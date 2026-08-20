@@ -3,7 +3,7 @@ Leap Program 2026
 Team members:
 1. Nathan Carr
 2. Sinead King
-3.
+3. Nokuvimba Chiyaka
 4.
 5. 
 
