@@ -1,17 +1,18 @@
-Leap Program 2026
+## Leap Program 2026
 
-Team members:
+### Team members:  
+
 1. Nathan Carr
 2. Sinead King
 3. Nokuvimba Chiyaka
-4.
-5. 
+4. Tetiana Urbanovych
+5.
 
-Branching Strategy
-Trunk-based 
+### Branching Strategy
+- Trunk-based 
 
-Reasons;
-better for small team.
-frequent commits
-Short lived
-Fewer, smaller possibility of conflicts
+### Reasons
+- Better for small team.
+- Frequent commits
+- Short lived
+- Fewer, smaller possibility of conflicts
