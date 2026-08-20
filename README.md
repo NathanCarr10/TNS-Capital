@@ -9,7 +9,7 @@
 5.
 
 ### Branching Strategy
-- Trunk based
+- Trunk-based
 
 ### Reasons
 - Better for small team.
