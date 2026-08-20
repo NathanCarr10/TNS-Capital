@@ -1,4 +1,4 @@
-## Leap Program 2026
+## Leap Program 2026 - TNS Capital
 
 ### Team members:  
 
