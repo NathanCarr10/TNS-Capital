@@ -6,7 +6,7 @@
 2. Sinead King
 3. Nokuvimba Chiyaka
 4. Tetiana Urbanovych
-5. Tiffanie Fitzgerald.
+5. Tiffanie Fitzgerald
 
 ### Branching Strategy
 - Trunk-based
