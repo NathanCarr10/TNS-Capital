@@ -21,6 +21,7 @@ pipeline {
                 // Builds the Docker image using the multi-stage Dockerfile from Lab 06.
                 // Tags with the Jenkins build number so every build produces a uniquely
                 // tagged image — avoids overwriting previous builds' artefacts.
+                sh 'mvn -B clean package -DskipTests'
                 sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
             }
         }
