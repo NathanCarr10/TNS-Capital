@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'maven-3.8.4'
+        jdk 'jdk-21'
+    }
+
     environment {
         IMAGE_NAME = "tns-capital-skeleton"
     }
