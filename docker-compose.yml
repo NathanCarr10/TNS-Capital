@@ -1,32 +1,9 @@
 services:
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: tns_capital
-      POSTGRES_USER: ${DB_USER:-tns_app}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-    ports:
-      - "5432:5432"
-    volumes:
-      - db-data:/var/lib/postgresql/data
-      - ./db:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tns_app} -d tns_capital"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build: .
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
-      DB_URL: jdbc:postgresql://db:5432/tns_capital
+      DB_URL: jdbc:postgresql://${DB_HOST:?set DB_HOST to the database container's host}:${DB_PORT:-5432}/tns_capital
       DB_USER: ${DB_USER:-tns_app}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
     ports:
       - "3000:3000"
-
-volumes:
-  db-data:
