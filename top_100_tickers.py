@@ -66,7 +66,6 @@ top_100_tickers = [
     "C",         # Citigroup
     "BLK",       # BlackRock
     "SCHW",      # Charles Schwab
-    "CME",       # CME Group
     "ICE",       # Intercontinental Exchange
     "JNJ",       # Johnson & Johnson
     "UNH",       # UnitedHealth
@@ -113,7 +112,6 @@ top_100_tickers = [
     "0005.HK",          # HSBC Holdings (Hong Kong)
     "0941.HK",          # China Mobile (Hong Kong)
     "005930.KS",        # Samsung Electronics (South Korea)
-    "000660.KS",        # SK Hynix (South Korea)
     "035420.KS",        # NAVER (South Korea)
     "6998.T",           # Sumitomo Mitsui (Japan)
     "8306.T",           # Mitsubishi UFJ (Japan)
@@ -121,7 +119,6 @@ top_100_tickers = [
     "6752.T",           # Panasonic (Japan)
     "7203.T",           # Toyota Motor (Japan)
     "1299.HK",          # AIA Group (Hong Kong)
-    "2318.HK",          # Ping An Insurance (Hong Kong)
     "3988.HK",          # Bank of China (Hong Kong)
     "6328.T",           # Daiwa Securities (Japan)
     
@@ -129,7 +126,6 @@ top_100_tickers = [
     "BHP.AX",           # BHP Group (Australia)
     "CBA.AX",           # Commonwealth Bank (Australia)
     "WBC.AX",           # Westpac Banking (Australia)
-    "TCL.AX",           # Telstra (Australia)
     "TD.TO",            # Toronto-Dominion Bank (Canada)
     "RY.TO",            # Royal Bank of Canada (Canada)
     "BCE.TO",           # BCE Inc (Canada)
