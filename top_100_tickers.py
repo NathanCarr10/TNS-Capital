@@ -6,19 +6,6 @@ This list contains the top 100 most traded instruments globally by daily average
 trading volume. It includes stocks from major exchanges worldwide and is formatted
 for use with yfinance library.
 
-Ticker Format:
-- US stocks: AAPL, MSFT (no suffix)
-- UK stocks: SHELL.L, ASML.AS (suffix indicates exchange)
-- European stocks: SAP.DE, SIEMENS.DE (suffix for exchange)
-- Asian stocks: 0700.HK (Hong Kong), 005930.KS (South Korea), 6998.T (Tokyo)
-- Other: .AX for Australia, .TO for Canada, etc.
-
-Coverage by Region:
-- US stocks: ~55 tickers (NYSE/NASDAQ)
-- European stocks: ~20 tickers
-- Asian stocks: ~15 tickers
-- Other regions: ~10 tickers
-
 Last Updated: 2026
 """
 
@@ -133,33 +120,3 @@ top_100_tickers = [
     "CNQ.TO",           # Canadian Natural (Canada)
     "TSM",              # Taiwan Semiconductor (US-listed ADR)
 ]
-
-# Verify list length
-assert len(top_100_tickers) == 100, f"List contains {len(top_100_tickers)} tickers, expected 100"
-
-# Example usage with yfinance
-if __name__ == "__main__":
-    """
-    Example: Download data for top 10 tickers
-    
-    Install yfinance first:
-    pip install yfinance pandas
-    
-    Then use like this:
-    
-    import yfinance as yf
-    from top_100_tickers import top_100_tickers
-    
-    # Download last 1 year of data for all tickers
-    data = yf.download(top_100_tickers, start='2025-09-09', end='2026-09-09')
-    
-    # Or download for specific tickers
-    data = yf.download(top_100_tickers[:10], period='1y')
-    
-    # Get current price
-    ticker = yf.Ticker("AAPL")
-    print(ticker.info['currentPrice'])
-    """
-    print(f"Loaded {len(top_100_tickers)} tickers")
-    print(f"First 10: {top_100_tickers[:10]}")
-    print(f"Last 10: {top_100_tickers[-10:]}")
