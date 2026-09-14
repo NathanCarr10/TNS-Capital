@@ -1,7 +1,8 @@
 package com.neueda.leap.enums;
 
 public enum OrderStatus {
-    WORKING,
+    NEW,
     FILLED,
+    REJECTED,
     CANCELLED
 }
