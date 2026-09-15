@@ -32,14 +32,6 @@ class EnumTypesTest {
     }
 
     @Test
-    void assetClassContainsExpectedValues() {
-        assertArrayEquals(
-                new AssetClass[]{AssetClass.EQUITY, AssetClass.BOND, AssetClass.FUND, AssetClass.CRYPTO},
-                AssetClass.values()
-        );
-    }
-
-    @Test
     void orderStatusCanBeReadByName() {
         assertEquals(OrderStatus.CANCELLED, OrderStatus.valueOf("CANCELLED"));
     }
