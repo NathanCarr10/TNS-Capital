@@ -21,6 +21,7 @@ public class Position {
     public void apply(Integer quantity, BigDecimal price) {
         if (this.quantity == 0) {
             this.averageCost = price;
+            this.quantity = quantity;
         } else {
             BigDecimal totalCost = this.averageCost.multiply(BigDecimal.valueOf(this.quantity))
                     .add(price.multiply(BigDecimal.valueOf(quantity)));
