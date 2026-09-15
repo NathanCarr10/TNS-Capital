@@ -1,4 +1,4 @@
-package com.neueda.leap.exception;
+package com.neueda.leap.exceptions;
 
 public class DuplicateOrderException extends RuntimeException {
 
