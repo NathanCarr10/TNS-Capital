@@ -2,6 +2,13 @@ package com.neueda.leap.exception;
 
 import org.junit.jupiter.api.Test;
 
+import com.neueda.leap.exceptions.AccountNotActiveException;
+import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.exceptions.InsufficientHoldingsException;
+
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -14,8 +21,7 @@ class CustomExceptionsTest {
 
         assertAll(
                 () -> assertInstanceOf(RuntimeException.class, exception),
-                () -> assertEquals("Account ACC-001 not found", exception.getMessage())
-        );
+                () -> assertEquals("Account ACC-001 not found", exception.getMessage()));
     }
 
     @Test
@@ -24,8 +30,7 @@ class CustomExceptionsTest {
 
         assertAll(
                 () -> assertInstanceOf(RuntimeException.class, exception),
-                () -> assertEquals("Account ACC-001 is not active", exception.getMessage())
-        );
+                () -> assertEquals("Account ACC-001 is not active", exception.getMessage()));
     }
 
     @Test
@@ -34,8 +39,7 @@ class CustomExceptionsTest {
 
         assertAll(
                 () -> assertInstanceOf(RuntimeException.class, exception),
-                () -> assertEquals("Instrument AAPL not found", exception.getMessage())
-        );
+                () -> assertEquals("Instrument AAPL not found", exception.getMessage()));
     }
 
     @Test
@@ -44,18 +48,17 @@ class CustomExceptionsTest {
 
         assertAll(
                 () -> assertInstanceOf(RuntimeException.class, exception),
-                () -> assertEquals("Insufficient funds for order ORD-001", exception.getMessage())
-        );
+                () -> assertEquals("Insufficient funds for order ORD-001", exception.getMessage()));
     }
 
     @Test
     void insufficientHoldingsExceptionStoresMessage() {
-        InsufficientHoldingsException exception = new InsufficientHoldingsException("Insufficient holdings for instrument AAPL");
+        InsufficientHoldingsException exception = new InsufficientHoldingsException(
+                "Insufficient holdings for instrument AAPL");
 
         assertAll(
                 () -> assertInstanceOf(RuntimeException.class, exception),
-                () -> assertEquals("Insufficient holdings for instrument AAPL", exception.getMessage())
-        );
+                () -> assertEquals("Insufficient holdings for instrument AAPL", exception.getMessage()));
     }
 
     @Test
@@ -64,7 +67,6 @@ class CustomExceptionsTest {
 
         assertAll(
                 () -> assertInstanceOf(RuntimeException.class, exception),
-                () -> assertEquals("Duplicate order ORD-001 detected", exception.getMessage())
-        );
+                () -> assertEquals("Duplicate order ORD-001 detected", exception.getMessage()));
     }
 }
