@@ -2,6 +2,8 @@ package com.neueda.leap.domain;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import com.neueda.leap.enums.AccountStatus;
+import com.neueda.leap.exceptions.InsufficientFundsException;
 
 public class Account {
     private Long id;
@@ -12,7 +14,8 @@ public class Account {
     private Integer version;
     private Instant lastUpdated;
 
-    public Account() {}
+    public Account() {
+    }
 
     public Account(String accountId, String holderName, BigDecimal cashBalance) {
         this.accountId = accountId;
@@ -39,13 +42,35 @@ public class Account {
     }
 
     // Getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    
-    public String getAccountId() { return accountId; }
-    public String getHolderName() { return holderName; }
-    public BigDecimal getCashBalance() { return cashBalance; }
-    public AccountStatus getStatus() { return status; }
-    public Integer getVersion() { return version; }
-    public Instant getLastUpdated() { return lastUpdated; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getAccountId() {
+        return accountId;
+    }
+
+    public String getHolderName() {
+        return holderName;
+    }
+
+    public BigDecimal getCashBalance() {
+        return cashBalance;
+    }
+
+    public AccountStatus getStatus() {
+        return status;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public Instant getLastUpdated() {
+        return lastUpdated;
+    }
 }
