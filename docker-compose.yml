@@ -17,14 +17,16 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build: .
-    environment:
-      DB_URL: jdbc:postgresql://${DB_HOST:?set DB_HOST to the database container's host}:${DB_PORT:-5432}/tns_capital
-      DB_USER: ${DB_USER:-tns_app}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-    ports:
-      - "3000:3000"
+  # app:
+  #   build: .
+  #   environment:
+  #     DB_URL: jdbc:postgresql://${DB_HOST:?set DB_HOST to the database container's host}:${DB_PORT:-5432}/tns_capital
+  #     DB_USER: ${DB_USER:-tns_app}
+  #     DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  #   ports:
+  #   - "3000:3000"
+
+
 
 volumes:
   db-data:
