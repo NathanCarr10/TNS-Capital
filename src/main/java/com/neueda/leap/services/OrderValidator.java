@@ -1,13 +1,14 @@
 package com.neueda.leap.services;
 
-import com.neueda.leap.domain.Account;
-import com.neueda.leap.domain.Instrument;
-import com.neueda.leap.domain.Order;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Order;
+
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;

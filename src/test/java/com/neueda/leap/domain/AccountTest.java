@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.model.Account;
 import com.neueda.leap.time.ClockTest;
 
 @DisplayName("Account Test Suite")

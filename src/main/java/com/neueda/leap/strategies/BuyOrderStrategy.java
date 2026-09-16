@@ -1,8 +1,9 @@
 package com.neueda.leap.strategies;
 
-import com.neueda.leap.domain.Account;
-import com.neueda.leap.domain.Position;
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Position;
+
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Objects;

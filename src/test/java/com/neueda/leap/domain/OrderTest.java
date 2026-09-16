@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.time.ClockTest;
 
 @DisplayName("Order Test Suite")
