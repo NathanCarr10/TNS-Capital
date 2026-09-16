@@ -5,6 +5,7 @@ import com.neueda.leap.domain.Instrument;
 import com.neueda.leap.domain.Order;
 import com.neueda.leap.domain.Position;
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.time.SystemClock;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
@@ -45,7 +46,7 @@ public class OrderProcessing {
         validator.validate(request);
         String symbol = normalizeSymbol(request.symbol());
         Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
-                request.price(), request.idempotencyKey());
+                request.price(), request.idempotencyKey(), SystemClock.INSTANCE);
 
         try {
             Account account = accounts.get(request.accountId());
