@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.time.Clock;
 
 public class Order {
     private UUID id;
@@ -17,14 +18,14 @@ public class Order {
     private String idempotencyKey;
     private Instant createdOn;
 
-    public Order() {
+    public Order(Clock clock) {
         this.id = UUID.randomUUID();
-        this.createdOn = Instant.now();
+        this.createdOn = clock.now();
     }
 
     public Order(Long accountId, String symbol, OrderSide side, Integer quantity, BigDecimal price,
-            String idempotencyKey) {
-        this();
+            String idempotencyKey, Clock clock) {
+        this(clock);
         this.accountId = accountId;
         this.symbol = symbol;
         this.side = side;

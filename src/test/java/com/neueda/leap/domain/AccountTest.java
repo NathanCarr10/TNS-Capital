@@ -10,19 +10,22 @@ import org.junit.jupiter.api.Test;
 
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.time.ClockTest;
 
 class AccountTest {
     private Account account;
+    private ClockTest testClock;
 
     @BeforeEach
     void setUp() {
-        account = new Account("ACC001", "John Doe", new BigDecimal("10000.00"));
+        testClock = new ClockTest(Instant.parse("2026-09-16T10:00:00Z"));
+        account = new Account("ACC001", "John Doe", new BigDecimal("10000.00"), testClock);
     }
 
     @Test
     void testAccountConstructor() {
         // ARRANGE: account created in setUp
-        
+
         // ACT & ASSERT: verify initialization
         assertEquals("ACC001", account.getAccountId());
         assertEquals("John Doe", account.getHolderName());
@@ -35,10 +38,10 @@ class AccountTest {
     @Test
     void testDebitSuccessful() throws InsufficientFundsException {
         // ARRANGE: account created in setUp with 10000.00
-        
+
         // ACT
         account.debit(new BigDecimal("1000.00"));
-        
+
         // ASSERT
         assertEquals(new BigDecimal("9000.00"), account.getCashBalance());
     }
@@ -46,7 +49,7 @@ class AccountTest {
     @Test
     void testDebitInsufficientFunds() {
         // ARRANGE: account created in setUp with 10000.00
-        
+
         // ACT & ASSERT: expect exception
         assertThrows(InsufficientFundsException.class, () -> {
             account.debit(new BigDecimal("15000.00"));
@@ -56,10 +59,10 @@ class AccountTest {
     @Test
     void testDebitExactAmount() throws InsufficientFundsException {
         // ARRANGE: account created in setUp with 10000.00
-        
+
         // ACT
         account.debit(new BigDecimal("10000.00"));
-        
+
         // ASSERT
         assertEquals(new BigDecimal("0.00"), account.getCashBalance());
     }
@@ -67,10 +70,10 @@ class AccountTest {
     @Test
     void testCredit() {
         // ARRANGE: account created in setUp with 10000.00
-        
+
         // ACT
         account.credit(new BigDecimal("5000.00"));
-        
+
         // ASSERT
         assertEquals(new BigDecimal("15000.00"), account.getCashBalance());
     }
@@ -78,12 +81,12 @@ class AccountTest {
     @Test
     void testMultipleDebitsAndCredits() throws InsufficientFundsException {
         // ARRANGE: account created in setUp with 10000.00
-        
+
         // ACT
         account.debit(new BigDecimal("2000.00"));
         account.credit(new BigDecimal("3000.00"));
         account.debit(new BigDecimal("1500.00"));
-        
+
         // ASSERT
         assertEquals(new BigDecimal("9500.00"), account.getCashBalance());
     }
@@ -91,7 +94,7 @@ class AccountTest {
     @Test
     void testIsActiveWhenStatusActive() {
         // ARRANGE: account created in setUp with ACTIVE status
-        
+
         // ACT & ASSERT
         assertTrue(account.isActive());
     }
@@ -100,7 +103,7 @@ class AccountTest {
     void testIsActiveWhenStatusInactive() {
         // ARRANGE: create account with no status
         Account inactiveAccount = new Account();
-        
+
         // ACT & ASSERT: should not be active
         assertFalse(inactiveAccount.isActive());
     }

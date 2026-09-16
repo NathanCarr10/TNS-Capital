@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.time.Clock;
 
 public class Account {
     private Long id;
@@ -17,13 +18,13 @@ public class Account {
     public Account() {
     }
 
-    public Account(String accountId, String holderName, BigDecimal cashBalance) {
+    public Account(String accountId, String holderName, BigDecimal cashBalance, Clock clock) {
         this.accountId = accountId;
         this.holderName = holderName;
         this.cashBalance = cashBalance;
         this.status = AccountStatus.ACTIVE;
         this.version = 0;
-        this.lastUpdated = Instant.now();
+        this.lastUpdated = clock.now();
     }
 
     public void debit(BigDecimal amount) throws InsufficientFundsException {
