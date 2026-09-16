@@ -15,15 +15,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.model.Account;
+import com.neueda.leap.time.ClockTest;
 
 @DisplayName("Account Test Suite")
 
 class AccountTest {
     private Account account;
+    private ClockTest testClock;
 
     @BeforeEach
     void setUp() {
-        account = new Account("ACC001", "John Doe", new BigDecimal("10000.00"));
+        testClock = new ClockTest(Instant.parse("2026-09-16T10:00:00Z"));
+        account = new Account("ACC001", "John Doe", new BigDecimal("10000.00"), testClock);
     }
 
     @DisplayName("Constructor initializes all fields correctly")
@@ -31,7 +35,8 @@ class AccountTest {
     void testAccountConstructor() {
         assertEquals("ACC001", account.getAccountId(), "Account ID should match constructor argument");
         assertEquals("John Doe", account.getHolderName(), "Holder name should match constructor argument");
-        assertEquals(new BigDecimal("10000.00"), account.getCashBalance(), "Initial cash balance should match constructor argument");
+        assertEquals(new BigDecimal("10000.00"), account.getCashBalance(),
+                "Initial cash balance should match constructor argument");
         assertEquals(AccountStatus.ACTIVE, account.getStatus(), "New account should have ACTIVE status");
         assertEquals(0, account.getVersion(), "Initial version should be 0");
         assertNotNull(account.getLastUpdated(), "Last updated timestamp should be set");
@@ -42,13 +47,13 @@ class AccountTest {
     class DebitTests {
         @DisplayName("Debit with valid amount reduces balance correctly")
         @ParameterizedTest(name = "Debit {0} from 10000.00")
-        @ValueSource(strings = {"0.01", "1000.00", "5000.00", "9999.99"})
+        @ValueSource(strings = { "0.01", "1000.00", "5000.00", "9999.99" })
         void testDebitValidAmounts(String amount) throws InsufficientFundsException {
             BigDecimal debitAmount = new BigDecimal(amount);
             BigDecimal expectedBalance = new BigDecimal("10000.00").subtract(debitAmount);
             account.debit(debitAmount);
-            assertEquals(expectedBalance, account.getCashBalance(), 
-                "Balance should be reduced by debit amount");
+            assertEquals(expectedBalance, account.getCashBalance(),
+                    "Balance should be reduced by debit amount");
         }
 
         @DisplayName("Debit amount exceeding balance throws InsufficientFundsException")
@@ -71,8 +76,8 @@ class AccountTest {
         @Test
         void testDebitExactAmount() throws InsufficientFundsException {
             account.debit(new BigDecimal("10000.00"));
-            assertEquals(new BigDecimal("0.00"), account.getCashBalance(), 
-                "Balance should be exactly 0.00 after debiting entire balance");
+            assertEquals(new BigDecimal("0.00"), account.getCashBalance(),
+                    "Balance should be exactly 0.00 after debiting entire balance");
         }
     }
 
@@ -81,13 +86,13 @@ class AccountTest {
     class CreditTests {
         @DisplayName("Credit with valid amounts increases balance correctly")
         @ParameterizedTest(name = "Credit {0} to 10000.00")
-        @ValueSource(strings = {"0.01", "500.00", "5000.00", "50000.00"})
+        @ValueSource(strings = { "0.01", "500.00", "5000.00", "50000.00" })
         void testCreditValidAmounts(String amount) {
             BigDecimal creditAmount = new BigDecimal(amount);
             BigDecimal expectedBalance = new BigDecimal("10000.00").add(creditAmount);
             account.credit(creditAmount);
-            assertEquals(expectedBalance, account.getCashBalance(), 
-                "Balance should be increased by credit amount");
+            assertEquals(expectedBalance, account.getCashBalance(),
+                    "Balance should be increased by credit amount");
         }
 
         @DisplayName("Multiple consecutive debits and credits are applied correctly")
@@ -96,8 +101,8 @@ class AccountTest {
             account.debit(new BigDecimal("2000.00"));
             account.credit(new BigDecimal("3000.00"));
             account.debit(new BigDecimal("1500.00"));
-            assertEquals(new BigDecimal("9500.00"), account.getCashBalance(), 
-                "Final balance should be 10000 - 2000 + 3000 - 1500 = 9500");
+            assertEquals(new BigDecimal("9500.00"), account.getCashBalance(),
+                    "Final balance should be 10000 - 2000 + 3000 - 1500 = 9500");
         }
     }
 

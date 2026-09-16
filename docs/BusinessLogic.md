@@ -7,6 +7,9 @@ This folder contains architectural and design diagrams for the TNS Capital tradi
 ### Class Diagram
 **File:** `diagrams/TNS_CAPITAL-CLASS-DIAGRAM.png`
 
+<img width="747" height="826" alt="image" src="https://github.com/user-attachments/assets/b04e5b3b-6214-429a-b9a6-441856975324" />
+
+
 This diagram illustrates the core domain model of the trading system:
 
 - **Account**: Represents a trading account with cash balance, status, and account metadata
@@ -35,6 +38,9 @@ This diagram illustrates the core domain model of the trading system:
 ### Buy Order Sequence Diagram
 **File:** `diagrams/BUY-ORDER-SEQUENCE-DIAGRAM.png`
 
+<img width="628" height="555" alt="image" src="https://github.com/user-attachments/assets/f690be10-82bc-4c7a-8796-9bdae09df3aa" />
+
+
 This diagram shows the complete flow when a trader places a buy order:
 
 1. **Validation Phase**
@@ -56,6 +62,9 @@ This diagram shows the complete flow when a trader places a buy order:
 
 ### Sell Order Sequence Diagram
 **File:** `diagrams/SELL-ORDER-SEQUENCE-DIAGRAM.png`
+
+<img width="607" height="598" alt="image" src="https://github.com/user-attachments/assets/5495b336-2c9b-4024-9f41-727b4e46ed19" />
+
 
 This diagram shows the complete flow when a trader places a sell order:
 

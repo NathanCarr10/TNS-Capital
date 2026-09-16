@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import com.neueda.leap.model.Instrument;
+
 @DisplayName("Instrument Test Suite")
 class InstrumentTest {
     private Instrument instrument;
@@ -51,12 +53,13 @@ class InstrumentTest {
         @DisplayName("Instrument supports various asset classes")
         @ParameterizedTest(name = "Asset Class: {0}")
         @CsvSource({
-            "BOND001, Corporate Bond, BOND, USD, true",
-            "ES, E-mini S&P 500, FUTURE, USD, true",
-            "AAPL_CALL, Apple Call Option, OPTION, USD, true",
-            "AAPL, Apple Inc., EQUITY, USD, true"
+                "BOND001, Corporate Bond, BOND, USD, true",
+                "ES, E-mini S&P 500, FUTURE, USD, true",
+                "AAPL_CALL, Apple Call Option, OPTION, USD, true",
+                "AAPL, Apple Inc., EQUITY, USD, true"
         })
-        void testMultipleAssetClasses(String symbol, String name, String assetClass, String currency, boolean tradable) {
+        void testMultipleAssetClasses(String symbol, String name, String assetClass, String currency,
+                boolean tradable) {
             Instrument instrument = new Instrument(symbol, name, assetClass, currency, tradable);
             assertEquals(symbol, instrument.getSymbol(), "Symbol should match");
             assertEquals(assetClass, instrument.getAssetClass(), "Asset class should match");
@@ -70,9 +73,9 @@ class InstrumentTest {
         @DisplayName("Instrument supports various currencies")
         @ParameterizedTest(name = "{0} instrument in {1}")
         @CsvSource({
-            "SAP, SAP SE, EQUITY, EUR, true",
-            "SHELL, Shell, EQUITY, GBP, true",
-            "AAPL, Apple Inc., EQUITY, USD, true"
+                "SAP, SAP SE, EQUITY, EUR, true",
+                "SHELL, Shell, EQUITY, GBP, true",
+                "AAPL, Apple Inc., EQUITY, USD, true"
         })
         void testMultipleCurrencies(String symbol, String name, String assetClass, String currency, boolean tradable) {
             Instrument instrument = new Instrument(symbol, name, assetClass, currency, tradable);
