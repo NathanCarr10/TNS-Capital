@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -5,7 +6,7 @@ pipeline {
         maven 'maven-3.8.4'
         jdk 'JDK21'
     }
-
+    
     environment {
         IMAGE_NAME = "tns-capital-skeleton"
     }
@@ -26,7 +27,7 @@ pipeline {
                 // Builds the Docker image using the multi-stage Dockerfile from Lab 06.
                 // Tags with the Jenkins build number so every build produces a uniquely
                 // tagged image — avoids overwriting previous builds' artefacts.
-                sh 'mvn -B clean package -DskipTests'
+                sh 'mvn -B clean package'
                 sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
             }
         }
@@ -42,7 +43,7 @@ pipeline {
                     // Publishes JUnit XML results to Jenkins regardless of pass/fail.
                     // This gives a test-trend chart in the Jenkins UI and lets branch
                     // protection rules check the test result as a status check.
-                    junit allowEmptyResults: true, testResults: 'target/surefire-reports/*.xml'
+                    junit 'target/surefire-reports/*.xml'
                 }
             }
         }
