@@ -9,7 +9,10 @@ import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
-import java.util.Locale;
+import com.neueda.leap.utils.PositionKeyFactory;
+import com.neueda.leap.utils.SymbolNormalizer;
+import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,7 +50,7 @@ public class OrderProcessing {
         Objects.requireNonNull(request);
 
         validator.validate(request);
-        String symbol = normalizeSymbol(request.symbol());
+        String symbol = SymbolNormalizer.normalize(request.symbol());
         Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
                 request.price(), request.idempotencyKey(), clock);
 
@@ -56,9 +59,12 @@ public class OrderProcessing {
             OrderExecutionStrategy strategy = strategies.get(request.side());
             strategy.execute(account, request, symbol);
             order.setStatus(OrderStatus.FILLED);
-        } catch (Exception ex) {
+        } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
             order.setStatus(OrderStatus.REJECTED);
             throw ex;
+        } catch (Exception ex) {
+            order.setStatus(OrderStatus.REJECTED);
+            throw new IllegalStateException("Unexpected error during order execution", ex);
         } finally {
             orders.put(order.getIdempotencyKey(), order);
         }
@@ -71,11 +77,7 @@ public class OrderProcessing {
     }
 
     public Optional<Position> findPosition(Long accountId, String symbol) {
-        String key = accountId + "::" + normalizeSymbol(symbol);
+        String key = PositionKeyFactory.createKey(accountId, SymbolNormalizer.normalize(symbol));
         return Optional.ofNullable(positions.get(key));
-    }
-
-    private String normalizeSymbol(String symbol) {
-        return symbol == null ? null : symbol.trim().toUpperCase(Locale.ROOT);
     }
 }
