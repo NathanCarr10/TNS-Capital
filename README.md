@@ -1,32 +1,136 @@
-## Leap Program 2026 - TNS Capital
+# TNS Capital - Leap Program 2026
 
-### Team members:  
+A trading system backend for managing accounts, orders, positions, and instruments using Domain-Driven Design principles.
 
-1. Nathan Carr
-2. Sinead King
-3. Nokuvimba Chiyaka
-4. Tetiana Urbanovych
-5. Tiffanie Fitzgerald
+## Team
 
-### Branching Strategy
-- Trunk-based
+- Nathan Carr
+- Sinead King
+- Nokuvimba Chiyaka
+- Tetiana Urbanovych
+- Tiffanie Fitzgerald
 
-### Reasons
-- Better for small team.
-- Frequent commits
-- Short lived
-- Fewer, smaller possibility of conflicts
+## Tech Stack
 
-### Database
+- **Language:** Java
+- **Build Tool:** Maven
+- **Database:** PostgreSQL
+- **Containerization:** Docker
+- **CI/CD:** Jenkins
+- **Version Control:** Git (Git Flow strategy)
 
-The database runs as a long-lived Postgres container (see `docker-compose.db.yml`),
-hosted on a shared machine rather than recreated per build. The `app` container
-(`docker-compose.yml`) connects to it over the network instead of starting its own DB.
+---
 
-Connection settings (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`) go in a local
-`.env` file (gitignored). These values are **not** freely
-customisable per-developer — they must match whatever the shared DB container was
-first initialised with, since Postgres only creates the user and runs
-`db/schema.sql` once, on first startup with an empty volume. Changing `DB_USER`/
-`DB_PASSWORD` locally without also updating them on the DB container itself will
-fail with `role "..." does not exist`.
+## Git Flow Strategy
+
+We follow **Git Flow** branching strategy:
+
+- **`main`** - Production-ready code (stable releases)
+- **`Development`** - Integration branch (staging/pre-release)
+
+
+---
+
+## Project Structure
+
+### Source Code Organization (`src/main/java/com/neueda/leap/`)
+
+```
+src/main/java/com/neueda/leap/
+├── domain/              # Domain model layer (core business logic)
+├── enums/               # Enumeration types
+├── exceptions/          # Custom exception classes
+└── Main.java           # Application entry point
+```
+
+#### **domain/** - Domain Model Layer
+**Responsibility:** Pure business logic and data validation
+
+- **Account.java** - Trading account entity with cash balance management, debit/credit operations, and status tracking
+- **Order.java** - Order entity with order details, idempotency key for duplicate prevention, and status lifecycle
+- **Position.java** - Position entity tracking held securities with weighted average cost calculations
+- **Instrument.java** - Tradable security/instrument definition with asset class and currency info
+
+**Key Features:**
+- Comprehensive input validation (null checks, range validation)
+- Defensive copying for immutable data integrity
+- equals() / hashCode() for proper object comparison in collections
+- toString() for debugging and logging
+
+#### **enums/** - Enumeration Types
+**Responsibility:** Define fixed state values used across the domain
+
+- **AccountStatus.java** - Account states: `ACTIVE`, `SUSPENDED`, `CLOSED`
+- **OrderSide.java** - Order direction: `BUY`, `SELL`
+- **OrderStatus.java** - Order lifecycle: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`
+
+#### **exceptions/** - Custom Exceptions
+**Responsibility:** Business-specific exception handling
+
+- **InsufficientFundsException.java** - Thrown when account lacks funds for a transaction
+- **InsufficientHoldingsException.java** - Thrown when position lacks shares for a trade
+- **InstrumentNotFoundException.java** - Thrown when instrument doesn't exist
+- **AccountNotFoundException.java** - Thrown when account doesn't exist
+- **DuplicateOrderException.java** - Thrown when order idempotency key already exists
+- **AccountNotActiveException.java** - Thrown when trading on inactive account
+
+---
+
+## Database Setup
+
+### Architecture
+- PostgreSQL runs as a **long-lived container** on a shared machine (not per-build)
+- App container connects via network (see `docker-compose.yml`)
+- Initial schema loaded from `db/schema.sql`
+
+
+---
+
+## Docker & Deployment
+
+### Files
+
+#### **docker-compose.yml**
+- **Purpose:** Orchestrates the application and database containers
+- **Services:**
+  - `app` - Java application container (port 8080)
+  - `postgres` - PostgreSQL database (port 5432)
+- **Usage:** `docker-compose up` to start both services
+
+#### **Dockerfile**
+- **Purpose:** Builds the Java application image
+- **Process:**
+  1. Compiles Maven project
+  2. Creates lightweight runtime image
+  3. Exposes application on port 8080
+- **Usage:** Docker build is automated by Jenkins; manual build with `docker build -t tns-capital .`
+
+---
+
+## CI/CD Pipeline
+
+### Jenkinsfile
+- **Purpose:** Automates build, test, and deployment pipeline
+- **Stages:**
+  1. **Checkout** - Pull latest code from repository
+  2. **Build** - Maven compile and package
+  3. **Test** - Run unit tests
+  4. **Docker Build** - Create application container image
+  5. **Deploy** - Push to registry and deploy (Dev/Staging/Prod based on branch)
+
+
+---
+
+
+---
+## Architecture Principles
+
+- **Domain-Driven Design (DDD):** Domain layer contains core business logic
+- **SOLID Principles:** Clean, maintainable code
+- **Input Validation:** Fail-fast approach prevents invalid state
+- **Defensive Copying:** BigDecimal fields copied to prevent external mutation
+- **Testability:** Entity design supports unit testing and mocking
+
+---
+
+
