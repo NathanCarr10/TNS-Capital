@@ -4,6 +4,7 @@ import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
+import com.neueda.leap.utils.PositionKeyFactory;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -18,7 +19,7 @@ public class SellOrderStrategy implements OrderExecutionStrategy {
 
     @Override
     public void execute(Account account, PlaceOrderRequest request, String symbol) {
-        String key = request.accountId() + "::" + symbol;
+        String key = PositionKeyFactory.createKey(request.accountId(), symbol);
         Position current = positions.get(key);
 
         if (current == null || current.getQuantity() < request.quantity()) {

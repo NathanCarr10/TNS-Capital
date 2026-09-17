@@ -8,8 +8,8 @@ import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.Order;
+import com.neueda.leap.utils.SymbolNormalizer;
 
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -46,14 +46,10 @@ public class OrderValidator {
         }
 
         // Check instrument exists and tradable
-        String symbol = normalizeSymbol(request.symbol());
+        String symbol = SymbolNormalizer.normalize(request.symbol());
         Instrument instrument = instruments.get(symbol);
         if (instrument == null || !instrument.isTradable()) {
             throw new InstrumentNotFoundException("Instrument not found: " + symbol);
         }
-    }
-
-    private String normalizeSymbol(String symbol) {
-        return symbol == null ? null : symbol.trim().toUpperCase(Locale.ROOT);
     }
 }

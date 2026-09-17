@@ -3,6 +3,7 @@ package com.neueda.leap.strategies;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
+import com.neueda.leap.utils.PositionKeyFactory;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -20,7 +21,7 @@ public class BuyOrderStrategy implements OrderExecutionStrategy {
         BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
         account.debit(cost);
 
-        String key = request.accountId() + "::" + symbol;
+        String key = PositionKeyFactory.createKey(request.accountId(), symbol);
         Position current = positions.get(key);
         if (current == null) {
             positions.put(key, new Position(request.accountId(), symbol, request.quantity(), request.price()));
