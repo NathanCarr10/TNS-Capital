@@ -93,7 +93,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.neueda.leap.Main</mainClass>
+                            <mainClass>com.neueda.leap.TNSCapitalApplication</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
