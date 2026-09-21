@@ -3,30 +3,46 @@ package com.neueda.leap.strategies;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
-import com.neueda.leap.utils.PositionKeyFactory;
+import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.exceptions.InsufficientFundsException;
 
 import java.math.BigDecimal;
-import java.util.Map;
 import java.util.Objects;
 
 public class BuyOrderStrategy implements OrderExecutionStrategy {
-    private final Map<String, Position> positions;
+    private final PositionRepository positionRepository;
 
-    public BuyOrderStrategy(Map<String, Position> positions) {
-        this.positions = Objects.requireNonNull(positions);
+    public BuyOrderStrategy(PositionRepository positionRepository) {
+        this.positionRepository = Objects.requireNonNull(positionRepository);
     }
 
     @Override
     public void execute(Account account, PlaceOrderRequest request, String symbol) {
         BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
+
+        // Phase 1: Validate before mutation
+        if (account.getCashBalance().compareTo(cost) < 0) {
+            throw new InsufficientFundsException("Insufficient funds for buy order");
+        }
+
+        // Phase 2: Perform debit operation
         account.debit(cost);
 
-        String key = PositionKeyFactory.createKey(request.accountId(), symbol);
-        Position current = positions.get(key);
-        if (current == null) {
-            positions.put(key, new Position(request.accountId(), symbol, request.quantity(), request.price()));
-        } else {
-            current.apply(request.quantity(), request.price());
+        try {
+            // Phase 2: Perform position update
+            var currentPosition = positionRepository.findPosition(request.accountId(), symbol);
+
+            if (currentPosition.isEmpty()) {
+                positionRepository.save(new Position(request.accountId(), symbol, request.quantity(), request.price()));
+            } else {
+                Position position = currentPosition.get();
+                position.apply(request.quantity(), request.price());
+                positionRepository.save(position);
+            }
+        } catch (Exception ex) {
+            // Phase 3: Rollback on exception
+            account.credit(cost); // Undo debit
+            throw new IllegalStateException("Position update failed; account restored", ex);
         }
     }
 }
