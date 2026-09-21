@@ -2,6 +2,8 @@ package com.neueda.leap.model;
 
 import java.math.BigDecimal;
 
+import com.neueda.leap.utils.InputNormalizer;
+
 /**
  * Position domain entity.
  * 
@@ -20,7 +22,7 @@ public class Position {
     public Position(Long accountId, String symbol, Integer quantity, BigDecimal averageCost) {
         validateConstructorArgs(accountId, symbol, quantity, averageCost);
         this.accountId = accountId;
-        this.symbol = symbol;
+        this.symbol = InputNormalizer.normalize(symbol);
         this.quantity = quantity;
         this.averageCost = new BigDecimal(averageCost.toPlainString());
     }
@@ -39,7 +41,7 @@ public class Position {
         if (accountId == null || accountId <= 0) {
             throw new IllegalArgumentException("Valid account ID is required");
         }
-        if (symbol == null || symbol.trim().isEmpty()) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
             throw new IllegalArgumentException("Symbol cannot be null or empty");
         }
         if (quantity == null || quantity < 0) {
