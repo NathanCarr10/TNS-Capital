@@ -24,16 +24,28 @@ import com.neueda.leap.strategies.BuyOrderStrategy;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.strategies.SellOrderStrategy;
 import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.repositories.impl.InMemoryAccountRepository;
+import com.neueda.leap.repositories.impl.InMemoryInstrumentRepository;
+import com.neueda.leap.repositories.impl.InMemoryOrderRepository;
+import com.neueda.leap.repositories.impl.InMemoryPositionRepository;
+import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
+import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.PositionRepository;
 
 @DisplayName("OrderProcessing Test Suite")
 class OrderProcessingTest {
     private OrderProcessing orderProcessing;
     private OrderValidator validator;
-    private Map<Long, Account> accounts;
-    private Map<String, Instrument> instruments;
-    private Map<String, Position> positions;
-    private Map<String, Order> orders;
+    private Map<Long, Account> accountsMap;
+    private Map<String, Instrument> instrumentsMap;
+    private Map<String, Position> positionsMap;
+    private Map<String, Order> ordersMap;
     private Map<OrderSide, OrderExecutionStrategy> strategies;
+    private AccountRepository accountRepository;
+    private InstrumentRepository instrumentRepository;
+    private OrderRepository orderRepository;
+    private PositionRepository positionRepository;
     private ClockTest testClock;
     private Account testAccount;
     private Instrument testInstrument;
@@ -43,27 +55,36 @@ class OrderProcessingTest {
         // Initialize test clock
         testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
 
-        // Initialize all maps
-        accounts = new HashMap<>();
-        instruments = new HashMap<>();
-        positions = new HashMap<>();
-        orders = new HashMap<>();
+        // Initialize underlying maps
+        accountsMap = new HashMap<>();
+        instrumentsMap = new HashMap<>();
+        positionsMap = new HashMap<>();
+        ordersMap = new HashMap<>();
         strategies = new HashMap<>();
 
         // Create test data
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("50000.00"), testClock);
-        accounts.put(1L, testAccount);
+        testAccount.setId(1L);
+        accountsMap.put(1L, testAccount);
 
-        testInstrument = new Instrument("AAPL", "APPLE INC", "USD", "EQUITY", true);
-        instruments.put("AAPL", testInstrument);
+        testInstrument = new Instrument("AAPL", "APPLE INC", "EQUITY", "USD", true);
+        // testInstrument.setId(1L);
+        instrumentsMap.put("AAPL", testInstrument);
+
+        // Create repository implementations
+        accountRepository = new InMemoryAccountRepository(accountsMap);
+        instrumentRepository = new InMemoryInstrumentRepository(instrumentsMap);
+        orderRepository = new InMemoryOrderRepository(ordersMap);
+        positionRepository = new InMemoryPositionRepository(positionsMap);
 
         // Setup strategies
-        strategies.put(OrderSide.BUY, new BuyOrderStrategy(positions));
-        strategies.put(OrderSide.SELL, new SellOrderStrategy(positions));
+        strategies.put(OrderSide.BUY, new BuyOrderStrategy(positionRepository));
+        strategies.put(OrderSide.SELL, new SellOrderStrategy(positionRepository));
 
         // Create validator and OrderProcessing
-        validator = new OrderValidator(accounts, instruments, orders);
-        orderProcessing = new OrderProcessing(accounts, instruments, positions, orders, validator, strategies, testClock);
+        validator = new OrderValidator(accountRepository, instrumentRepository, orderRepository);
+        orderProcessing = new OrderProcessing(accountRepository, orderRepository, positionRepository, validator,
+                strategies, testClock);
     }
 
     @DisplayName("Successful Order Placement Tests")
@@ -78,8 +99,7 @@ class OrderProcessingTest {
                     OrderSide.BUY,
                     100,
                     new BigDecimal("150.00"),
-                    "BUY-001"
-            );
+                    "BUY-001");
 
             Order result = orderProcessing.placeOrder(buyRequest);
 
@@ -104,8 +124,7 @@ class OrderProcessingTest {
                     OrderSide.BUY,
                     quantity,
                     price,
-                    "BUY-002"
-            );
+                    "BUY-002");
 
             Order result = orderProcessing.placeOrder(buyRequest);
 
@@ -126,16 +145,15 @@ class OrderProcessingTest {
                     OrderSide.BUY,
                     100,
                     new BigDecimal("150.00"),
-                    "BUY-003"
-            );
+                    "BUY-003");
 
             Order result = orderProcessing.placeOrder(buyRequest);
 
             // Verify position was created
             String positionKey = "1::AAPL";
-            Position position = positions.get(positionKey);
-            assertNotNull(position, "Position should be created for AAPL");
-            assertEquals(100, position.getQuantity(), "Position quantity should be 100");
+            var positionOpt = positionRepository.findPosition(1L, "AAPL");
+            assertTrue(positionOpt.isPresent(), "Position should be created for AAPL");
+            assertEquals(100, positionOpt.get().getQuantity(), "Position quantity should be 100");
         }
     }
 
@@ -150,20 +168,19 @@ class OrderProcessingTest {
                     1L,
                     "AAPL",
                     OrderSide.BUY,
-                    1000,                           // Quantity too high
-                    new BigDecimal("150.00"),       // Price
-                    "BUY-FAIL-001"
-            );
+                    1000, // Quantity too high
+                    new BigDecimal("150.00"), // Price
+                    "BUY-FAIL-001");
 
             // Should throw exception
             assertThrows(InsufficientFundsException.class,
                     () -> orderProcessing.placeOrder(expensiveBuyRequest),
                     "Should throw InsufficientFundsException");
 
-            // But the order should still be in the orders map with REJECTED status
-            Order rejectedOrder = orders.get("BUY-FAIL-001");
-            assertNotNull(rejectedOrder, "Rejected order should still be persisted");
-            assertEquals(OrderStatus.REJECTED, rejectedOrder.getStatus(),
+            // But the order should still be persisted with REJECTED status
+            var rejectedOrderOpt = orderRepository.findByIdempotencyKey("BUY-FAIL-001");
+            assertTrue(rejectedOrderOpt.isPresent(), "Rejected order should still be persisted");
+            assertEquals(OrderStatus.REJECTED, rejectedOrderOpt.get().getStatus(),
                     "Order status should be REJECTED after exception");
         }
 
@@ -172,13 +189,12 @@ class OrderProcessingTest {
         void testOrderPersistedOnValidationFailure() {
             // Try to place order with non-existent account
             PlaceOrderRequest invalidRequest = new PlaceOrderRequest(
-                    999L,                            // Non-existent account
+                    999L, // Non-existent account
                     "AAPL",
                     OrderSide.BUY,
                     100,
                     new BigDecimal("150.00"),
-                    "INVALID-ACC-001"
-            );
+                    "INVALID-ACC-001");
 
             // Should throw validation exception
             assertThrows(Exception.class, () -> orderProcessing.placeOrder(invalidRequest));
@@ -200,8 +216,7 @@ class OrderProcessingTest {
                     OrderSide.BUY,
                     100,
                     new BigDecimal("150.00"),
-                    "FIND-001"
-            );
+                    "FIND-001");
 
             Order placedOrder = orderProcessing.placeOrder(buyRequest);
             Order foundOrder = orderProcessing.findByIdempotencyKey("FIND-001").orElse(null);
@@ -233,8 +248,7 @@ class OrderProcessingTest {
                     OrderSide.BUY,
                     100,
                     new BigDecimal("150.00"),
-                    "POS-001"
-            );
+                    "POS-001");
 
             orderProcessing.placeOrder(buyRequest);
 
@@ -263,8 +277,7 @@ class OrderProcessingTest {
                     OrderSide.BUY,
                     100,
                     new BigDecimal("150.00"),
-                    "POS-002"
-            );
+                    "POS-002");
 
             orderProcessing.placeOrder(buyRequest);
 
