@@ -15,6 +15,8 @@ public final class PositionKeyFactory {
      * @return formatted position key
      */
     public static String createKey(Long accountId, String symbol) {
-        return accountId + KEY_SEPARATOR + symbol;
+        StringBuilder sb = new StringBuilder();
+        sb.append(accountId).append(KEY_SEPARATOR).append(symbol);
+        return sb.toString();
     }
 }
