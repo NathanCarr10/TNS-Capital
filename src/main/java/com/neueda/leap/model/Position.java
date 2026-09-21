@@ -60,6 +60,15 @@ public class Position {
         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Price must be positive");
         }
+
+        // Validate quantity bounds: new quantity cannot be negative
+        int newQuantity = this.quantity + quantity;
+        if (newQuantity < 0) {
+            throw new IllegalArgumentException(
+                    String.format("Quantity cannot go negative: current=%d, change=%d, result=%d",
+                            this.quantity, quantity, newQuantity));
+        }
+
         if (this.quantity == 0) {
             this.averageCost = new BigDecimal(price.toPlainString());
             this.quantity = quantity;
