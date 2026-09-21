@@ -38,7 +38,7 @@ public class Account {
         if (other == null) {
             throw new IllegalArgumentException("Source account cannot be null");
         }
-        this.id = other.id;
+        // this.id = other.id;
         this.accountId = other.accountId;
         this.holderName = other.holderName;
         this.cashBalance = new BigDecimal(other.cashBalance.toPlainString());
