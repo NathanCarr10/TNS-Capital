@@ -1,0 +1,20 @@
+package com.neueda.leap.repositories;
+
+import com.neueda.leap.model.Instrument;
+import java.util.Optional;
+
+/**
+ * Repository abstraction for Instrument persistence.
+ * 
+ * Instruments are typically read-only after creation.
+ * Decouples business logic from storage implementation.
+ */
+public interface InstrumentRepository {
+    /**
+     * Finds an instrument by symbol.
+     *
+     * @param symbol the instrument symbol (typically normalized)
+     * @return Optional containing the instrument if found, empty otherwise
+     */
+    Optional<Instrument> findBySymbol(String symbol);
+}
