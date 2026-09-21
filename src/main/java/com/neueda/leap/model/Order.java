@@ -2,7 +2,7 @@ package com.neueda.leap.model;
 
 import java.time.Instant;
 import com.neueda.leap.time.Clock;
-import com.neueda.leap.utils.SymbolNormalizer;
+import com.neueda.leap.utils.InputNormalizer;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -36,12 +36,12 @@ public class Order {
         this(clock);
         validateConstructorArgs(accountId, symbol, side, quantity, price, idempotencyKey);
         this.accountId = accountId;
-        this.symbol = SymbolNormalizer.normalize(symbol);
+        this.symbol = InputNormalizer.normalize(symbol);
         this.side = side;
         this.quantity = quantity;
         this.price = new BigDecimal(price.toPlainString());
         this.status = OrderStatus.NEW;
-        this.idempotencyKey = idempotencyKey;
+        this.idempotencyKey = InputNormalizer.normalize(idempotencyKey);
     }
 
     public Order(Order other, Clock clock) {
@@ -65,7 +65,7 @@ public class Order {
         if (accountId == null || accountId <= 0) {
             throw new IllegalArgumentException("Valid account ID is required");
         }
-        if (symbol == null || SymbolNormalizer.normalize(symbol).isEmpty()) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
             throw new IllegalArgumentException("Symbol cannot be null or empty");
         }
         if (side == null) {
@@ -77,7 +77,7 @@ public class Order {
         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Price must be positive");
         }
-        if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
+        if (idempotencyKey == null || InputNormalizer.normalize(idempotencyKey).isEmpty()) {
             throw new IllegalArgumentException("Idempotency key cannot be null or empty");
         }
     }

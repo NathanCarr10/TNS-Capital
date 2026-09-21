@@ -10,7 +10,7 @@ import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.utils.PositionKeyFactory;
-import com.neueda.leap.utils.SymbolNormalizer;
+import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
@@ -51,7 +51,7 @@ public class OrderProcessing {
         Objects.requireNonNull(request);
 
         validator.validate(request);
-        String symbol = SymbolNormalizer.normalize(request.symbol());
+        String symbol = InputNormalizer.normalize(request.symbol());
         Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
                 request.price(), request.idempotencyKey(), clock);
 
@@ -86,6 +86,6 @@ public class OrderProcessing {
     }
 
     public Optional<Position> findPosition(Long accountId, String symbol) {
-        return positionRepository.findPosition(accountId, SymbolNormalizer.normalize(symbol));
+        return positionRepository.findPosition(accountId, InputNormalizer.normalize(symbol));
     }
 }

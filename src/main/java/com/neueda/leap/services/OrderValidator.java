@@ -7,7 +7,7 @@ import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
-import com.neueda.leap.utils.SymbolNormalizer;
+import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
@@ -45,7 +45,7 @@ public class OrderValidator {
         }
 
         // Check instrument exists and tradable
-        String symbol = SymbolNormalizer.normalize(request.symbol());
+        String symbol = InputNormalizer.normalize(request.symbol());
         Instrument instrument = instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
         if (!instrument.isTradable()) {

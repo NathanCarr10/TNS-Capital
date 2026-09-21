@@ -25,7 +25,7 @@ class OrderTest {
     @BeforeEach
     void setUp() {
         testClock = new ClockTest(Instant.parse("2026-09-16T10:00:00Z"));
-        order = new Order(1L, "   aapl  ", OrderSide.BUY, 100, new BigDecimal("150.50"), "ID-12345", testClock);
+        order = new Order(1L, "   aapl  ", OrderSide.BUY, 100, new BigDecimal("150.50"), " id-12345", testClock);
     }
 
     @DisplayName("Constructor with all parameters initializes correctly")
