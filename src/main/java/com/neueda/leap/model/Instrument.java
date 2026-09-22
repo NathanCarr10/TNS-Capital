@@ -1,5 +1,7 @@
 package com.neueda.leap.model;
 
+import com.neueda.leap.utils.InputNormalizer;
+
 /**
  * Instrument domain entity.
  * 
@@ -19,10 +21,10 @@ public class Instrument {
 
     public Instrument(String symbol, String name, String assetClass, String currency, boolean tradable) {
         validateConstructorArgs(symbol, name, assetClass, currency);
-        this.symbol = symbol;
+        this.symbol = InputNormalizer.normalize(symbol);
         this.name = name;
-        this.assetClass = assetClass;
-        this.currency = currency;
+        this.assetClass = InputNormalizer.normalize(assetClass);
+        this.currency = InputNormalizer.normalize(currency);
         this.tradable = tradable;
     }
 
@@ -39,16 +41,16 @@ public class Instrument {
     }
 
     private void validateConstructorArgs(String symbol, String name, String assetClass, String currency) {
-        if (symbol == null || symbol.trim().isEmpty()) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
             throw new IllegalArgumentException("Symbol cannot be null or empty");
         }
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Name cannot be null or empty");
         }
-        if (assetClass == null || assetClass.trim().isEmpty()) {
+        if (assetClass == null || InputNormalizer.normalize(assetClass).isEmpty()) {
             throw new IllegalArgumentException("Asset class cannot be null or empty");
         }
-        if (currency == null || currency.trim().isEmpty()) {
+        if (currency == null || InputNormalizer.normalize(currency).isEmpty()) {
             throw new IllegalArgumentException("Currency cannot be null or empty");
         }
     }

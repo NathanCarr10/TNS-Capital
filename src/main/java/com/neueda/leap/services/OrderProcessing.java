@@ -10,9 +10,13 @@ import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.utils.PositionKeyFactory;
-import com.neueda.leap.utils.SymbolNormalizer;
+import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
+import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.PositionRepository;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,26 +25,23 @@ import java.util.Optional;
  * Orchestrates order placement: validates, executes, and persists.
  */
 public class OrderProcessing {
-    private final Map<Long, Account> accounts;
-    private final Map<String, Instrument> instruments;
-    private final Map<String, Position> positions;
-    private final Map<String, Order> orders;
+    private final AccountRepository accountRepository;
+    private final OrderRepository orderRepository;
+    private final PositionRepository positionRepository;
     private final OrderValidator validator;
     private final Map<OrderSide, OrderExecutionStrategy> strategies;
     private final Clock clock;
 
     public OrderProcessing(
-            Map<Long, Account> accounts,
-            Map<String, Instrument> instruments,
-            Map<String, Position> positions,
-            Map<String, Order> orders,
+            AccountRepository accountRepository,
+            OrderRepository orderRepository,
+            PositionRepository positionRepository,
             OrderValidator validator,
             Map<OrderSide, OrderExecutionStrategy> strategies,
             Clock clock) {
-        this.accounts = Objects.requireNonNull(accounts);
-        this.instruments = Objects.requireNonNull(instruments);
-        this.positions = Objects.requireNonNull(positions);
-        this.orders = Objects.requireNonNull(orders);
+        this.accountRepository = Objects.requireNonNull(accountRepository);
+        this.orderRepository = Objects.requireNonNull(orderRepository);
+        this.positionRepository = Objects.requireNonNull(positionRepository);
         this.validator = Objects.requireNonNull(validator);
         this.strategies = Objects.requireNonNull(strategies);
         this.clock = Objects.requireNonNull(clock);
@@ -50,13 +51,21 @@ public class OrderProcessing {
         Objects.requireNonNull(request);
 
         validator.validate(request);
-        String symbol = SymbolNormalizer.normalize(request.symbol());
+        String symbol = InputNormalizer.normalize(request.symbol());
         Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
                 request.price(), request.idempotencyKey(), clock);
 
         try {
-            Account account = accounts.get(request.accountId());
+            // Retrieve account with null-safety
+            Account account = accountRepository.findById(request.accountId())
+                    .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
+
+            // Retrieve strategy with null-safety
             OrderExecutionStrategy strategy = strategies.get(request.side());
+            if (strategy == null) {
+                throw new IllegalStateException("No strategy registered for order side: " + request.side());
+            }
+
             strategy.execute(account, request, symbol);
             order.setStatus(OrderStatus.FILLED);
         } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
@@ -66,18 +75,17 @@ public class OrderProcessing {
             order.setStatus(OrderStatus.REJECTED);
             throw new IllegalStateException("Unexpected error during order execution", ex);
         } finally {
-            orders.put(order.getIdempotencyKey(), order);
+            orderRepository.save(order);
         }
 
         return order;
     }
 
     public Optional<Order> findByIdempotencyKey(String key) {
-        return Optional.ofNullable(orders.get(key));
+        return orderRepository.findByIdempotencyKey(key);
     }
 
     public Optional<Position> findPosition(Long accountId, String symbol) {
-        String key = PositionKeyFactory.createKey(accountId, SymbolNormalizer.normalize(symbol));
-        return Optional.ofNullable(positions.get(key));
+        return positionRepository.findPosition(accountId, InputNormalizer.normalize(symbol));
     }
 }

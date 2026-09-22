@@ -4,36 +4,46 @@ import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
-import com.neueda.leap.utils.PositionKeyFactory;
+import com.neueda.leap.repositories.PositionRepository;
 
 import java.math.BigDecimal;
-import java.util.Map;
 import java.util.Objects;
 
 public class SellOrderStrategy implements OrderExecutionStrategy {
-    private final Map<String, Position> positions;
+    private final PositionRepository positionRepository;
 
-    public SellOrderStrategy(Map<String, Position> positions) {
-        this.positions = Objects.requireNonNull(positions);
+    public SellOrderStrategy(PositionRepository positionRepository) {
+        this.positionRepository = Objects.requireNonNull(positionRepository);
     }
 
     @Override
     public void execute(Account account, PlaceOrderRequest request, String symbol) {
-        String key = PositionKeyFactory.createKey(request.accountId(), symbol);
-        Position current = positions.get(key);
+        // Phase 1: Validate position exists and has sufficient quantity
+        var currentPosition = positionRepository.findPosition(request.accountId(), symbol)
+                .orElseThrow(() -> new InsufficientHoldingsException("No position for symbol: " + symbol));
 
-        if (current == null || current.getQuantity() < request.quantity()) {
+        if (currentPosition.getQuantity() < request.quantity()) {
             throw new InsufficientHoldingsException("Insufficient holdings for symbol: " + symbol);
         }
 
+        // Phase 2: Perform credit operation
         BigDecimal proceeds = request.price().multiply(BigDecimal.valueOf(request.quantity()));
         account.credit(proceeds);
 
-        int remaining = current.getQuantity() - request.quantity();
-        if (remaining == 0) {
-            positions.remove(key);
-        } else {
-            positions.put(key, new Position(request.accountId(), symbol, remaining, current.getAverageCost()));
+        try {
+            // Phase 2: Update position
+            int remaining = currentPosition.getQuantity() - request.quantity();
+            if (remaining == 0) {
+                positionRepository.delete(request.accountId(), symbol);
+            } else {
+                Position updatedPosition = new Position(request.accountId(), symbol, remaining,
+                        currentPosition.getAverageCost());
+                positionRepository.save(updatedPosition);
+            }
+        } catch (Exception ex) {
+            // Phase 3: Rollback on exception
+            account.debit(proceeds); // Undo credit
+            throw new IllegalStateException("Position update failed; account restored", ex);
         }
     }
 }

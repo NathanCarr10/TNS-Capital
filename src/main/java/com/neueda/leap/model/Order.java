@@ -2,6 +2,8 @@ package com.neueda.leap.model;
 
 import java.time.Instant;
 import com.neueda.leap.time.Clock;
+import com.neueda.leap.utils.InputNormalizer;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 import com.neueda.leap.enums.OrderSide;
@@ -34,12 +36,12 @@ public class Order {
         this(clock);
         validateConstructorArgs(accountId, symbol, side, quantity, price, idempotencyKey);
         this.accountId = accountId;
-        this.symbol = symbol;
+        this.symbol = InputNormalizer.normalize(symbol);
         this.side = side;
         this.quantity = quantity;
         this.price = new BigDecimal(price.toPlainString());
         this.status = OrderStatus.NEW;
-        this.idempotencyKey = idempotencyKey;
+        this.idempotencyKey = InputNormalizer.normalize(idempotencyKey);
     }
 
     public Order(Order other, Clock clock) {
@@ -63,7 +65,7 @@ public class Order {
         if (accountId == null || accountId <= 0) {
             throw new IllegalArgumentException("Valid account ID is required");
         }
-        if (symbol == null || symbol.trim().isEmpty()) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
             throw new IllegalArgumentException("Symbol cannot be null or empty");
         }
         if (side == null) {
@@ -75,7 +77,7 @@ public class Order {
         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Price must be positive");
         }
-        if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
+        if (idempotencyKey == null || InputNormalizer.normalize(idempotencyKey).isEmpty()) {
             throw new IllegalArgumentException("Idempotency key cannot be null or empty");
         }
     }
@@ -117,11 +119,40 @@ public class Order {
         return createdOn;
     }
 
-    public void setStatus(OrderStatus status) {
-        if (status == null) {
+    public void setStatus(OrderStatus newStatus) {
+        if (newStatus == null) {
             throw new IllegalArgumentException("Status cannot be null");
         }
-        this.status = status;
+        validateTransition(this.status, newStatus);
+        this.status = newStatus;
+    }
+
+    /**
+     * Validates state transitions are allowed.
+     * Valid transitions: NEW → FILLED, NEW → REJECTED, NEW → CANCELLED
+     * Terminal states: FILLED, REJECTED, CANCELLED (no further transitions)
+     *
+     * @param from current status
+     * @param to   new status
+     * @throws IllegalStateException if transition is invalid
+     */
+    private void validateTransition(OrderStatus from, OrderStatus to) {
+        // Terminal states cannot transition to anything
+        if (from == OrderStatus.FILLED || from == OrderStatus.REJECTED || from == OrderStatus.CANCELLED) {
+            throw new IllegalStateException(
+                    String.format("Cannot transition from terminal state %s to %s", from, to));
+        }
+
+        // From NEW state, can only go to FILLED, REJECTED or CANCELLED
+        if (from == OrderStatus.NEW) {
+            if (to == OrderStatus.FILLED || to == OrderStatus.REJECTED || to == OrderStatus.CANCELLED) {
+                return; // Valid transition
+            }
+        }
+
+        // Any other transition is invalid
+        throw new IllegalStateException(
+                String.format("Invalid transition from %s to %s", from, to));
     }
 
     @Override
