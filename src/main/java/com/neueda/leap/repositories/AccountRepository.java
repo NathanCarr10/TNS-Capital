@@ -1,6 +1,8 @@
 package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Account;
+
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -26,4 +28,11 @@ public interface AccountRepository {
      * @throws IllegalArgumentException if account is null
      */
     void save(Account account);
+    
+     /**
+     * Finds all accounts.
+     *
+     * @return a collection of all accounts
+     */
+    List<Account> findAll();
 }

@@ -2,6 +2,9 @@ package com.neueda.leap.repositories.impl;
 
 import com.neueda.leap.model.Account;
 import com.neueda.leap.repositories.AccountRepository;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,5 +32,10 @@ public class InMemoryAccountRepository implements AccountRepository {
     public void save(Account account) {
         Objects.requireNonNull(account, "Account cannot be null");
         storage.put(account.getId(), account);
+    }
+
+    @Override
+    public List<Account> findAll() {
+        return new ArrayList<>(storage.values());
     }
 }
