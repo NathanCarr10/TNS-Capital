@@ -30,7 +30,7 @@ public class BuyOrderStrategy implements OrderExecutionStrategy {
 
         try {
             // Phase 2: Perform position update
-            var currentPosition = positionRepository.findPosition(request.accountId(), symbol);
+            var currentPosition = positionRepository.findByAccountIdAndSymbol(request.accountId(), symbol);
 
             if (currentPosition.isEmpty()) {
                 positionRepository.save(new Position(request.accountId(), symbol, request.quantity(), request.price()));
