@@ -3,9 +3,11 @@ package com.neueda.leap.repositories.impl;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.utils.PositionKeyFactory;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * In-memory implementation of PositionRepository.
@@ -38,5 +40,13 @@ public class InMemoryPositionRepository implements PositionRepository {
     public void delete(Long accountId, String symbol) {
         String key = PositionKeyFactory.createKey(accountId, symbol);
         storage.remove(key);
+    }
+
+    @Override
+    public List<Position> findByAccountId(Long accountId) {
+        // Filters positions by accountId since keys are "accountId::symbol"
+        return storage.values().stream()
+                .filter(position -> position.getAccountId().equals(accountId))
+                .collect(Collectors.toList());
     }
 }

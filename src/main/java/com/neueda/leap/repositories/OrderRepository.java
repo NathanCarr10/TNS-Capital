@@ -25,4 +25,12 @@ public interface OrderRepository {
      * @throws IllegalArgumentException if order is null
      */
     void save(Order order);
+
+    /**
+     * Finds all orders for a given account.
+     *
+     * @param accountId the account ID
+     * @return list of orders for the account; empty list if none found
+     */
+    java.util.List<Order> findByAccountId(Long accountId);
 }

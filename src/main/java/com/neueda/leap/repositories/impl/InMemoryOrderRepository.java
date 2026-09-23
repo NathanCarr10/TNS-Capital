@@ -2,9 +2,11 @@ package com.neueda.leap.repositories.impl;
 
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.OrderRepository;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * In-memory implementation of OrderRepository.
@@ -29,5 +31,13 @@ public class InMemoryOrderRepository implements OrderRepository {
     public void save(Order order) {
         Objects.requireNonNull(order, "Order cannot be null");
         storage.put(order.getIdempotencyKey(), order);
+    }
+
+    @Override
+    public List<Order> findByAccountId(Long accountId) {
+        // Filters orders by accountId since they store account context
+        return storage.values().stream()
+                .filter(order -> order.getAccountId().equals(accountId))
+                .collect(Collectors.toList());
     }
 }
