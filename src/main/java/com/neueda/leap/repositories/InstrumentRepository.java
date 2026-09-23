@@ -26,4 +26,12 @@ public interface InstrumentRepository {
      * @return list of all instruments; empty list if none found
      */
     List<Instrument> findAll();
+
+    /**
+     * Saves or updates an instrument.
+     *
+     * @param instrument the instrument to persist
+     * @throws IllegalArgumentException if instrument is null
+     */
+    void save(Instrument instrument);
 }

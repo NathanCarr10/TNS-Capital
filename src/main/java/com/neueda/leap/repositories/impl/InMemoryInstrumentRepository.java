@@ -33,4 +33,10 @@ public class InMemoryInstrumentRepository implements InstrumentRepository {
         // Returns all instruments as a new list; decouples internal storage from external API consumers
         return new ArrayList<>(storage.values());
     }
+
+    @Override
+    public void save(Instrument instrument) {
+        Objects.requireNonNull(instrument, "Instrument cannot be null");
+        storage.put(instrument.getSymbol(), instrument);
+    }
 }
