@@ -4,3 +4,4 @@ target/
 .vscode/.venv
 .venv
 .vscode/
+*/__pycache__/
