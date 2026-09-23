@@ -149,4 +149,54 @@ public class FinancialDataController {
                 )))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
+    
+    /**
+     * Fetch multiple symbols with delay to avoid rate-limiting.
+     * 
+     * GET /api/v1/financial-data/fetch-multiple?symbols=AAPL,GOOGL,MSFT&startDate=2024-09-01&endDate=2024-09-23
+     * 
+     * @param symbols Comma-separated stock symbols
+     * @param startDate Start date in format YYYY-MM-DD
+     * @param endDate End date in format YYYY-MM-DD
+     * @param delaySeconds Delay between fetches in seconds (default: 5)
+     * @return Results for each symbol
+     */
+    @GetMapping("/fetch-multiple")
+    public ResponseEntity<?> fetchMultipleWithDelay(
+            @RequestParam String symbols,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "5") int delaySeconds) {
+        
+        String[] symbolArray = symbols.split(",");
+        Map<String, Object> results = new java.util.LinkedHashMap<>();
+        
+        for (int i = 0; i < symbolArray.length; i++) {
+            String symbol = symbolArray[i].trim();
+            
+            try {
+                List<PriceHistory> data = yahooFinanceService.fetchAndStoreHistoricalData(symbol, startDate, endDate);
+                results.put(symbol, Map.of(
+                        "status", "success",
+                        "recordsStored", data.size()
+                ));
+            } catch (Exception e) {
+                results.put(symbol, Map.of(
+                        "status", "error",
+                        "message", e.getMessage() != null ? e.getMessage() : "Unknown error"
+                ));
+            }
+            
+            // Add delay between fetches (except after last symbol)
+            if (i < symbolArray.length - 1) {
+                try {
+                    Thread.sleep(delaySeconds * 1000L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        
+        return ResponseEntity.ok(results);
+    }
 }
