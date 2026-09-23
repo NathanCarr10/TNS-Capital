@@ -86,6 +86,6 @@ public class OrderProcessing {
     }
 
     public Optional<Position> findPosition(Long accountId, String symbol) {
-        return positionRepository.findPosition(accountId, InputNormalizer.normalize(symbol));
+        return positionRepository.findByAccountIdAndSymbol(accountId, InputNormalizer.normalize(symbol));
     }
 }

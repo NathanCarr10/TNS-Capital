@@ -1,6 +1,7 @@
 package com.neueda.leap.model;
 
 import com.neueda.leap.utils.InputNormalizer;
+import jakarta.persistence.*;
 
 /**
  * Instrument domain entity.
@@ -8,12 +9,26 @@ import com.neueda.leap.utils.InputNormalizer;
  * Manages tradable instrument data with validations.
  * Follows Domain-Driven Design principles.
  */
+@Entity
+@Table(name = "instruments", uniqueConstraints = @UniqueConstraint(columnNames = "symbol"))
 public class Instrument {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
+    @Column(unique = true, nullable = false)
     private String symbol;
+    
+    @Column(nullable = false)
     private String name;
+    
+    @Column(nullable = false)
     private String assetClass;
+    
+    @Column(nullable = false)
     private String currency;
+    
+    @Column(nullable = false)
     private boolean tradable;
 
     public Instrument() {

@@ -151,7 +151,7 @@ class OrderProcessingTest {
 
             // Verify position was created
             String positionKey = "1::AAPL";
-            var positionOpt = positionRepository.findPosition(1L, "AAPL");
+            var positionOpt = positionRepository.findByAccountIdAndSymbol(1L, "AAPL");
             assertTrue(positionOpt.isPresent(), "Position should be created for AAPL");
             assertEquals(100, positionOpt.get().getQuantity(), "Position quantity should be 100");
         }
