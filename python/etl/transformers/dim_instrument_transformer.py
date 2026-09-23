@@ -24,16 +24,21 @@ class DimInstrumentTransformer(BaseTransformer):
             # Create a copy to avoid modifying original
             df = input_data.copy()
             
+            # Remove duplicates (keep first occurrence)
+            df = df.drop_duplicates(subset=['symbol'], keep='first').reset_index(drop=True)
+            
+            # Generate surrogate keys (use hash of symbol for deterministic generation)
+            df['INSTRUMENT_KEY'] = (df['symbol'].astype(str).apply(hash) % 2147483647).abs() + 2000000
+            
             # Select and rename required columns
             self.output_data = pd.DataFrame({
+                'INSTRUMENT_KEY': df['INSTRUMENT_KEY'],
                 'SYMBOL': df['symbol'],
                 'NAME': df['name'],
                 'ASSET_CLASS': df['asset_class'],
-                'CURRENCY': df['currency']
+                'CURRENCY': df['currency'],
+                'TRADABLE': True
             })
-            
-            # Remove duplicates (keep first occurrence)
-            self.output_data = self.output_data.drop_duplicates(subset=['SYMBOL'], keep='first')
             
             logger.info(f"Transformed {self.row_count()} records to DIM_INSTRUMENT format")
             return self.output_data

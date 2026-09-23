@@ -50,7 +50,7 @@ class FactLoader(BaseLoader):
         """
         try:
             # Validate required columns
-            required_cols = ['ACCOUNT_KEY', 'INSTRUMENT_KEY', 'DATE_KEY', 'SIDE', 'QUANTITY', 'PRICE', 'STATUS']
+            required_cols = ['TRADE_KEY', 'ACCOUNT_KEY', 'INSTRUMENT_KEY', 'DATE_KEY', 'SIDE', 'QUANTITY', 'PRICE', 'STATUS', 'IDEMPOTENCY_KEY']
             missing_cols = [col for col in required_cols if col not in data.columns]
             if missing_cols:
                 raise ValueError(f"Missing required columns: {missing_cols}")
@@ -69,8 +69,8 @@ class FactLoader(BaseLoader):
                     USING {temp_table_name} s
                     ON t.IDEMPOTENCY_KEY = s.IDEMPOTENCY_KEY
                     WHEN NOT MATCHED THEN
-                        INSERT (ACCOUNT_KEY, INSTRUMENT_KEY, DATE_KEY, SIDE, QUANTITY, PRICE, STATUS, CREATED_ON, IDEMPOTENCY_KEY)
-                        VALUES (s.ACCOUNT_KEY, s.INSTRUMENT_KEY, s.DATE_KEY, s.SIDE, s.QUANTITY, s.PRICE, s.STATUS, s.CREATED_ON, s.IDEMPOTENCY_KEY)
+                        INSERT (TRADE_KEY, ACCOUNT_KEY, INSTRUMENT_KEY, DATE_KEY, SIDE, QUANTITY, PRICE, STATUS, CREATED_ON, IDEMPOTENCY_KEY)
+                        VALUES (s.TRADE_KEY, s.ACCOUNT_KEY, s.INSTRUMENT_KEY, s.DATE_KEY, s.SIDE, s.QUANTITY, s.PRICE, s.STATUS, s.CREATED_ON, s.IDEMPOTENCY_KEY)
                 """
                 
                 client.execute_update(merge_sql)

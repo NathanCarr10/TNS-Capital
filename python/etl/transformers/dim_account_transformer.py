@@ -1,7 +1,7 @@
 """Dimension Account Transformer"""
 
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 
 from etl.transformers.base import BaseTransformer
 from etl.logging_config import get_logger
@@ -25,16 +25,21 @@ class DimAccountTransformer(BaseTransformer):
             # Create a copy to avoid modifying original
             df = input_data.copy()
             
+            # Remove duplicates (keep latest by account_id)
+            df = df.drop_duplicates(subset=['account_id'], keep='first').reset_index(drop=True)
+            
+            # Generate surrogate keys (use hash of account_id for deterministic generation)
+            df['ACCOUNT_KEY'] = (df['account_id'].astype(str).apply(hash) % 2147483647).abs() + 1000000
+            
             # Select and rename required columns
+            # Use Python date objects (not Timestamp) for proper Snowflake DATE type mapping
             self.output_data = pd.DataFrame({
+                'ACCOUNT_KEY': df['ACCOUNT_KEY'],
                 'ACCOUNT_ID': df['account_id'],
                 'HOLDER_NAME': df['holder_name'],
                 'STATUS': df['status'],
-                'EFFECTIVE_DATE': datetime.now()
+                'EFFECTIVE_DATE': date.today()
             })
-            
-            # Remove duplicates (keep latest by account_id)
-            self.output_data = self.output_data.drop_duplicates(subset=['ACCOUNT_ID'], keep='first')
             
             logger.info(f"Transformed {self.row_count()} records to DIM_ACCOUNT format")
             return self.output_data

@@ -112,11 +112,16 @@ class SnowflakeClient:
             Number of rows inserted
         """
         try:
+            # Drop table if replace mode is requested
+            if if_exists == "replace":
+                self.execute_update(f"DROP TABLE IF EXISTS {table_name.upper()}")
+            
             success, nchunks, nrows, _ = write_pandas(
                 self.connection,
                 df,
                 table_name.upper(),
-                if_exists=if_exists,
+                auto_create_table=True,
+                overwrite=(if_exists == "replace"),
                 parallel=4
             )
             if success:
@@ -146,8 +151,12 @@ class SnowflakeClient:
             
             # Build MERGE statement
             key_condition = " AND ".join([f"t.{col} = s.{col}" for col in key_columns])
+            
+            # For UPDATE: all non-key columns
             update_cols = [col for col in df.columns if col not in key_columns]
-            update_statement = ", ".join([f"t.{col} = s.{col}" for col in update_cols])
+            update_statement = ", ".join([f"t.{col} = s.{col}" for col in update_cols]) if update_cols else ""
+            
+            # For INSERT: all columns including surrogate keys from the DataFrame
             insert_cols = ", ".join(df.columns)
             insert_values = ", ".join([f"s.{col}" for col in df.columns])
             
@@ -186,11 +195,12 @@ class SnowflakeClient:
                 SELECT 1 FROM information_schema.tables 
                 WHERE table_schema = '{self.config.schema.upper()}'
                 AND table_name = '{table_name.upper()}'
-            )
+            ) as table_exists
         """
         try:
             result = self.execute_query(query)
-            exists = result[0][0] if result else False
+            # execute_query returns list of dicts, so extract the first value from the first row
+            exists = bool(next(iter(result[0].values()))) if result else False
             logger.debug(f"Table {table_name} exists: {exists}")
             return exists
         except Exception as e:

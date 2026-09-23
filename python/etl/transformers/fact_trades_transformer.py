@@ -63,15 +63,13 @@ class FactTradesTransformer(BaseTransformer):
             # Create a copy to avoid modifying original
             df = input_data.copy()
             
-            # Prepare date dimension for joining
-            # Extract date from created_on timestamp
+            # Prepare date dimension for joining - use Python date objects
             df['ORDER_DATE'] = pd.to_datetime(df['created_on']).dt.date
             
             # Prepare dimension tables for joining
             dim_account_lookup = self.dim_account[['ACCOUNT_ID', 'ACCOUNT_KEY']].drop_duplicates()
             dim_instrument_lookup = self.dim_instrument[['SYMBOL', 'INSTRUMENT_KEY']].drop_duplicates()
             dim_date_lookup = self.dim_date[['FULL_DATE', 'DATE_KEY']].copy()
-            dim_date_lookup['FULL_DATE'] = pd.to_datetime(dim_date_lookup['FULL_DATE']).dt.date
             
             # Join with dimensions
             # Account lookup
@@ -122,6 +120,11 @@ class FactTradesTransformer(BaseTransformer):
                 'CREATED_ON': df['created_on'],
                 'IDEMPOTENCY_KEY': df['idempotency_key']
             })
+            
+            # Generate TRADE_KEY surrogate (hash-based, deterministic)
+            self.output_data['TRADE_KEY'] = (
+                self.output_data['IDEMPOTENCY_KEY'].astype(str).apply(hash) % 2147483647
+            ).abs() + 3000000
             
             # Drop rows with any null foreign keys
             self.output_data = self.output_data.dropna(subset=['ACCOUNT_KEY', 'INSTRUMENT_KEY', 'DATE_KEY'])

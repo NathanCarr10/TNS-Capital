@@ -37,10 +37,10 @@ class DimDateTransformer(BaseTransformer):
             # Generate all dates in range
             date_range = pd.date_range(start=start_date, end=end_date, freq='D')
             
-            # Create dataframe with date dimension
+            # Create dataframe with date dimension - use Python date objects for Snowflake DATE type
             self.output_data = pd.DataFrame({
                 'DATE_KEY': date_range.strftime('%Y%m%d').astype(int),
-                'FULL_DATE': date_range.date,
+                'FULL_DATE': date_range.date,  # Python date objects for proper Snowflake DATE mapping
                 'DAY': date_range.day,
                 'MONTH': date_range.month,
                 'YEAR': date_range.year,
@@ -53,8 +53,6 @@ class DimDateTransformer(BaseTransformer):
                 self.output_data = self.output_data[
                     self.output_data['FULL_DATE'].isin(created_dates)
                 ].reset_index(drop=True)
-                
-                # No need for additional filtering as we already filtered by created_dates
             
             logger.info(f"Generated {self.row_count()} date records")
             return self.output_data
