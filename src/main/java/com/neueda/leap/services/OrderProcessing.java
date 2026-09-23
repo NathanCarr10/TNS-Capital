@@ -88,4 +88,14 @@ public class OrderProcessing {
     public Optional<Position> findPosition(Long accountId, String symbol) {
         return positionRepository.findPosition(accountId, InputNormalizer.normalize(symbol));
     }
+
+    public void cancelOrder(Order order) {
+        // Sets order status to CANCELLED and persists; prevents double-cancellation by only allowing NEW orders
+        Objects.requireNonNull(order);
+        if (!order.getStatus().equals(OrderStatus.NEW)) {
+            throw new IllegalStateException("Cannot cancel order with status: " + order.getStatus());
+        }
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+    }
 }

@@ -2,6 +2,7 @@ package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Order;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository abstraction for Order persistence.
@@ -33,4 +34,20 @@ public interface OrderRepository {
      * @return list of orders for the account; empty list if none found
      */
     java.util.List<Order> findByAccountId(Long accountId);
+
+    /**
+     * Finds an order by its unique ID.
+     *
+     * @param id the order UUID
+     * @return Optional containing the order if found, empty otherwise
+     */
+    Optional<Order> findById(UUID id);
+
+    /**
+     * Finds all orders in the system.
+     *
+     * @return list of all orders; empty list if none found
+     */
+    java.util.List<Order> findAll();
+
 }

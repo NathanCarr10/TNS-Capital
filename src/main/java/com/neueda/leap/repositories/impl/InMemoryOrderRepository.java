@@ -2,10 +2,13 @@ package com.neueda.leap.repositories.impl;
 
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.OrderRepository;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -39,5 +42,19 @@ public class InMemoryOrderRepository implements OrderRepository {
         return storage.values().stream()
                 .filter(order -> order.getAccountId().equals(accountId))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<Order> findById(UUID id) {
+        // Searches storage by UUID since orders are keyed by idempotency key; UUID lookup requires full scan
+        return storage.values().stream()
+                .filter(order -> order.getId().equals(id))
+                .findFirst();
+    }
+
+    @Override
+    public List<Order> findAll() {
+        // Returns all orders as a new list; decouples internal storage from external API consumers
+        return new ArrayList<>(storage.values());
     }
 }
