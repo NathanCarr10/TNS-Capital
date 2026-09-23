@@ -33,9 +33,9 @@ import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
 
-@DisplayName("OrderProcessing Test Suite")
-class OrderProcessingTest {
-    private OrderProcessing orderProcessing;
+@DisplayName("OrderService Test Suite")
+class OrderServiceTest {
+    private OrderService orderService;
     private OrderValidator validator;
     private Map<Long, Account> accountsMap;
     private Map<String, Instrument> instrumentsMap;
@@ -81,9 +81,9 @@ class OrderProcessingTest {
         strategies.put(OrderSide.BUY, new BuyOrderStrategy(positionRepository));
         strategies.put(OrderSide.SELL, new SellOrderStrategy(positionRepository));
 
-        // Create validator and OrderProcessing
+        // Create validator and OrderService
         validator = new OrderValidator(accountRepository, instrumentRepository, orderRepository);
-        orderProcessing = new OrderProcessing(accountRepository, orderRepository, positionRepository, validator,
+        orderService = new OrderService(accountRepository, orderRepository, positionRepository, validator,
                 strategies, testClock);
     }
 
@@ -101,7 +101,7 @@ class OrderProcessingTest {
                     new BigDecimal("150.00"),
                     "BUY-001");
 
-            Order result = orderProcessing.placeOrder(buyRequest);
+            Order result = orderService.placeOrder(buyRequest);
 
             // Verify order properties
             assertEquals("BUY-001", result.getIdempotencyKey(), "Idempotency key should match");
@@ -126,7 +126,7 @@ class OrderProcessingTest {
                     price,
                     "BUY-002");
 
-            Order result = orderProcessing.placeOrder(buyRequest);
+            Order result = orderService.placeOrder(buyRequest);
 
             BigDecimal expectedCost = price.multiply(BigDecimal.valueOf(quantity));
             BigDecimal expectedBalance = initialBalance.subtract(expectedCost);
@@ -147,7 +147,7 @@ class OrderProcessingTest {
                     new BigDecimal("150.00"),
                     "BUY-003");
 
-            Order result = orderProcessing.placeOrder(buyRequest);
+            Order result = orderService.placeOrder(buyRequest);
 
             // Verify position was created
             String positionKey = "1::AAPL";
@@ -174,7 +174,7 @@ class OrderProcessingTest {
 
             // Should throw exception
             assertThrows(InsufficientFundsException.class,
-                    () -> orderProcessing.placeOrder(expensiveBuyRequest),
+                    () -> orderService.placeOrder(expensiveBuyRequest),
                     "Should throw InsufficientFundsException");
 
             // But the order should still be persisted with REJECTED status
@@ -197,7 +197,7 @@ class OrderProcessingTest {
                     "INVALID-ACC-001");
 
             // Should throw validation exception
-            assertThrows(Exception.class, () -> orderProcessing.placeOrder(invalidRequest));
+            assertThrows(Exception.class, () -> orderService.placeOrder(invalidRequest));
 
             // Order should NOT be in orders map (validation happens before order creation)
             // This is correct behavior - order not created if validation fails
@@ -218,8 +218,8 @@ class OrderProcessingTest {
                     new BigDecimal("150.00"),
                     "FIND-001");
 
-            Order placedOrder = orderProcessing.placeOrder(buyRequest);
-            Order foundOrder = orderProcessing.findByIdempotencyKey("FIND-001").orElse(null);
+            Order placedOrder = orderService.placeOrder(buyRequest);
+            Order foundOrder = orderService.findByIdempotencyKey("FIND-001").orElse(null);
 
             assertNotNull(foundOrder, "Order should be found by idempotency key");
             assertEquals(placedOrder.getIdempotencyKey(), foundOrder.getIdempotencyKey(),
@@ -229,7 +229,7 @@ class OrderProcessingTest {
         @DisplayName("Finding non-existent order returns empty Optional")
         @Test
         void testFindNonExistentOrderReturnsEmpty() {
-            var result = orderProcessing.findByIdempotencyKey("DOES-NOT-EXIST");
+            var result = orderService.findByIdempotencyKey("DOES-NOT-EXIST");
 
             assertTrue(result.isEmpty(), "Finding non-existent order should return empty Optional");
         }
@@ -250,10 +250,10 @@ class OrderProcessingTest {
                     new BigDecimal("150.00"),
                     "POS-001");
 
-            orderProcessing.placeOrder(buyRequest);
+            orderService.placeOrder(buyRequest);
 
             // Now find the position
-            var foundPosition = orderProcessing.findPosition(1L, "AAPL");
+            var foundPosition = orderService.findPosition(1L, "AAPL");
 
             assertTrue(foundPosition.isPresent(), "Position should be found");
             assertEquals(100, foundPosition.get().getQuantity(), "Position quantity should be 100");
@@ -262,7 +262,7 @@ class OrderProcessingTest {
         @DisplayName("Finding non-existent position returns empty Optional")
         @Test
         void testFindNonExistentPositionReturnsEmpty() {
-            var result = orderProcessing.findPosition(1L, "MSFT");
+            var result = orderService.findPosition(1L, "MSFT");
 
             assertTrue(result.isEmpty(), "Finding non-existent position should return empty Optional");
         }
@@ -279,10 +279,10 @@ class OrderProcessingTest {
                     new BigDecimal("150.00"),
                     "POS-002");
 
-            orderProcessing.placeOrder(buyRequest);
+            orderService.placeOrder(buyRequest);
 
             // Find with lowercase - should still work
-            var foundPosition = orderProcessing.findPosition(1L, "aapl");
+            var foundPosition = orderService.findPosition(1L, "aapl");
 
             assertTrue(foundPosition.isPresent(), "Position should be found regardless of symbol case");
         }

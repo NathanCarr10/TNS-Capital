@@ -20,11 +20,15 @@ import com.neueda.leap.repositories.PositionRepository;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orchestrates order placement: validates, executes, and persists.
  */
-public class OrderProcessing {
+@Service
+@Transactional
+public class OrderService {
     private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
     private final PositionRepository positionRepository;
@@ -32,7 +36,7 @@ public class OrderProcessing {
     private final Map<OrderSide, OrderExecutionStrategy> strategies;
     private final Clock clock;
 
-    public OrderProcessing(
+    public OrderService(
             AccountRepository accountRepository,
             OrderRepository orderRepository,
             PositionRepository positionRepository,
