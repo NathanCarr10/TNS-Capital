@@ -14,12 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * REST API Controller for financial data endpoints.
- * 
- * Provides endpoints for fetching, storing, and analyzing financial data
- * from Yahoo Finance with fallback to Python yfinance wrapper.
- */
 @RestController
 @RequestMapping("/api/v1/financial-data")
 public class FinancialDataController {
@@ -32,17 +26,6 @@ public class FinancialDataController {
         this.yahooFinanceService = yahooFinanceService;
         this.pythonYFinanceService = pythonYFinanceService;
     }
-    
-    /**
-     * Fetch and store historical price data from Yahoo Finance.
-     * 
-     * GET /api/v1/financial-data/fetch?symbol=AAPL&startDate=2023-01-01&endDate=2024-01-01
-     * 
-     * @param symbol Stock symbol (e.g., "AAPL")
-     * @param startDate Start date in format YYYY-MM-DD
-     * @param endDate End date in format YYYY-MM-DD
-     * @return Response with number of records stored
-     */
     @GetMapping("/fetch")
     public ResponseEntity<?> fetchHistoricalData(
             @RequestParam String symbol,
@@ -62,14 +45,6 @@ public class FinancialDataController {
         }
     }
     
-    /**
-     * Get current price for a symbol.
-     * 
-     * GET /api/v1/financial-data/current-price?symbol=AAPL
-     * 
-     * @param symbol Stock symbol
-     * @return Current price information
-     */
     @GetMapping("/current-price")
     public ResponseEntity<?> getCurrentPrice(@RequestParam String symbol) {
         return yahooFinanceService.getCurrentPrice(symbol)
@@ -81,16 +56,6 @@ public class FinancialDataController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
     
-    /**
-     * Get price history for a symbol and date range.
-     * 
-     * GET /api/v1/financial-data/history?symbol=AAPL&startDate=2023-01-01&endDate=2024-01-01
-     * 
-     * @param symbol Stock symbol
-     * @param startDate Start date in format YYYY-MM-DD
-     * @param endDate End date in format YYYY-MM-DD
-     * @return List of price history records
-     */
     @GetMapping("/history")
     public ResponseEntity<?> getPriceHistory(
             @RequestParam String symbol,
@@ -108,15 +73,6 @@ public class FinancialDataController {
         ));
     }
     
-    /**
-     * Calculate moving average.
-     * 
-     * GET /api/v1/financial-data/moving-average?symbol=AAPL&days=50
-     * 
-     * @param symbol Stock symbol
-     * @param days Number of days for moving average (default: 50)
-     * @return Moving average value
-     */
     @GetMapping("/moving-average")
     public ResponseEntity<?> getMovingAverage(
             @RequestParam String symbol,
@@ -131,15 +87,6 @@ public class FinancialDataController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
     
-    /**
-     * Calculate volatility.
-     * 
-     * GET /api/v1/financial-data/volatility?symbol=AAPL&days=30
-     * 
-     * @param symbol Stock symbol
-     * @param days Number of days for volatility calculation (default: 30)
-     * @return Volatility value
-     */
     @GetMapping("/volatility")
     public ResponseEntity<?> getVolatility(
             @RequestParam String symbol,
@@ -154,17 +101,6 @@ public class FinancialDataController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
     
-    /**
-     * Fetch multiple symbols with delay to avoid rate-limiting.
-     * 
-     * GET /api/v1/financial-data/fetch-multiple?symbols=AAPL,GOOGL,MSFT&startDate=2024-09-01&endDate=2024-09-23
-     * 
-     * @param symbols Comma-separated stock symbols
-     * @param startDate Start date in format YYYY-MM-DD
-     * @param endDate End date in format YYYY-MM-DD
-     * @param delaySeconds Delay between fetches in seconds (default: 5)
-     * @return Results for each symbol
-     */
     @GetMapping("/fetch-multiple")
     public ResponseEntity<?> fetchMultipleWithDelay(
             @RequestParam String symbols,
@@ -204,16 +140,6 @@ public class FinancialDataController {
         return ResponseEntity.ok(results);
     }
     
-    /**
-     * Fetch data using Python yfinance wrapper (better rate-limit handling).
-     * 
-     * GET /api/v1/financial-data/fetch-python?symbol=AAPL&startDate=2024-09-01&endDate=2024-09-30
-     * 
-     * @param symbol Stock symbol
-     * @param startDate Start date in format YYYY-MM-DD
-     * @param endDate End date in format YYYY-MM-DD
-     * @return Number of records stored
-     */
     @GetMapping("/fetch-python")
     public ResponseEntity<?> fetchViaPhonYFinance(
             @RequestParam String symbol,
