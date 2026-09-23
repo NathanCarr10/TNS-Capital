@@ -33,16 +33,35 @@ public class YahooFinanceService {
     
     /**
      * Fetch historical price data from Yahoo Finance and store in database.
+     * Includes exponential backoff retry logic to handle rate limiting.
      * 
      * @param symbol Stock symbol (e.g., "AAPL")
      * @param startDate Starting date for historical data
      * @param endDate Ending date for historical data
      * @return List of PriceHistory objects
-     * @throws RuntimeException if unable to fetch data from Yahoo Finance
+     * @throws RuntimeException if unable to fetch data after 5 attempts
      */
     public List<PriceHistory> fetchAndStoreHistoricalData(String symbol, LocalDate startDate, LocalDate endDate) {
+        return fetchWithExponentialBackoff(symbol, startDate, endDate, 1, 5000);
+    }
+    
+    /**
+     * Fetch with exponential backoff retry strategy.
+     * Max 5 attempts with delays: 5s → 10s → 20s → 40s → 80s
+     * Adds jitter (±20%) to prevent thundering herd.
+     * 
+     * @param attempt Current attempt number (1-5)
+     * @param delayMs Current delay in milliseconds
+     * @return List of PriceHistory objects
+     */
+    private List<PriceHistory> fetchWithExponentialBackoff(String symbol, LocalDate startDate, LocalDate endDate, int attempt, long delayMs) {
+        if (attempt > 5) {
+            logger.error("✗ Max retries (5) exceeded for symbol: {}", symbol);
+            throw new RuntimeException("Failed to fetch data for symbol: " + symbol + " after 5 attempts");
+        }
+        
         try {
-            logger.info("Fetching historical data for {} from {} to {}", symbol, startDate, endDate);
+            logger.info("Fetching {} from {} to {} (attempt {}/5)", symbol, startDate, endDate, attempt);
             
             Stock stock = YahooFinance.get(symbol);
             Calendar startCal = Calendar.getInstance();
@@ -67,12 +86,36 @@ public class YahooFinanceService {
                     .collect(Collectors.toList());
             
             priceHistoryRepository.saveAll(priceHistories);
-            logger.info("Successfully stored {} price records for {}", priceHistories.size(), symbol);
+            logger.info("✓ Successfully stored {} records for {}", priceHistories.size(), symbol);
             
             return priceHistories;
+            
         } catch (IOException e) {
-            logger.error("Error fetching data from Yahoo Finance for symbol: {}", symbol, e);
-            throw new RuntimeException("Failed to fetch financial data for symbol: " + symbol, e);
+            String errorMsg = e.getMessage();
+            boolean isRateLimited = errorMsg != null && (errorMsg.contains("429") || errorMsg.contains("Too Many Requests"));
+            
+            if (isRateLimited) {
+                logger.warn("⚠️  Rate-limited (HTTP 429) for {}. Attempt {}/5. Backing off...", symbol, attempt);
+                
+                // Exponential backoff with jitter: 5s, 10s, 20s, 40s, 80s
+                // Jitter: ±20% to avoid thundering herd
+                long jitter = (long) (delayMs * 0.2 * (Math.random() * 2 - 1));
+                long waitTime = delayMs + jitter;
+                
+                logger.info("  Waiting {}ms before retry...", waitTime);
+                try {
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Interrupted during retry", ie);
+                }
+                
+                // Retry with doubled delay
+                return fetchWithExponentialBackoff(symbol, startDate, endDate, attempt + 1, delayMs * 2);
+            } else {
+                logger.error("✗ Error fetching {} (not rate-limited): {}", symbol, errorMsg);
+                throw new RuntimeException("Failed to fetch financial data for symbol: " + symbol, e);
+            }
         }
     }
     
