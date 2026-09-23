@@ -16,10 +16,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Wrapper service for Python-based yfinance library.
- * Provides better rate-limit handling than Java yahoofinance-api.
- */
 @Service
 public class PythonYFinanceService {
     
@@ -32,17 +28,6 @@ public class PythonYFinanceService {
         this.priceHistoryRepository = priceHistoryRepository;
     }
     
-    /**
-     * Fetch historical data using Python yfinance library.
-     * Better rate-limit handling and more reliable than Java library.
-     * 
-     * @param symbol Stock ticker
-     * @param startDate Start date
-     * @param endDate End date
-     * @param maxRetries Maximum retry attempts
-     * @return List of PriceHistory objects
-     * @throws RuntimeException if fetch fails after retries
-     */
     public List<PriceHistory> fetchHistoricalData(String symbol, LocalDate startDate, LocalDate endDate, int maxRetries) {
         try {
             logger.info("Fetching {} via Python yfinance (retries: {})", symbol, maxRetries);
@@ -80,8 +65,8 @@ public class PythonYFinanceService {
             String result = output.toString().trim();
             
             if (exitCode != 0 || result.isEmpty()) {
-                logger.error("Python script failed with exit code {}: {}", exitCode, result);
-                throw new RuntimeException("Python fetch failed: " + result);
+                logger.error("Python script failed with exit code {}", exitCode);
+                throw new RuntimeException("Python fetch failed");
             }
             
             // Parse JSON response
@@ -90,7 +75,7 @@ public class PythonYFinanceService {
             // Check for error response
             if (root.isObject() && root.has("error")) {
                 String error = root.get("error").asText();
-                logger.error("✗ Python fetch error for {}: {}", symbol, error);
+                logger.error("Python fetch error for {}: {}", symbol, error);
                 throw new RuntimeException("Fetch failed: " + error);
             }
             
@@ -121,7 +106,7 @@ public class PythonYFinanceService {
             
             // Save to database
             priceHistoryRepository.saveAll(priceHistories);
-            logger.info("✓ Successfully fetched and stored {} records for {} via Python", priceHistories.size(), symbol);
+            logger.info("Successfully fetched and stored {} records for {}", priceHistories.size(), symbol);
             return priceHistories;
             
         } catch (IOException e) {
@@ -133,10 +118,6 @@ public class PythonYFinanceService {
             throw new RuntimeException("Fetch interrupted", e);
         }
     }
-    
-    /**
-     * Fetch with default retry count.
-     */
     public List<PriceHistory> fetchHistoricalData(String symbol, LocalDate startDate, LocalDate endDate) {
         return fetchHistoricalData(symbol, startDate, endDate, 3);
     }
