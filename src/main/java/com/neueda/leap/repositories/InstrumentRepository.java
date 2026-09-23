@@ -1,6 +1,8 @@
 package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Instrument;
+
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -17,4 +19,11 @@ public interface InstrumentRepository {
      * @return Optional containing the instrument if found, empty otherwise
      */
     Optional<Instrument> findBySymbol(String symbol);
+
+    /**
+     * Finds all instruments in the system.
+     *
+     * @return list of all instruments; empty list if none found
+     */
+    List<Instrument> findAll();
 }

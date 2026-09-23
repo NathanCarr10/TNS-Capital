@@ -2,6 +2,9 @@ package com.neueda.leap.repositories.impl;
 
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.InstrumentRepository;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,5 +26,11 @@ public class InMemoryInstrumentRepository implements InstrumentRepository {
     @Override
     public Optional<Instrument> findBySymbol(String symbol) {
         return Optional.ofNullable(storage.get(symbol));
+    }
+
+    @Override
+    public List<Instrument> findAll() {
+        // Returns all instruments as a new list; decouples internal storage from external API consumers
+        return new ArrayList<>(storage.values());
     }
 }
