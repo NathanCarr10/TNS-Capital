@@ -117,7 +117,7 @@ class FactTradesTransformer(BaseTransformer):
                 'QUANTITY': df['quantity'],
                 'PRICE': df['price'],
                 'STATUS': df['status'],
-                'CREATED_ON': df['created_on'],
+                'CREATED_ON': pd.to_datetime(df['created_on']),
                 'IDEMPOTENCY_KEY': df['idempotency_key']
             })
             

@@ -65,7 +65,7 @@ class ETLConfig:
     """ETL Pipeline Configuration"""
     
     batch_size = int(os.getenv("BATCH_SIZE", "1000"))
-    synthetic_orders_count = int(os.getenv("SYNTHETIC_ORDERS_COUNT", "50000"))
+    synthetic_orders_count = int(os.getenv("SYNTHETIC_ORDERS_COUNT", "5000"))
     historical_period_years = int(os.getenv("HISTORICAL_PERIOD_YEARS", "1"))
     log_level = os.getenv("LOG_LEVEL", "INFO")
     
