@@ -30,8 +30,23 @@ public class MyBatisAccountRepository implements AccountRepository {
     }
 
     @Override
-    public void save(Account account) {
+    public <S extends Account> S save(S account) {
         Objects.requireNonNull(account, "Account cannot be null");
         accountMapper.save(account);
+        return account;
+    }
+
+    @Override
+    public Optional<Account> findByAccountId(String accountId) {
+        Objects.requireNonNull(accountId, "Account ID cannot be null");
+        Account account = accountMapper.findById(Long.parseLong(accountId));
+        return Optional.ofNullable(account);
+    }
+
+    // Stub implementations for JpaRepository methods
+    @Override
+    public <S extends Account> java.util.List<S> findAll(org.springframework.data.domain.Example<S> example,
+                                                         org.springframework.data.domain.Sort sort) {
+        return new java.util.ArrayList<>();
     }
 }

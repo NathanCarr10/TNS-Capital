@@ -3,6 +3,7 @@ package com.neueda.leap.repositories.impl;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.mappers.OrderMapper;
+import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
 import java.util.UUID;
@@ -38,8 +39,22 @@ public class MyBatisOrderRepository implements OrderRepository {
     }
 
     @Override
-    public void save(Order order) {
+    public <S extends Order> S save(S order) {
         Objects.requireNonNull(order, "Order cannot be null");
         orderMapper.save(order);
+        return order;
+    }
+
+    @Override
+    public List<Order> findByAccountId(Long accountId) {
+        Objects.requireNonNull(accountId, "Account ID cannot be null");
+        return new java.util.ArrayList<>(); // TODO: Implement with orderMapper query
+    }
+
+    // Stub implementations for JpaRepository methods
+    @Override
+    public <S extends Order> java.util.List<S> findAll(org.springframework.data.domain.Example<S> example,
+                                                       org.springframework.data.domain.Sort sort) {
+        return new java.util.ArrayList<>();
     }
 }

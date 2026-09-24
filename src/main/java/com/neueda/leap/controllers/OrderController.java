@@ -6,7 +6,7 @@ import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
-import com.neueda.leap.services.OrderProcessing;
+import com.neueda.leap.services.OrderService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,15 +23,15 @@ import java.util.stream.Collectors;
 public class OrderController {
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
-    private final OrderProcessing orderProcessing;
+    private final OrderService orderService;
     
     public OrderController(OrderRepository orderRepository,
                         AccountRepository accountRepository,
-                        OrderProcessing orderProcessing) {
+                        OrderService orderService) {
 
         this.orderRepository = orderRepository;
         this.accountRepository = accountRepository;
-        this.orderProcessing = orderProcessing;
+        this.orderService = orderService;
     }
 
     @PostMapping
@@ -41,7 +41,7 @@ public class OrderController {
                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
         
         // Delegates order processing to service layer; controller owns HTTP routing, service owns business logic
-        Order order = orderProcessing.placeOrder(request);
+        Order order = orderService.placeOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(order));
     }
 
@@ -70,7 +70,7 @@ public class OrderController {
                 .orElseThrow(() -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
         
         // Delegates cancellation to service layer; service validates business rules (status, timing)
-        orderProcessing.cancelOrder(order);
+        orderService.cancelOrder(orderId);
         return ResponseEntity.noContent().build();
     }
 

@@ -15,7 +15,6 @@ import com.neueda.leap.utils.InputNormalizer;
 
 import java.util.Objects;
 import org.springframework.stereotype.Service;
-import org.springframework.stereotype.Service;
 
 /**
  * Validates order requests before execution.
@@ -23,7 +22,6 @@ import org.springframework.stereotype.Service;
  * Retrieves validation data directly from MyBatis mappers for account,
  * instrument, and order entities.
  */
-@Service
 @Service
 public class OrderValidator {
     private final AccountMapper accountMapper;

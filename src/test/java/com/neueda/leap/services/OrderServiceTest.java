@@ -271,25 +271,25 @@ class OrderServiceTest {
         void testFindPositionSuccess() {
             Position position = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
 
-            when(positionRepository.findPosition(1L, "AAPL")).thenReturn(Optional.of(position));
+            when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL")).thenReturn(Optional.of(position));
 
             Optional<Position> result = orderService.findPosition(1L, "AAPL");
 
             assertTrue(result.isPresent());
             assertEquals("AAPL", result.get().getSymbol());
             assertEquals(100, result.get().getQuantity());
-            verify(positionRepository, times(1)).findPosition(1L, "AAPL");
+            verify(positionRepository, times(1)).findByAccountIdAndSymbol(1L, "AAPL");
         }
 
         @DisplayName("Should return empty Optional when position not found")
         @Test
         void testFindPositionNotFound() {
-            when(positionRepository.findPosition(1L, "AAPL")).thenReturn(Optional.empty());
+            when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL")).thenReturn(Optional.empty());
 
             Optional<Position> result = orderService.findPosition(1L, "AAPL");
 
             assertFalse(result.isPresent());
-            verify(positionRepository, times(1)).findPosition(1L, "AAPL");
+            verify(positionRepository, times(1)).findByAccountIdAndSymbol(1L, "AAPL");
         }
 
         @DisplayName("Should normalize symbol before searching")
@@ -297,13 +297,13 @@ class OrderServiceTest {
         void testFindPositionNormalizeSymbol() {
             Position position = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
 
-            when(positionRepository.findPosition(1L, "AAPL")).thenReturn(Optional.of(position));
+            when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL")).thenReturn(Optional.of(position));
 
             // Pass lowercase symbol
             orderService.findPosition(1L, "aapl");
 
             // Should be normalized to uppercase
-            verify(positionRepository, times(1)).findPosition(1L, "AAPL");
+            verify(positionRepository, times(1)).findByAccountIdAndSymbol(1L, "AAPL");
         }
     }
 
