@@ -26,8 +26,8 @@ public interface OrderMapper {
      * @return the Order if found, null otherwise
      */
     @Select("SELECT id, account_id, symbol, side, quantity, price, status, idempotency_key, created_on " +
-            "FROM orders WHERE id = #{id}")
-    Order findById(UUID id);
+            "FROM orders WHERE id = #{id, javaType=java.util.UUID, jdbcType=VARCHAR}")
+    Order findById(@Param("id") UUID id);
 
     /**
      * Saves or updates an order.
@@ -35,7 +35,7 @@ public interface OrderMapper {
      * @param order the order to persist
      */
     @Insert("INSERT INTO orders (id, account_id, symbol, side, quantity, price, status, idempotency_key, created_on) " +
-            "VALUES (#{id}, #{accountId}, #{symbol}, #{side}, #{quantity}, #{price}, #{status}, #{idempotencyKey}, #{createdOn}) " +
+            "VALUES (#{id, javaType=java.util.UUID, jdbcType=VARCHAR}, #{accountId}, #{symbol}, #{side}, #{quantity}, #{price}, #{status}, #{idempotencyKey}, #{createdOn}) " +
             "ON CONFLICT (idempotency_key) DO UPDATE SET " +
             "status = #{status}")
     void save(Order order);
@@ -46,6 +46,6 @@ public interface OrderMapper {
      * @param id the order ID
      * @param status the new status
      */
-    @Update("UPDATE orders SET status = #{status} WHERE id = #{id}")
-    void updateStatus(UUID id, String status);
+    @Update("UPDATE orders SET status = #{status} WHERE id = #{id, javaType=java.util.UUID, jdbcType=VARCHAR}")
+    void updateStatus(@Param("id") UUID id, @Param("status") String status);
 }
