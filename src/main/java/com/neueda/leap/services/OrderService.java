@@ -14,6 +14,8 @@ import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.OrderNotFoundException;
+import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
@@ -21,13 +23,16 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orchestrates order placement: validates, executes, and persists.
  */
 @Service
-public class OrderProcessing {
+@Transactional
+public class OrderService {
     private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
     private final PositionRepository positionRepository;
@@ -35,7 +40,7 @@ public class OrderProcessing {
     private final Map<OrderSide, OrderExecutionStrategy> strategies;
     private final Clock clock;
 
-    public OrderProcessing(
+    public OrderService(
             AccountRepository accountRepository,
             OrderRepository orderRepository,
             PositionRepository positionRepository,
@@ -92,9 +97,35 @@ public class OrderProcessing {
         return positionRepository.findByAccountIdAndSymbol(accountId, InputNormalizer.normalize(symbol));
     }
 
-    public void cancelOrder(Order order) {
-        // Deletes the order from the database
-        Objects.requireNonNull(order);
-        orderRepository.delete(order);
+    /**
+     * Cancels an order if its status is NEW.
+     * 
+     * Cancellation is only allowed for orders in NEW state.
+     * Attempting to cancel FILLED, REJECTED, or CANCELLED orders throws a conflict exception.
+     *
+     * @param orderId the order ID to cancel
+     * @return the cancelled order
+     * @throws OrderNotFoundException if order is not found
+     * @throws OrderCancellationConflictException if order status is not NEW
+     */
+    public Order cancelOrder(UUID orderId) {
+        Objects.requireNonNull(orderId, "Order ID cannot be null");
+
+        // Retrieve order
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+
+        // Validate cancellation is allowed (only NEW orders can be cancelled)
+        if (order.getStatus() != OrderStatus.NEW) {
+            throw new OrderCancellationConflictException(
+                    String.format("Cannot cancel order in %s status. Only NEW orders can be cancelled.", 
+                            order.getStatus()));
+        }
+
+        // Update order status to CANCELLED
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+
+        return order;
     }
 }
