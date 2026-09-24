@@ -24,8 +24,9 @@ import com.neueda.leap.time.Clock;
 
 /**
  * Loads comprehensive seed data on application startup.
- * Loads accounts, instruments, positions, and orders from db/data folder seed data.
- * This runs after Hibernate creates the schema.
+ * Works alongside Flyway: DataLoader runs first after schema creation,
+ * checking if tables are empty before inserting seed data.
+ * NOTE: For production, consider migrating to pure Flyway-based seed data.
  */
 @Component
 public class DataLoader implements CommandLineRunner {
