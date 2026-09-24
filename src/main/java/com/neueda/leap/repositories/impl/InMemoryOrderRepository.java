@@ -30,6 +30,17 @@ public class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
+    public List<Order> findByAccountId(Long accountId) {
+        List<Order> result = new ArrayList<>();
+        for (Order order : storage.values()) {
+            if (order.getAccountId().equals(accountId)) {
+                result.add(order);
+            }
+        }
+        return result;
+    }
+
+    @Override
     public <S extends Order> S save(S order) {
         Objects.requireNonNull(order, "Order cannot be null");
         storage.put(order.getIdempotencyKey(), order);

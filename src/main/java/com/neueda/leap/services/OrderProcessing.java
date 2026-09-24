@@ -17,6 +17,7 @@ import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
+import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,6 +25,7 @@ import java.util.Optional;
 /**
  * Orchestrates order placement: validates, executes, and persists.
  */
+@Service
 public class OrderProcessing {
     private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
@@ -90,12 +92,8 @@ public class OrderProcessing {
     }
 
     public void cancelOrder(Order order) {
-        // Sets order status to CANCELLED and persists; prevents double-cancellation by only allowing NEW orders
+        // Deletes the order from the database
         Objects.requireNonNull(order);
-        if (!order.getStatus().equals(OrderStatus.NEW)) {
-            throw new IllegalStateException("Cannot cancel order with status: " + order.getStatus());
-        }
-        order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        orderRepository.delete(order);
     }
 }

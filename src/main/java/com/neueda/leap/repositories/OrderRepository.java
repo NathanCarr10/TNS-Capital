@@ -3,6 +3,7 @@ package com.neueda.leap.repositories;
 import com.neueda.leap.model.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,4 +22,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
      * @return Optional containing the order if found, empty otherwise
      */
     Optional<Order> findByIdempotencyKey(String idempotencyKey);
+
+    /**
+     * Finds all orders for a given account.
+     *
+     * @param accountId the account ID
+     * @return list of orders for the account; empty list if none found
+     */
+    List<Order> findByAccountId(Long accountId);
 }

@@ -46,7 +46,7 @@ public class PositionController {
                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
         
         String normalizedSymbol = InputNormalizer.normalize(symbol);
-        Position position = positionRepository.findPosition(accountId, normalizedSymbol)
+        Position position = positionRepository.findByAccountIdAndSymbol(accountId, normalizedSymbol)
                 .orElseThrow(() -> new com.neueda.leap.exceptions.PositionNotFoundException("Position not found: " + accountId + " " + symbol));
         return ResponseEntity.ok(mapToResponse(position));
     }

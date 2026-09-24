@@ -11,12 +11,14 @@ import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
+import org.springframework.stereotype.Service;
 
 import java.util.Objects;
 
 /**
  * Validates order requests before execution.
  */
+@Service
 public class OrderValidator {
     private final AccountRepository accountRepository;
     private final InstrumentRepository instrumentRepository;

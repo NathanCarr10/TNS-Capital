@@ -48,6 +48,10 @@ public class Order {
     @Column(nullable = false)
     private Instant createdOn;
 
+    protected Order() {
+        // JPA no-arg constructor
+    }
+
     public Order(Clock clock) {
         this.id = UUID.randomUUID();
         this.createdOn = clock.now();
@@ -107,6 +111,10 @@ public class Order {
     // Getters
     public UUID getId() {
         return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
     }
 
     public Long getAccountId() {

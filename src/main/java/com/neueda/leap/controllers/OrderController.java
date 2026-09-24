@@ -75,16 +75,16 @@ public class OrderController {
     }
 
     private OrderResponse mapToResponse(Order order) {
-        // Converts Order entity to response; UUID to Long via LSBs, Instant to LocalDateTime for REST contract
+        // Converts Order entity to response; UUID to UUID, Instant to Instant for proper REST contract
         return new OrderResponse(
-                order.getId().getLeastSignificantBits(),
+                order.getId(),
                 order.getAccountId(),
                 order.getSymbol(),
                 order.getSide(),
                 order.getQuantity(),
                 order.getPrice(),
                 order.getStatus(),
-                java.time.LocalDateTime.ofInstant(order.getCreatedOn(), ZoneId.of("UTC"))
+                order.getCreatedOn()
         );
     }
 }
