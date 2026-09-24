@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import jakarta.persistence.*;
 
 /**
  * Order domain entity.
@@ -15,16 +16,41 @@ import com.neueda.leap.enums.OrderStatus;
  * Manages order data with core validations and business logic.
  * Follows Domain-Driven Design principles.
  */
+@Entity
+@Table(name = "orders", uniqueConstraints = @UniqueConstraint(columnNames = "idempotencyKey"))
 public class Order {
+    @Id
     private UUID id;
+    
+    @Column(nullable = false)
     private Long accountId;
+    
+    @Column(nullable = false)
     private String symbol;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OrderSide side;
+    
+    @Column(nullable = false)
     private Integer quantity;
+    
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal price;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OrderStatus status;
+    
+    @Column(nullable = false, unique = true)
     private String idempotencyKey;
+    
+    @Column(nullable = false)
     private Instant createdOn;
+
+    protected Order() {
+        // JPA no-arg constructor
+    }
 
     public Order(Clock clock) {
         this.id = UUID.randomUUID();
@@ -85,6 +111,10 @@ public class Order {
     // Getters
     public UUID getId() {
         return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
     }
 
     public Long getAccountId() {

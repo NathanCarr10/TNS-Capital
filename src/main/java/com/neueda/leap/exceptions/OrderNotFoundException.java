@@ -1,7 +1,9 @@
 package com.neueda.leap.exceptions;
 
-public class OrderNotFoundException extends RuntimeException {
-
+/**
+ * Exception thrown when an order cannot be found by ID.
+ */
+public class OrderNotFoundException extends RuntimeException{
     public OrderNotFoundException(String message) {
         super(message);
     }

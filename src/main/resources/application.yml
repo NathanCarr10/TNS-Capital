@@ -1,23 +1,48 @@
 spring:
-    application:
-        name: tns-capital-api
-    datasource:
-        url: jdbc:postgresql://localhost:5432/tns_capital
-        username: ${DB_USER:-tns-capital-db-user}
-        password: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-        driver-class-name: org.postgresql.Driver
-
-mybatis:
-  mapper-locations: classpath:mappers/*.xml
-  type-aliases-package: com.neueda.leap.model
-  configuration:
-    map-underscore-to-camel-case: true
+  application:
+    name: tns-capital-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tns_capital}
+    username: ${SPRING_DATASOURCE_USERNAME:tns-capital-db-user}
+    password: ${SPRING_DATASOURCE_PASSWORD:n3u3d4!}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 10
+          fetch_size: 50
+    show-sql: false
+    open-in-view: false
 
 server:
   port: 3000
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  health:
+    db:
+      enabled: true
+
 springdoc:
   swagger-ui:
-    path: /swagger-ui
+    enabled: true
   api-docs:
     path: /v3/api-docs
+
+logging:
+  level:
+    org.springdoc: DEBUG
+    org.springframework.web: DEBUG
+    org.flywaydb: DEBUG

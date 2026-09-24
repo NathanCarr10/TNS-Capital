@@ -1,18 +1,22 @@
 package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Order;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Repository abstraction for Order persistence.
+ * Spring Data JPA Repository for Order persistence.
  * 
- * Orders are immutable after creation; status changes are persisted atomically.
- * Decouples business logic from storage implementation.
+ * Provides CRUD operations and custom query methods.
+ * JpaRepository automatically provides: findById, save, findAll, delete, etc.
  */
-public interface OrderRepository {
+@Repository
+public interface OrderRepository extends JpaRepository<Order, UUID> {
     /**
-     * Finds an order by idempotency key.
+     * Finds an order by idempotency key for duplicate detection.
      *
      * @param idempotencyKey the idempotency key for the order
      * @return Optional containing the order if found, empty otherwise
@@ -20,7 +24,6 @@ public interface OrderRepository {
     Optional<Order> findByIdempotencyKey(String idempotencyKey);
 
     /**
-     * Finds an order by ID.
      *
      * @param id the order ID
      * @return Optional containing the order if found, empty otherwise
@@ -28,10 +31,10 @@ public interface OrderRepository {
     Optional<Order> findById(UUID id);
 
     /**
-     * Saves or updates an order.
+     * Finds all orders for a given account.
      *
-     * @param order the order to persist
-     * @throws IllegalArgumentException if order is null
+     * @param accountId the account ID
+     * @return list of orders for the account; empty list if none found
      */
-    void save(Order order);
+    List<Order> findByAccountId(Long accountId);
 }

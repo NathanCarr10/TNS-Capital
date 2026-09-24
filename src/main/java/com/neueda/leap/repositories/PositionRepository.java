@@ -1,15 +1,20 @@
 package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Position;
+import com.neueda.leap.model.PositionId;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 import java.util.Optional;
+import java.util.List;
 
 /**
- * Repository abstraction for Position persistence.
+ * Spring Data JPA Repository for Position persistence.
  * 
- * Manages positions keyed by (accountId, symbol).
- * Decouples business logic from storage implementation.
+ * Provides CRUD operations for positions keyed by (accountId, symbol).
+ * JpaRepository automatically provides: findById, save, delete, etc.
  */
-public interface PositionRepository {
+@Repository
+public interface PositionRepository extends JpaRepository<Position, PositionId> {
     /**
      * Finds a position for an account and symbol.
      *
@@ -17,15 +22,7 @@ public interface PositionRepository {
      * @param symbol    the instrument symbol (typically normalized)
      * @return Optional containing the position if found, empty otherwise
      */
-    Optional<Position> findPosition(Long accountId, String symbol);
-
-    /**
-     * Saves or updates a position.
-     *
-     * @param position the position to persist
-     * @throws IllegalArgumentException if position is null
-     */
-    void save(Position position);
+    Optional<Position> findByAccountIdAndSymbol(Long accountId, String symbol);
 
     /**
      * Deletes a position by account ID and symbol.
@@ -33,5 +30,14 @@ public interface PositionRepository {
      * @param accountId the account ID
      * @param symbol    the instrument symbol
      */
-    void delete(Long accountId, String symbol);
+    void deleteByAccountIdAndSymbol(Long accountId, String symbol);
+
+    /**
+     * Finds all positions for a given account.
+     *
+     * @param accountId the account ID
+     * @return list of positions for the account; empty list if none found
+     */
+    List<Position> findByAccountId(Long accountId);
+
 }

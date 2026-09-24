@@ -4,15 +4,16 @@ import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 
 public record OrderResponse(
-        Long id,
+        UUID id,
         Long accountId,
         String symbol,
         OrderSide side,
         Integer quantity,
         BigDecimal price,
         OrderStatus status,
-        LocalDateTime createdOn) {
+        Instant createdOn) {
 }
