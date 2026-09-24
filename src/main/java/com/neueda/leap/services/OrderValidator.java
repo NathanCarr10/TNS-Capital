@@ -14,6 +14,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * Validates order requests before execution.

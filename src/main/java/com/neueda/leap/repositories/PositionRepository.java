@@ -5,6 +5,7 @@ import com.neueda.leap.model.PositionId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
+import java.util.List;
 
 /**
  * Spring Data JPA Repository for Position persistence.
@@ -37,5 +38,6 @@ public interface PositionRepository extends JpaRepository<Position, PositionId> 
      * @param accountId the account ID
      * @return list of positions for the account; empty list if none found
      */
-    java.util.List<Position> findByAccountId(Long accountId);
+    List<Position> findByAccountId(Long accountId);
+
 }
