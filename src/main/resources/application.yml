@@ -10,8 +10,6 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    baselineOnMigrate: true
-    baselineVersion: 0
   
   jpa:
     hibernate:
@@ -50,3 +48,5 @@ logging:
   level:
     org.springdoc: DEBUG
     org.springframework.web: DEBUG
+    org.flywaydb: DEBUG
+    org.flywaydb.core: DEBUG

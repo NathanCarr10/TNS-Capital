@@ -9,7 +9,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tns-capital-db-user} -d tns_capital"]
       interval: 5s
