@@ -2,22 +2,20 @@ package com.neueda.leap.repositories.impl;
 
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.OrderRepository;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.domain.Example;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery;
 
 /**
- * In-memory implementation of OrderRepository for testing.
+ * In-memory implementation of OrderRepository.
  * 
  * Wraps a Map<String, Order> for storage (keyed by idempotency key).
+ * Suitable for testing and non-persistent use; replace with Spring Data JPA
+ * implementation for production.
  */
 public class InMemoryOrderRepository implements OrderRepository {
     private final Map<String, Order> storage;
@@ -32,13 +30,6 @@ public class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public Optional<Order> findById(UUID id) {
-        return storage.values().stream()
-                .filter(order -> order.getId().equals(id))
-                .findFirst();
-    }
-
-    @Override
     public <S extends Order> S save(S order) {
         Objects.requireNonNull(order, "Order cannot be null");
         storage.put(order.getIdempotencyKey(), order);
@@ -46,161 +37,44 @@ public class InMemoryOrderRepository implements OrderRepository {
     }
 
     @Override
-    public void deleteById(UUID id) {
-        findById(id).ifPresent(this::delete);
+    public Optional<Order> findById(UUID id) {
+        // Searches storage by UUID since orders are keyed by idempotency key; UUID lookup requires full scan
+        return storage.values().stream()
+                .filter(order -> order.getId().equals(id))
+                .findFirst();
     }
 
-    @Override
-    public void delete(Order entity) {
-        if (entity != null && entity.getIdempotencyKey() != null) {
-            storage.remove(entity.getIdempotencyKey());
-        }
-    }
-
-    @Override
-    public long count() {
-        return storage.size();
-    }
-
-    @Override
-    public boolean existsById(UUID id) {
-        return findById(id).isPresent();
-    }
-
-    // Stub implementations for JpaRepository methods
     @Override
     public List<Order> findAll() {
         return new ArrayList<>(storage.values());
     }
 
-    @Override
-    public List<Order> findAllById(Iterable<UUID> ids) {
-        List<Order> result = new ArrayList<>();
-        for (UUID id : ids) {
-            findById(id).ifPresent(result::add);
-        }
-        return result;
-    }
-
-    @Override
-    public <S extends Order> List<S> saveAll(Iterable<S> entities) {
-        List<S> result = new ArrayList<>();
-        for (S entity : entities) {
-            result.add(save(entity));
-        }
-        return result;
-    }
-
-    @Override
-    public void flush() {
-    }
-
-    @Override
-    public <S extends Order> S saveAndFlush(S entity) {
-        return save(entity);
-    }
-
-    @Override
-    public <S extends Order> List<S> saveAllAndFlush(Iterable<S> entities) {
-        return saveAll(entities);
-    }
-
-    @Override
-    public void deleteAllInBatch(Iterable<Order> entities) {
-        for (Order entity : entities) {
-            delete(entity);
-        }
-    }
-
-    @Override
-    public void deleteAllByIdInBatch(Iterable<UUID> ids) {
-        for (UUID id : ids) {
-            deleteById(id);
-        }
-    }
-
-    @Override
-    public void deleteAllInBatch() {
-        storage.clear();
-    }
-
-    @Override
-    public Order getById(UUID id) {
-        return findById(id).orElse(null);
-    }
-
-    @Override
-    public Order getReferenceById(UUID id) {
-        return findById(id).orElse(null);
-    }
-
-    @Override
-    @Deprecated(since = "3.0")
-    public Order getOne(UUID id) {
-        return findById(id).orElse(null);
-    }
-
-    @Override
-    public <S extends Order> List<S> findAll(Example<S> example) {
-        return new ArrayList<>();
-    }
-
-    @Override
-    public <S extends Order> List<S> findAll(Example<S> example, Sort sort) {
-        return new ArrayList<>();
-    }
-
-    @Override
-    public <S extends Order> Optional<S> findOne(Example<S> example) {
-        return Optional.empty();
-    }
-
-    @Override
-    public <S extends Order> long count(Example<S> example) {
-        return 0;
-    }
-
-    @Override
-    public <S extends Order> boolean exists(Example<S> example) {
-        return false;
-    }
-
-    @Override
-    public <S extends Order, R> R findBy(Example<S> example, java.util.function.Function<FetchableFluentQuery<S>, R> queryFunction) {
-        return null;
-    }
-
-    @Override
-    public void deleteAll(Iterable<? extends Order> entities) {
-        for (Order entity : entities) {
-            delete(entity);
-        }
-    }
-
-    @Override
-    public void deleteAll() {
-        storage.clear();
-    }
-
-    @Override
-    public void deleteAllById(Iterable<? extends UUID> ids) {
-        for (UUID id : ids) {
-            deleteById(id);
-        }
-    }
-
-    @Override
-    public List<Order> findAll(Sort sort) {
-        return new ArrayList<>(storage.values());
-    }
-
-    @Override
-    public Page<Order> findAll(Pageable pageable) {
-        return null;
-    }
-
-    @Override
-    public <S extends Order> Page<S> findAll(Example<S> example, Pageable pageable) {
-        return null;
-    }
+    // Stub implementations for other JpaRepository methods
+    @Override public <S extends Order> List<S> saveAll(Iterable<S> entities) { return new ArrayList<>(); }
+    @Override public void flush() {}
+    @Override public <S extends Order> S saveAndFlush(S entity) { return entity; }
+    @Override public <S extends Order> List<S> saveAllAndFlush(Iterable<S> entities) { return new ArrayList<>(); }
+    @Override public void deleteAllInBatch(Iterable<Order> entities) {}
+    @Override public void deleteAllByIdInBatch(Iterable<UUID> ids) {}
+    @Override public void deleteAllInBatch() {}
+    @Override public Order getReferenceById(UUID id) { return null; }
+    @Override public Order getById(UUID id) { return null; }
+    @Override public Order getOne(UUID id) { return null; }
+    @Override public <S extends Order> List<S> findAll(org.springframework.data.domain.Example<S> example) { return new ArrayList<>(); }
+    @Override public <S extends Order> List<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Sort sort) { return new ArrayList<>(); }
+    @Override public <S extends Order> Optional<S> findOne(org.springframework.data.domain.Example<S> example) { return Optional.empty(); }
+    @Override public <S extends Order> long count(org.springframework.data.domain.Example<S> example) { return 0; }
+    @Override public <S extends Order> boolean exists(org.springframework.data.domain.Example<S> example) { return false; }
+    @Override public <S extends Order, R> R findBy(org.springframework.data.domain.Example<S> example, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { return null; }
+    @Override public List<Order> findAll(org.springframework.data.domain.Sort sort) { return new ArrayList<>(storage.values()); }
+    @Override public List<Order> findAllById(Iterable<UUID> ids) { return new ArrayList<>(); }
+    @Override public long count() { return storage.size(); }
+    @Override public void deleteById(UUID id) { storage.values().removeIf(order -> order.getId().equals(id)); }
+    @Override public void delete(Order entity) {}
+    @Override public void deleteAllById(Iterable<? extends UUID> ids) {}
+    @Override public void deleteAll(Iterable<? extends Order> entities) {}
+    @Override public void deleteAll() {}
+    @Override public boolean existsById(UUID id) { return findById(id).isPresent(); }
+    @Override public <S extends Order> org.springframework.data.domain.Page<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Pageable pageable) { return new org.springframework.data.domain.PageImpl<>(new ArrayList<>()); }
+    @Override public org.springframework.data.domain.Page<Order> findAll(org.springframework.data.domain.Pageable pageable) { return new org.springframework.data.domain.PageImpl<>(new ArrayList<>(storage.values())); }
 }
