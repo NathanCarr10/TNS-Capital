@@ -33,12 +33,18 @@ public class PositionController {
                 accountRepository.findById(accountId)
                                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
 
-                List<Position> positions = positionRepository.findByAccountId(accountId);
-                List<PositionResponse> responses = positions.stream()
-                                .map(this::mapToResponse)
-                                .collect(Collectors.toList());
-                return ResponseEntity.ok(responses);
-        }
+    @GetMapping("/{accountId}/{symbol}")
+    public ResponseEntity<PositionResponse> getPosition(@PathVariable Long accountId,
+                                                        @PathVariable String symbol) {
+        // Validates account exists first; normalizes symbol for consistent lookup
+        accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
+        
+        String normalizedSymbol = InputNormalizer.normalize(symbol);
+        Position position = positionRepository.findByAccountIdAndSymbol(accountId, normalizedSymbol)
+                .orElseThrow(() -> new com.neueda.leap.exceptions.PositionNotFoundException("Position not found: " + accountId + " " + symbol));
+        return ResponseEntity.ok(mapToResponse(position));
+    }
 
         @GetMapping("/{accountId}/{symbol}")
         public ResponseEntity<PositionResponse> getPosition(@PathVariable Long accountId,
