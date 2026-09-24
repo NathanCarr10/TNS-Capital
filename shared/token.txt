@@ -2,4 +2,6 @@ TOKEN=$(curl -s -X POST http://localhost:4000/login \
   -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"mission123"}' | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 
+echo $TOKEN
+
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/your-protected-endpoint
