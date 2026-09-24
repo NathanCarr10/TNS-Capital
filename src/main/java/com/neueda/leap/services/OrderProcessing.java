@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 
 /**
  * Orchestrates order placement: validates, executes, and persists.
@@ -92,7 +93,8 @@ public class OrderProcessing {
     }
 
     public void cancelOrder(Order order) {
-        // Sets order status to CANCELLED and persists; prevents double-cancellation by only allowing NEW orders
+        // Sets order status to CANCELLED and persists; prevents double-cancellation by
+        // only allowing NEW orders
         Objects.requireNonNull(order);
         if (!order.getStatus().equals(OrderStatus.NEW)) {
             throw new IllegalStateException("Cannot cancel order with status: " + order.getStatus());
