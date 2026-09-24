@@ -30,23 +30,11 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        // TODO:
-        // - disable CSRF (this is a stateless API, not a browser form)
-        // - permit /public with no authentication required
-        // - require authentication for every other request
-        // - enable oauth2ResourceServer().jwt() (the default JwtAuthenticationConverter
-        // is fine for this kata - you don't need to customise the roles claim)
-
-        // JwtAuthenticationConverter authenticationConverter = new
-        // JwtAuthenticationConverter();
-
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
-                                "/v3/api-docs/**", "/api/v1/**")
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**")
                         .permitAll()
-                        .requestMatchers("/health").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer((OAuth2ResourceServerConfigurer<HttpSecurity> oauth2) -> oauth2
                         .jwt(jwt -> jwt.decoder(jwtDecoder())));
