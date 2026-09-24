@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tns_capital}
     username: ${SPRING_DATASOURCE_USERNAME:tns-capital-db-user}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    password: ${SPRING_DATASOURCE_PASSWORD:n3u3d4!}
     driver-class-name: org.postgresql.Driver
   
   jpa:
