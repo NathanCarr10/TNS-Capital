@@ -24,6 +24,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByIdempotencyKey(String idempotencyKey);
 
     /**
+     *
+     * @param id the order ID
+     * @return Optional containing the order if found, empty otherwise
+     */
+    Optional<Order> findById(UUID id);
+
+    /**
      * Finds all orders for a given account.
      *
      * @param accountId the account ID
