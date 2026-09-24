@@ -32,9 +32,8 @@ public class InMemoryInstrumentRepository implements InstrumentRepository {
 
     @Override
     public Optional<Instrument> findById(Long id) {
-        return storage.values().stream()
-                .filter(instrument -> instrument.getId().equals(id))
-                .findFirst();
+        // Symbol is now the primary key; this method is not applicable
+        return Optional.empty();
     }
 
     @Override

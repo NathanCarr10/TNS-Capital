@@ -44,9 +44,8 @@ public class InstrumentController {
     }
     @PostMapping
     public ResponseEntity<InstrumentResponse> createInstrument(@Valid @RequestBody CreateInstrumentRequest request) {
-        // Creates new instrument with auto-generated ID; validates symbol not duplicate via repository constraint
+        // Creates new instrument; symbol is the primary key
         Instrument instrument = new Instrument();
-        instrument.setId(System.nanoTime()); // Simple ID generation; replace with proper sequence in production
         instrument.setSymbol(InputNormalizer.normalize(request.symbol()));
         instrument.setName(request.name());
         instrument.setAssetClass(request.assetClass());
@@ -77,7 +76,6 @@ public class InstrumentController {
     private InstrumentResponse mapToResponse(Instrument instrument) {
         // Converts Instrument entity to response; simple pass-through for immutable reference data
         return new InstrumentResponse(
-                instrument.getId(),
                 instrument.getSymbol(),
                 instrument.getName(),
                 instrument.getAssetClass(),
