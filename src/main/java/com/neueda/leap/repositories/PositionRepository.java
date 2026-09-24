@@ -30,4 +30,12 @@ public interface PositionRepository extends JpaRepository<Position, PositionId> 
      * @param symbol    the instrument symbol
      */
     void deleteByAccountIdAndSymbol(Long accountId, String symbol);
+
+    /**
+     * Finds all positions for a given account.
+     *
+     * @param accountId the account ID
+     * @return list of positions for the account; empty list if none found
+     */
+    java.util.List<Position> findByAccountId(Long accountId);
 }

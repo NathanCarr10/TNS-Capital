@@ -121,4 +121,40 @@ public class Instrument {
                 ", tradable=" + tradable +
                 '}';
     }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setSymbol(String symbol) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
+            throw new IllegalArgumentException("Symbol cannot be null or empty");
+        }
+        this.symbol = InputNormalizer.normalize(symbol);
+    }
+
+    public void setName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Name cannot be null or empty");
+        }
+        this.name = name;
+    }
+
+    public void setAssetClass(String assetClass) {
+        if (assetClass == null || InputNormalizer.normalize(assetClass).isEmpty()) {
+            throw new IllegalArgumentException("Asset class cannot be null or empty");
+        }
+        this.assetClass = InputNormalizer.normalize(assetClass);
+    }
+
+    public void setCurrency(String currency) {
+        if (currency == null || InputNormalizer.normalize(currency).isEmpty()) {
+            throw new IllegalArgumentException("Currency cannot be null or empty");
+        }
+        this.currency = InputNormalizer.normalize(currency);
+    }
+
+    public void setTradable(boolean tradable) {
+        this.tradable = tradable;
+    }
 }
