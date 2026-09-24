@@ -5,6 +5,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.mappers.OrderMapper;
 import java.util.Optional;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 import org.springframework.context.annotation.Primary;
 
@@ -26,6 +27,13 @@ public class MyBatisOrderRepository implements OrderRepository {
     public Optional<Order> findByIdempotencyKey(String idempotencyKey) {
         Objects.requireNonNull(idempotencyKey, "Idempotency key cannot be null");
         Order order = orderMapper.findByIdempotencyKey(idempotencyKey);
+        return Optional.ofNullable(order);
+    }
+
+    @Override
+    public Optional<Order> findById(UUID id) {
+        Objects.requireNonNull(id, "Order ID cannot be null");
+        Order order = orderMapper.findById(id);
         return Optional.ofNullable(order);
     }
 

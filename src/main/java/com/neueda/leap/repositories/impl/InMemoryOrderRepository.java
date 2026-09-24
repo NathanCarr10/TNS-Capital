@@ -5,6 +5,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * In-memory implementation of OrderRepository.
@@ -23,6 +24,14 @@ public class InMemoryOrderRepository implements OrderRepository {
     @Override
     public Optional<Order> findByIdempotencyKey(String idempotencyKey) {
         return Optional.ofNullable(storage.get(idempotencyKey));
+    }
+
+    @Override
+    public Optional<Order> findById(UUID id) {
+        Objects.requireNonNull(id, "Order ID cannot be null");
+        return storage.values().stream()
+                .filter(order -> order.getId().equals(id))
+                .findFirst();
     }
 
     @Override

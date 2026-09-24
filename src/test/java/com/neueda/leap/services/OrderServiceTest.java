@@ -27,7 +27,6 @@ import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
-import com.neueda.leap.mappers.OrderMapper;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
@@ -54,9 +53,6 @@ class OrderServiceTest {
     private OrderValidator validator;
 
     @Mock
-    private OrderMapper orderMapper;
-
-    @Mock
     private OrderExecutionStrategy buyStrategy;
 
     @Mock
@@ -80,7 +76,7 @@ class OrderServiceTest {
         strategies.put(OrderSide.SELL, sellStrategy);
 
         orderService = new OrderService(accountRepository, orderRepository, positionRepository, validator,
-                orderMapper, strategies, testClock);
+                strategies, testClock);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -207,7 +203,7 @@ class OrderServiceTest {
             // Create service with empty strategies map
             Map<OrderSide, OrderExecutionStrategy> emptyStrategies = new HashMap<>();
             OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    positionRepository, validator, orderMapper, emptyStrategies, testClock);
+                    positionRepository, validator, emptyStrategies, testClock);
 
             assertThrows(IllegalStateException.class,
                     () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),
@@ -320,13 +316,13 @@ class OrderServiceTest {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);
 
-            when(orderMapper.findById(orderId)).thenReturn(order);
+            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
             Order result = orderService.cancelOrder(orderId);
 
             assertNotNull(result);
             assertEquals(OrderStatus.CANCELLED, result.getStatus());
-            verify(orderMapper, times(1)).findById(orderId);
+            verify(orderRepository, times(1)).findById(orderId);
             verify(orderRepository, times(1)).save(order);
         }
 
@@ -334,7 +330,7 @@ class OrderServiceTest {
         @Test
         void testCancelOrderNotFound() {
             UUID orderId = UUID.randomUUID();
-            when(orderMapper.findById(orderId)).thenReturn(null);
+            when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
             assertThrows(OrderNotFoundException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderNotFoundException when order not found");
@@ -348,7 +344,7 @@ class OrderServiceTest {
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-002", testClock);
             order.setStatus(OrderStatus.FILLED); // Transition from NEW to FILLED
 
-            when(orderMapper.findById(orderId)).thenReturn(order);
+            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is FILLED");
@@ -362,7 +358,7 @@ class OrderServiceTest {
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-003", testClock);
             order.setStatus(OrderStatus.REJECTED); // Transition from NEW to REJECTED
 
-            when(orderMapper.findById(orderId)).thenReturn(order);
+            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is REJECTED");
@@ -376,7 +372,7 @@ class OrderServiceTest {
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-004", testClock);
             order.setStatus(OrderStatus.CANCELLED); // Transition from NEW to CANCELLED
 
-            when(orderMapper.findById(orderId)).thenReturn(order);
+            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is already CANCELLED");
@@ -388,7 +384,7 @@ class OrderServiceTest {
         void testCancelOrderNullOrderId() {
             assertThrows(NullPointerException.class, () -> orderService.cancelOrder(null),
                     "Should throw NullPointerException for null order ID");
-            verify(orderMapper, never()).findById(any());
+            verify(orderRepository, never()).findById(any());
             verify(orderRepository, never()).save(any());
         }
     }
