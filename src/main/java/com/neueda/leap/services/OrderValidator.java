@@ -13,10 +13,12 @@ import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * Validates order requests before execution.
  */
+@Service
 public class OrderValidator {
     private final AccountRepository accountRepository;
     private final InstrumentRepository instrumentRepository;
