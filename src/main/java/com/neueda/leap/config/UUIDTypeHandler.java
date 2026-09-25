@@ -14,6 +14,7 @@ import java.util.UUID;
  * MyBatis type handler for java.util.UUID.
  * Converts between UUID objects and VARCHAR in the database.
  */
+@Component
 public class UUIDTypeHandler extends BaseTypeHandler<UUID> {
 
     @Override
