@@ -2,6 +2,8 @@ package com.neueda.leap.config;
 
 import org.apache.ibatis.type.BaseTypeHandler;
 import org.apache.ibatis.type.JdbcType;
+import org.springframework.stereotype.Component;
+
 import java.sql.CallableStatement;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,10 +14,12 @@ import java.util.UUID;
  * MyBatis type handler for java.util.UUID.
  * Converts between UUID objects and VARCHAR in the database.
  */
+@Component
 public class UUIDTypeHandler extends BaseTypeHandler<UUID> {
 
     @Override
-    public void setNonNullParameter(PreparedStatement ps, int i, UUID parameter, JdbcType jdbcType) throws SQLException {
+    public void setNonNullParameter(PreparedStatement ps, int i, UUID parameter, JdbcType jdbcType)
+            throws SQLException {
         ps.setString(i, parameter.toString());
     }
 
