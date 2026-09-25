@@ -23,7 +23,8 @@ spring:
 jwt:
   shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
 
-mybatis-plus:
+mybatis:
+  type-handlers-package: com.neueda.leap.config
   type-aliases-package: com.neueda.leap.model
   configuration:
     map-underscore-to-camel-case: true
