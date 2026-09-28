@@ -1,18 +1,20 @@
 package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.OrderResponse;
+import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Order;
+import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.services.OrderService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -23,14 +25,17 @@ import java.util.stream.Collectors;
 public class OrderController {
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
+    private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
     
     public OrderController(OrderRepository orderRepository,
                         AccountRepository accountRepository,
+                        OrderHistoryRepository orderHistoryRepository,
                         OrderService orderService) {
 
         this.orderRepository = orderRepository;
         this.accountRepository = accountRepository;
+        this.orderHistoryRepository = orderHistoryRepository;
         this.orderService = orderService;
     }
 
@@ -66,12 +71,30 @@ public class OrderController {
     @DeleteMapping("/{orderId}")
     public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
         // Validates order exists before cancellation; prevents silently ignoring requests for non-existent orders
-        Order order = orderRepository.findById(orderId)
+        orderRepository.findById(orderId)
                 .orElseThrow(() -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
         
         // Delegates cancellation to service layer; service validates business rules (status, timing)
         orderService.cancelOrder(orderId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/history/{orderId}")
+    public ResponseEntity<OrderHistoryResponse> getOrderHistory(@PathVariable UUID orderId) {
+        // Retrieves order history record for a cancelled/deleted order
+        OrderHistory history = orderHistoryRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new com.neueda.leap.exceptions.OrderNotFoundException("Order history not found: " + orderId));
+        return ResponseEntity.ok(mapHistoryToResponse(history));
+    }
+
+    @GetMapping("/{accountId}/history")
+    public ResponseEntity<List<OrderHistoryResponse>> getAccountOrderHistory(@PathVariable Long accountId) {
+        // Retrieves all order history records for an account; enables audit trail queries even for deleted accounts
+        List<OrderHistory> histories = orderHistoryRepository.findByAccountId(accountId);
+        List<OrderHistoryResponse> responses = histories.stream()
+                .map(this::mapHistoryToResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
     }
 
     private OrderResponse mapToResponse(Order order) {
@@ -85,6 +108,21 @@ public class OrderController {
                 order.getPrice(),
                 order.getStatus(),
                 order.getCreatedOn()
+        );
+    }
+
+    private OrderHistoryResponse mapHistoryToResponse(OrderHistory history) {
+        // Converts OrderHistory entity to response
+        return new OrderHistoryResponse(
+                history.getOrderId(),
+                history.getAccountId(),
+                history.getSymbol(),
+                history.getSide(),
+                history.getQuantity(),
+                history.getPrice(),
+                history.getStatus(),
+                history.getOrderCreatedOn(),
+                history.getDeletedOn()
         );
     }
 }

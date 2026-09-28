@@ -124,6 +124,13 @@ public class Account {
         return holderName;
     }
 
+    public void setHolderName(String holderName) {
+        if (holderName == null || holderName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Holder name cannot be null or empty");
+        }
+        this.holderName = holderName;
+    }
+
     public BigDecimal getCashBalance() {
         return new BigDecimal(cashBalance.toPlainString());
     }
