@@ -6,7 +6,10 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -386,6 +389,50 @@ class OrderServiceTest {
                     "Should throw NullPointerException for null order ID");
             verify(orderRepository, never()).findById(any());
             verify(orderRepository, never()).save(any());
+        }
+    }
+
+    @DisplayName("GetOrdersByAccountId Test Suite")
+    @Nested
+    class GetOrdersByAccountIdTests {
+        @DisplayName("Should return list of orders for valid account")
+        @Test
+        void testGetOrdersByAccountIdSuccess() {
+            Long accountId = 1L;
+            Order order1 = new Order(accountId, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);
+            Order order2 = new Order(accountId, "GOOGL", OrderSide.SELL, 50, new BigDecimal("200.00"), "ORDER-002", testClock);
+            List<Order> orders = Arrays.asList(order1, order2);
+
+            when(orderRepository.findByAccountId(accountId)).thenReturn(orders);
+
+            List<Order> result = orderService.getOrdersByAccountId(accountId);
+
+            assertEquals(2, result.size(), "Should return 2 orders");
+            assertEquals("AAPL", result.get(0).getSymbol(), "First order symbol should be AAPL");
+            assertEquals("GOOGL", result.get(1).getSymbol(), "Second order symbol should be GOOGL");
+            verify(orderRepository, times(1)).findByAccountId(accountId);
+        }
+
+        @DisplayName("Should return empty list when account has no orders")
+        @Test
+        void testGetOrdersByAccountIdEmptyList() {
+            Long accountId = 2L;
+            List<Order> emptyOrders = Collections.emptyList();
+
+            when(orderRepository.findByAccountId(accountId)).thenReturn(emptyOrders);
+
+            List<Order> result = orderService.getOrdersByAccountId(accountId);
+
+            assertTrue(result.isEmpty(), "Should return empty list");
+            verify(orderRepository, times(1)).findByAccountId(accountId);
+        }
+
+        @DisplayName("Should throw NullPointerException for null account ID")
+        @Test
+        void testGetOrdersByAccountIdNullAccountId() {
+            assertThrows(NullPointerException.class, () -> orderService.getOrdersByAccountId(null),
+                    "Should throw NullPointerException for null account ID");
+            verify(orderRepository, never()).findByAccountId(any());
         }
     }
 }
