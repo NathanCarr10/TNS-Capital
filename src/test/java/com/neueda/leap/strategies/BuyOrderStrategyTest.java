@@ -1,11 +1,14 @@
 package com.neueda.leap.strategies;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +16,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
@@ -20,27 +25,52 @@ import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.time.ClockTest;
-import com.neueda.leap.repositories.impl.InMemoryPositionRepository;
 import com.neueda.leap.repositories.PositionRepository;
 
 @DisplayName("BuyOrderStrategy Test Suite")
 class BuyOrderStrategyTest {
         private BuyOrderStrategy buyStrategy;
         private Map<String, Position> positionsMap;
+
+        @Mock
         private PositionRepository positionRepository;
         private Account testAccount;
         private ClockTest testClock;
 
         @BeforeEach
         void setUp() {
+                MockitoAnnotations.openMocks(this);
+                
                 testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
                 positionsMap = new HashMap<>();
 
                 // Create test account with sufficient funds
                 testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"), testClock);
 
-                // Create position repository
-                positionRepository = new InMemoryPositionRepository(positionsMap);
+                // Configure mock PositionRepository to delegate to positionsMap
+                when(positionRepository.findByAccountIdAndSymbol(anyLong(), anyString()))
+                    .thenAnswer(invocation -> {
+                        Long accountId = invocation.getArgument(0);
+                        String symbol = invocation.getArgument(1);
+                        String key = accountId + "::" + symbol;
+                        return Optional.ofNullable(positionsMap.get(key));
+                    });
+
+                when(positionRepository.save(any(Position.class)))
+                    .thenAnswer(invocation -> {
+                        Position pos = invocation.getArgument(0);
+                        String key = pos.getAccountId() + "::" + pos.getSymbol();
+                        positionsMap.put(key, pos);
+                        return pos;
+                    });
+
+                doAnswer(invocation -> {
+                    Long accountId = invocation.getArgument(0);
+                    String symbol = invocation.getArgument(1);
+                    String key = accountId + "::" + symbol;
+                    positionsMap.remove(key);
+                    return null;
+                }).when(positionRepository).deleteByAccountIdAndSymbol(anyLong(), anyString());
 
                 // Initialize strategy with repository
                 buyStrategy = new BuyOrderStrategy(positionRepository);

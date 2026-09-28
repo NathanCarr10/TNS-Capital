@@ -4,5 +4,7 @@ target/
 .vscode/.venv
 .venv
 .vscode/
+*/__pycache__/
 /python/
 node_modules/
+/scripts/
