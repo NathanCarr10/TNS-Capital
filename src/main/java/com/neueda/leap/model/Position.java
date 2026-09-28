@@ -3,6 +3,7 @@ package com.neueda.leap.model;
 import java.math.BigDecimal;
 
 import com.neueda.leap.utils.InputNormalizer;
+import jakarta.persistence.*;
 
 /**
  * Position domain entity.
@@ -10,10 +11,22 @@ import com.neueda.leap.utils.InputNormalizer;
  * Manages position data with core validations and business logic.
  * Follows Domain-Driven Design principles.
  */
+@Entity
+@Table(name = "positions")
+@IdClass(PositionId.class)
 public class Position {
+    @Id
+    @Column(nullable = false)
     private Long accountId;
+    
+    @Id
+    @Column(nullable = false)
     private String symbol;
+    
+    @Column(nullable = false)
     private Integer quantity;
+    
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal averageCost;
 
     public Position() {

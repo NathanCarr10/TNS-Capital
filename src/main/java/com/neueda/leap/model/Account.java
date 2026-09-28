@@ -5,6 +5,7 @@ import java.time.Instant;
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.time.Clock;
+import jakarta.persistence.*;
 
 /**
  * Account domain entity.
@@ -12,13 +13,30 @@ import com.neueda.leap.time.Clock;
  * Manages account data with core validations and business logic.
  * Follows Domain-Driven Design principles.
  */
+@Entity
+@Table(name = "accounts")
 public class Account {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
+    @Column(unique = true, nullable = false)
     private String accountId;
+    
+    @Column(nullable = false)
     private String holderName;
+    
+    @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal cashBalance;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private AccountStatus status;
+    
+    @Version
     private Integer version;
+    
+    @Column(nullable = false)
     private Instant lastUpdated;
 
     public Account() {

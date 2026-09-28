@@ -19,7 +19,7 @@ public class SellOrderStrategy implements OrderExecutionStrategy {
     @Override
     public void execute(Account account, PlaceOrderRequest request, String symbol) {
         // Phase 1: Validate position exists and has sufficient quantity
-        var currentPosition = positionRepository.findPosition(request.accountId(), symbol)
+        var currentPosition = positionRepository.findByAccountIdAndSymbol(request.accountId(), symbol)
                 .orElseThrow(() -> new InsufficientHoldingsException("No position for symbol: " + symbol));
 
         if (currentPosition.getQuantity() < request.quantity()) {
@@ -34,7 +34,7 @@ public class SellOrderStrategy implements OrderExecutionStrategy {
             // Phase 2: Update position
             int remaining = currentPosition.getQuantity() - request.quantity();
             if (remaining == 0) {
-                positionRepository.delete(request.accountId(), symbol);
+                positionRepository.deleteByAccountIdAndSymbol(request.accountId(), symbol);
             } else {
                 Position updatedPosition = new Position(request.accountId(), symbol, remaining,
                         currentPosition.getAverageCost());

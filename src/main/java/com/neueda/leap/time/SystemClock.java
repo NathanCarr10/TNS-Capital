@@ -1,7 +1,9 @@
 package com.neueda.leap.time;
 
 import java.time.Instant;
+import org.springframework.stereotype.Component;
 
+@Component
 public class SystemClock implements Clock {
     public static final SystemClock INSTANCE = new SystemClock();
 
