@@ -1,7 +1,6 @@
 package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.PlaceOrderRequest;
-import com.neueda.leap.dtos.ErrorResponse;
 import com.neueda.leap.enums.OrderSide;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -33,8 +32,7 @@ class SecurityTests {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("150.00"),
-                "ORDER-SECURITY-001"
-        );
+                "ORDER-SECURITY-001");
     }
 
     // ========== INPUT VALIDATION TESTS ==========

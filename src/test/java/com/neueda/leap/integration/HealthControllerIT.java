@@ -24,6 +24,7 @@ public class HealthControllerIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should return OK for health check")
+    @SuppressWarnings("null")
     void testHealthCheck() throws Exception {
         mockMvc.perform(get("/api/v1/health")
                 .contentType(MediaType.APPLICATION_JSON))
@@ -33,6 +34,7 @@ public class HealthControllerIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should return service information in health response")
+    @SuppressWarnings("null")
     void testHealthCheckDetails() throws Exception {
         mockMvc.perform(get("/api/v1/health")
                 .contentType(MediaType.APPLICATION_JSON))

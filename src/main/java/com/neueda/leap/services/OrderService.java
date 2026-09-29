@@ -58,6 +58,7 @@ public class OrderService {
         this.clock = Objects.requireNonNull(clock);
     }
 
+    @SuppressWarnings("null")
     public Order placeOrder(PlaceOrderRequest request) {
         Objects.requireNonNull(request);
 
@@ -116,12 +117,13 @@ public class OrderService {
      * Cancels an order if its status is NEW.
      * 
      * Cancellation is only allowed for orders in NEW state.
-     * Attempting to cancel FILLED, REJECTED, or CANCELLED orders throws a conflict exception.
+     * Attempting to cancel FILLED, REJECTED, or CANCELLED orders throws a conflict
+     * exception.
      * When an order is cancelled, it is archived to OrderHistory for audit trail.
      *
      * @param orderId the order ID to cancel
      * @return the cancelled order
-     * @throws OrderNotFoundException if order is not found
+     * @throws OrderNotFoundException             if order is not found
      * @throws OrderCancellationConflictException if order status is not NEW
      */
     public Order cancelOrder(UUID orderId) {
@@ -134,14 +136,14 @@ public class OrderService {
         // Validate cancellation is allowed (only NEW orders can be cancelled)
         if (order.getStatus() != OrderStatus.NEW) {
             throw new OrderCancellationConflictException(
-                    String.format("Cannot cancel order in %s status. Only NEW orders can be cancelled.", 
+                    String.format("Cannot cancel order in %s status. Only NEW orders can be cancelled.",
                             order.getStatus()));
         }
 
         // Update order status to CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
-        
+
         // Archive cancelled order to history for audit trail
         OrderHistory history = new OrderHistory(order, clock);
         orderHistoryRepository.save(history);

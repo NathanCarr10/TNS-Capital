@@ -10,7 +10,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.neueda.leap.enums.AccountStatus;
@@ -33,7 +32,7 @@ class AccountTest {
     @DisplayName("Constructor initializes all fields correctly")
     @Test
     void testAccountConstructor() {
-        assertEquals("ACC001", account.getAccountId(), "Account ID should match constructor argument");
+        assertEquals("ACC001", account.getAccountNumber(), "Account number should match constructor argument");
         assertEquals("John Doe", account.getHolderName(), "Holder name should match constructor argument");
         assertEquals(new BigDecimal("10000.00"), account.getCashBalance(),
                 "Initial cash balance should match constructor argument");

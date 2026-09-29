@@ -1,7 +1,6 @@
 package com.neueda.leap.services;
 
 import com.neueda.leap.model.Account;
-import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.repositories.AccountRepository;
@@ -12,9 +11,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Provides account business logic: retrieval, validation, and account status management.
+ * Provides account business logic: retrieval, validation, and account status
+ * management.
  * 
- * Decouples account operations from the repository layer, ensuring consistency and
+ * Decouples account operations from the repository layer, ensuring consistency
+ * and
  * maintaining layered architecture principles.
  */
 @Service
@@ -36,7 +37,7 @@ public class AccountService {
      */
     public Account getAccountById(Long accountId) {
         Objects.requireNonNull(accountId, "Account ID cannot be null");
-        
+
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
     }
@@ -50,7 +51,7 @@ public class AccountService {
      */
     public Optional<Account> findAccountById(Long accountId) {
         Objects.requireNonNull(accountId, "Account ID cannot be null");
-        
+
         return accountRepository.findById(accountId);
     }
 
@@ -82,7 +83,7 @@ public class AccountService {
      * Validates that an account is active.
      *
      * @param accountId the account ID
-     * @throws AccountNotFoundException if account is not found
+     * @throws AccountNotFoundException  if account is not found
      * @throws AccountNotActiveException if account is not active
      */
     public void validateAccountActive(Long accountId) {
@@ -96,17 +97,17 @@ public class AccountService {
      * Validates that an account has sufficient funds for a transaction.
      *
      * @param accountId the account ID
-     * @param amount the amount required
+     * @param amount    the amount required
      * @throws AccountNotFoundException if account is not found
      * @throws IllegalArgumentException if amount is null or non-positive
      */
     public void validateSufficientFunds(Long accountId, BigDecimal amount) {
         Objects.requireNonNull(amount, "Amount cannot be null");
-        
+
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Amount must be positive");
         }
-        
+
         BigDecimal balance = getCashBalance(accountId);
         if (balance.compareTo(amount) < 0) {
             throw new IllegalArgumentException("Insufficient funds available");
