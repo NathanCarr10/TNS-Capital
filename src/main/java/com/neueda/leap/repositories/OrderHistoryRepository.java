@@ -2,7 +2,6 @@ package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.OrderHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,7 +11,6 @@ import java.util.UUID;
  * 
  * Provides CRUD operations and custom query methods for order history records.
  */
-@Repository
 public interface OrderHistoryRepository extends JpaRepository<OrderHistory, Long> {
     /**
      * Finds a history record by original order ID.

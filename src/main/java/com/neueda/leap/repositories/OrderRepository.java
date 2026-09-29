@@ -2,7 +2,6 @@ package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,7 +12,6 @@ import java.util.UUID;
  * Provides CRUD operations and custom query methods.
  * JpaRepository automatically provides: findById, save, findAll, delete, etc.
  */
-@Repository
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     /**
      * Finds an order by idempotency key for duplicate detection.

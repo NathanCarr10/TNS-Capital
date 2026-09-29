@@ -2,7 +2,6 @@ package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Account;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
@@ -11,7 +10,6 @@ import java.util.Optional;
  * Extends JpaRepository for Spring Data JPA integration.
  * Provides CRUD operations and custom query methods.
  */
-@Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
     /**
      * Finds an account by its unique account number string.

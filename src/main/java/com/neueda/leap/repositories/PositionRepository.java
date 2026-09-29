@@ -3,7 +3,6 @@ package com.neueda.leap.repositories;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.model.PositionId;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.Optional;
 import java.util.List;
 
@@ -13,7 +12,6 @@ import java.util.List;
  * Provides CRUD operations for positions keyed by (accountId, symbol).
  * JpaRepository automatically provides: findById, save, delete, etc.
  */
-@Repository
 public interface PositionRepository extends JpaRepository<Position, PositionId> {
     /**
      * Finds a position for an account and symbol.
