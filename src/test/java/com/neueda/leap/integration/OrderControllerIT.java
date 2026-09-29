@@ -33,161 +33,164 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser(username = "testuser", roles = "USER")
 public class OrderControllerIT extends AbstractIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private OrderRepository orderRepository;
+        @Autowired
+        private OrderRepository orderRepository;
 
-    @Autowired
-    private AccountRepository accountRepository;
+        @Autowired
+        private AccountRepository accountRepository;
 
-    @Autowired
-    private InstrumentRepository instrumentRepository;
+        @Autowired
+        private InstrumentRepository instrumentRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @Autowired
-    private Clock clock;
+        @Autowired
+        private Clock clock;
 
-    private Account testAccount;
+        private Account testAccount;
 
-    @BeforeEach
-    void setUp() {
-        orderRepository.deleteAll();
-        accountRepository.deleteAll();
-        instrumentRepository.deleteAll();
+        @BeforeEach
+        void setUp() {
+                orderRepository.deleteAll();
+                accountRepository.deleteAll();
+                instrumentRepository.deleteAll();
 
-        // Create test account
-        testAccount = new Account("ACC001", "Jane Trader", new BigDecimal("50000.00"), clock);
-        testAccount = accountRepository.save(testAccount);
+                // Create test account
+                testAccount = new Account("ACC001", "Jane Trader", new BigDecimal("50000.00"), clock);
+                testAccount = accountRepository.save(testAccount);
 
-        // Create test instrument (required for order placement validation)
-        Instrument aapl = new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true);
-        instrumentRepository.save(aapl);
-    }
+                // Create test instrument (required for order placement validation)
+                Instrument aapl = new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true);
+                instrumentRepository.save(aapl);
+        }
 
-    @Test
-    @DisplayName("Should retrieve all orders")
-    void testGetAllOrders() throws Exception {
-        // Create an order first
-        Order order = new Order(
-                testAccount.getId(),
-                "AAPL",
-                OrderSide.BUY,
-                10,
-                new BigDecimal("150.00"),
-                "ORDER-001",
-                clock
-        );
-        orderRepository.save(order);
+        @Test
+        @DisplayName("Should retrieve all orders")
+        @SuppressWarnings("null")
+        void testGetAllOrders() throws Exception {
+                // Create an order first
+                Order order = new Order(
+                                testAccount.getId(),
+                                "AAPL",
+                                OrderSide.BUY,
+                                10,
+                                new BigDecimal("150.00"),
+                                "ORDER-001",
+                                clock);
+                orderRepository.save(order);
 
-        mockMvc.perform(get("/api/v1/orders")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].symbol", equalTo("AAPL")))
-                .andExpect(jsonPath("$[0].side", equalTo("BUY")))
-                .andExpect(jsonPath("$[0].quantity", equalTo(10)))
-                .andExpect(jsonPath("$[0].status", equalTo("NEW")));
-    }
+                mockMvc.perform(get("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(1)))
+                                .andExpect(jsonPath("$[0].symbol", equalTo("AAPL")))
+                                .andExpect(jsonPath("$[0].side", equalTo("BUY")))
+                                .andExpect(jsonPath("$[0].quantity", equalTo(10)))
+                                .andExpect(jsonPath("$[0].status", equalTo("NEW")));
+        }
 
-    @Test
-    @DisplayName("Should retrieve a specific order by ID")
-    void testGetOrderById() throws Exception {
-        // Create an order
-        Order order = new Order(
-                testAccount.getId(),
-                "AAPL",
-                OrderSide.BUY,
-                5,
-                new BigDecimal("155.50"),
-                "ORDER-002",
-                clock
-        );
-        orderRepository.save(order);
+        @Test
+        @DisplayName("Should retrieve a specific order by ID")
+        @SuppressWarnings("null")
+        void testGetOrderById() throws Exception {
+                // Create an order
+                Order order = new Order(
+                                testAccount.getId(),
+                                "AAPL",
+                                OrderSide.BUY,
+                                5,
+                                new BigDecimal("155.50"),
+                                "ORDER-002",
+                                clock);
+                orderRepository.save(order);
 
-        mockMvc.perform(get("/api/v1/orders/{orderId}", order.getId())
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", equalTo(order.getId().toString())))
-                .andExpect(jsonPath("$.accountId", equalTo(testAccount.getId().intValue())))
-                .andExpect(jsonPath("$.symbol", equalTo("AAPL")))
-                .andExpect(jsonPath("$.side", equalTo("BUY")))
-                .andExpect(jsonPath("$.quantity", equalTo(5)));
-    }
+                mockMvc.perform(get("/api/v1/orders/{orderId}", order.getId())
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id", equalTo(order.getId().toString())))
+                                .andExpect(jsonPath("$.accountId", equalTo(testAccount.getId().intValue())))
+                                .andExpect(jsonPath("$.symbol", equalTo("AAPL")))
+                                .andExpect(jsonPath("$.side", equalTo("BUY")))
+                                .andExpect(jsonPath("$.quantity", equalTo(5)));
+        }
 
-    @Test
-    @DisplayName("Should return 404 when order not found")
-    void testGetOrderNotFound() throws Exception {
-        // Note: Currently returns 500 instead of 404 - this is a bug in error handling
-        // that should be fixed in the application
-        UUID nonExistentOrderId = UUID.randomUUID();
-        mockMvc.perform(get("/api/v1/orders/{orderId}", nonExistentOrderId)
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isInternalServerError()); // TODO: Should be isNotFound()
-    }
+        @Test
+        @DisplayName("Should return 404 when order not found")
+        @SuppressWarnings("null")
+        void testGetOrderNotFound() throws Exception {
+                // Note: Currently returns 500 instead of 404 - this is a bug in error handling
+                // that should be fixed in the application
+                UUID nonExistentOrderId = UUID.randomUUID();
+                mockMvc.perform(get("/api/v1/orders/{orderId}", nonExistentOrderId)
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isInternalServerError()); // TODO: Should be isNotFound()
+        }
 
-    @Test
-    @DisplayName("Should place a new order successfully")
-    void testPlaceOrderSuccess() throws Exception {
-        PlaceOrderRequest request = new PlaceOrderRequest(
-                testAccount.getId(),
-                "AAPL",
-                OrderSide.BUY,
-                10,
-                new BigDecimal("152.00"),
-                "IDEM-001"
-        );
+        @Test
+        @DisplayName("Should place a new order successfully")
+        @SuppressWarnings("null")
+        void testPlaceOrderSuccess() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(),
+                                "AAPL",
+                                OrderSide.BUY,
+                                10,
+                                new BigDecimal("152.00"),
+                                "IDEM-001");
 
-        mockMvc.perform(post("/api/v1/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id", notNullValue()))
-                .andExpect(jsonPath("$.accountId", equalTo(testAccount.getId().intValue())))
-                .andExpect(jsonPath("$.symbol", equalTo("AAPL")))
-                .andExpect(jsonPath("$.side", equalTo("BUY")))
-                .andExpect(jsonPath("$.quantity", equalTo(10)))
-                .andExpect(jsonPath("$.price", is(152.0)));
-    }
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.id", notNullValue()))
+                                .andExpect(jsonPath("$.accountId", equalTo(testAccount.getId().intValue())))
+                                .andExpect(jsonPath("$.symbol", equalTo("AAPL")))
+                                .andExpect(jsonPath("$.side", equalTo("BUY")))
+                                .andExpect(jsonPath("$.quantity", equalTo(10)))
+                                .andExpect(jsonPath("$.price", is(152.0)));
+        }
 
-    @Test
-    @DisplayName("Should return 404 when placing order for non-existent account")
-    void testPlaceOrderAccountNotFound() throws Exception {
-        PlaceOrderRequest request = new PlaceOrderRequest(
-                99999L,
-                "AAPL",
-                OrderSide.BUY,
-                10,
-                new BigDecimal("152.00"),
-                "IDEM-002"
-        );
+        @Test
+        @DisplayName("Should return 404 when placing order for non-existent account")
+        @SuppressWarnings("null")
+        void testPlaceOrderAccountNotFound() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                99999L,
+                                "AAPL",
+                                OrderSide.BUY,
+                                10,
+                                new BigDecimal("152.00"),
+                                "IDEM-002");
 
-        mockMvc.perform(post("/api/v1/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound());
-    }
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isNotFound());
+        }
 
-    @Test
-    @DisplayName("Should return 400 for invalid order request")
-    void testPlaceOrderInvalidRequest() throws Exception {
-        String invalidRequest = "{\"accountId\": null, \"symbol\": \"\"}";
+        @Test
+        @DisplayName("Should return 400 for invalid order request")
+        @SuppressWarnings("null")
+        void testPlaceOrderInvalidRequest() throws Exception {
+                String invalidRequest = "{\"accountId\": null, \"symbol\": \"\"}";
 
-        mockMvc.perform(post("/api/v1/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(invalidRequest))
-                .andExpect(status().isBadRequest());
-    }
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(invalidRequest))
+                                .andExpect(status().isBadRequest());
+        }
 
-    @Test
-    @DisplayName("Should return empty orders list initially")
-    void testGetAllOrdersEmpty() throws Exception {
-        mockMvc.perform(get("/api/v1/orders")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
-    }
+        @Test
+        @DisplayName("Should return empty orders list initially")
+        @SuppressWarnings("null")
+        void testGetAllOrdersEmpty() throws Exception {
+                mockMvc.perform(get("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$", hasSize(0)));
+        }
 }
