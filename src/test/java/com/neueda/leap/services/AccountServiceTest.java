@@ -54,7 +54,7 @@ class AccountServiceTest {
 
             assertNotNull(result);
             assertEquals(1L, result.getId());
-            assertEquals("ACC001", result.getAccountId());
+            assertEquals("ACC001", result.getAccountNumber());
             assertEquals("John Doe", result.getHolderName());
             verify(accountRepository, times(1)).findById(1L);
         }
@@ -89,7 +89,7 @@ class AccountServiceTest {
             Optional<Account> result = accountService.findAccountById(1L);
 
             assertTrue(result.isPresent());
-            assertEquals("ACC001", result.get().getAccountId());
+            assertEquals("ACC001", result.get().getAccountNumber());
             verify(accountRepository, times(1)).findById(1L);
         }
 

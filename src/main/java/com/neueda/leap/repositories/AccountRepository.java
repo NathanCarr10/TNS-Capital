@@ -14,10 +14,10 @@ import java.util.Optional;
 @Repository
 public interface AccountRepository extends JpaRepository<Account, Long> {
     /**
-     * Finds an account by its unique account ID string.
+     * Finds an account by its unique account number string.
      *
-     * @param accountId the account ID to search for
+     * @param accountNumber the account number to search for
      * @return Optional containing the account if found, empty otherwise
      */
-    Optional<Account> findByAccountId(String accountId);
+    Optional<Account> findByAccountNumber(String accountNumber);
 }
