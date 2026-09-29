@@ -5,10 +5,7 @@ WORKDIR /etl
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY tns_etl ./tns_etl
+COPY *.py schema.sql ./
 
-RUN useradd --system etl
-USER etl
-
-# Runs daily at ETL_SCHEDULE_TIME (container time, UTC by default).
-CMD ["python", "-m", "tns_etl", "schedule"]
+# Run the pipeline every day at ETL_SCHEDULE_TIME (UTC inside the container)
+CMD ["python", "pipeline.py", "--schedule"]
