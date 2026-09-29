@@ -11,7 +11,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Abstract base class for all integration tests.
- * Provides containerized PostgreSQL database for testing with Spring Boot application context.
+ * Provides containerized PostgreSQL database for testing with Spring Boot
+ * application context.
  * Enables security testing with a mock user context.
  */
 @Testcontainers
@@ -21,6 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 public abstract class AbstractIntegrationTest {
 
     @Container
+    @SuppressWarnings("resource")
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
             .withDatabaseName("tns_capital_test")
             .withUsername("test_user")
