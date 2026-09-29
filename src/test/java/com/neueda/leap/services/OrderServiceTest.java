@@ -326,6 +326,7 @@ class OrderServiceTest {
     class CancelOrderTests {
         @DisplayName("Should cancel NEW order successfully")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderSuccess() {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);

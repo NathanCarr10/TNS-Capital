@@ -64,6 +64,7 @@ public class OrderController {
     }
 
     @GetMapping("/{orderId}")
+    @SuppressWarnings("null")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID orderId) {
         // Retrieves order by UUID; throws exception if not found to maintain REST
         // consistency
