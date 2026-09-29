@@ -146,6 +146,10 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(
                         "NOT_FOUND",
                         "Resource not found: " + e.getResourcePath(),
+                        LocalDateTime.now()
+                ));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         logger.warn("Access denied: {}", e.getMessage());
