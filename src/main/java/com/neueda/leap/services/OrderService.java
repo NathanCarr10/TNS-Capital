@@ -20,6 +20,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import org.springframework.stereotype.Service;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -97,6 +98,18 @@ public class OrderService {
 
     public Optional<Position> findPosition(Long accountId, String symbol) {
         return positionRepository.findByAccountIdAndSymbol(accountId, InputNormalizer.normalize(symbol));
+    }
+
+    /**
+     * Retrieves all orders for a given account.
+     *
+     * @param accountId the account ID
+     * @return list of orders for the account (empty list if no orders found)
+     * @throws IllegalArgumentException if accountId is null
+     */
+    public List<Order> getOrdersByAccountId(Long accountId) {
+        Objects.requireNonNull(accountId, "Account ID cannot be null");
+        return orderRepository.findByAccountId(accountId);
     }
 
     /**
