@@ -21,6 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,8 +63,9 @@ public class AccountController {
                 return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(savedAccount));
         }
 
+        @SuppressWarnings("null")
         @PatchMapping("/{accountId}")
-        public ResponseEntity<AccountResponse> updateAccount(@PathVariable Long accountId,
+        public ResponseEntity<AccountResponse> updateAccount(@PathVariable @NotNull Long accountId,
                         @Valid @RequestBody UpdateAccountRequest request) {
                 // Retrieves existing account; throws exception if not found to maintain REST
                 // consistency
@@ -78,8 +81,9 @@ public class AccountController {
                 return ResponseEntity.ok(mapToResponse(updatedAccount));
         }
 
+        @SuppressWarnings("null")
         @DeleteMapping("/{accountId}")
-        public ResponseEntity<Void> deleteAccount(@PathVariable Long accountId) {
+        public ResponseEntity<Void> deleteAccount(@PathVariable @NotNull Long accountId) {
                 // Validates account exists before deletion; prevents silently ignoring requests
                 // for non-existent accounts
                 Account account = accountRepository.findById(accountId)
@@ -101,15 +105,17 @@ public class AccountController {
                 return ResponseEntity.noContent().build();
         }
 
+        @SuppressWarnings("null")
         @GetMapping("/{accountId}")
-        public ResponseEntity<AccountResponse> getAccount(@PathVariable Long accountId) {
+        public ResponseEntity<AccountResponse> getAccount(@PathVariable @NotNull Long accountId) {
                 Account account = accountRepository.findById(accountId)
                                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
                 return ResponseEntity.ok(mapToResponse(account));
         }
 
+        @SuppressWarnings("null")
         @GetMapping("/{accountId}/balance")
-        public ResponseEntity<BalanceResponse> getAccountBalance(@PathVariable Long accountId) {
+        public ResponseEntity<BalanceResponse> getAccountBalance(@PathVariable @NotNull Long accountId) {
                 // Validates account exists before returning balance; prevents exposing
                 // non-existent accounts
                 Account account = accountRepository.findById(accountId)
@@ -117,8 +123,9 @@ public class AccountController {
                 return ResponseEntity.ok(new BalanceResponse(account.getCashBalance()));
         }
 
+        @SuppressWarnings("null")
         @GetMapping("/{accountId}/positions")
-        public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable Long accountId) {
+        public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 // Validates account exists; queries positions separately to enable flexible
                 // retrieval
                 accountRepository.findById(accountId)
@@ -130,8 +137,9 @@ public class AccountController {
                 return ResponseEntity.ok(responses);
         }
 
+        @SuppressWarnings("null")
         @GetMapping("/{accountId}/orders")
-        public ResponseEntity<List<OrderResponse>> getAccountOrders(@PathVariable Long accountId) {
+        public ResponseEntity<List<OrderResponse>> getAccountOrders(@PathVariable @NotNull Long accountId) {
                 // Validates account exists; queries orders separately to enable filtering and
                 // pagination later
                 accountRepository.findById(accountId)
