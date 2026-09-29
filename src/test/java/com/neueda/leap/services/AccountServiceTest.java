@@ -1,6 +1,8 @@
 package com.neueda.leap.services;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
@@ -74,7 +76,7 @@ class AccountServiceTest {
         void testGetAccountByIdNullAccountId() {
             assertThrows(NullPointerException.class, () -> accountService.getAccountById(null),
                     "Should throw NullPointerException for null account ID");
-            verify(accountRepository, never()).findById(any());
+            verify(accountRepository, never()).findById(anyLong());
         }
     }
 
@@ -109,7 +111,7 @@ class AccountServiceTest {
         void testFindAccountByIdNullAccountId() {
             assertThrows(NullPointerException.class, () -> accountService.findAccountById(null),
                     "Should throw NullPointerException for null account ID");
-            verify(accountRepository, never()).findById(any());
+            verify(accountRepository, never()).findById(anyLong());
         }
     }
 
@@ -256,7 +258,7 @@ class AccountServiceTest {
             assertThrows(NullPointerException.class,
                     () -> accountService.validateSufficientFunds(1L, null),
                     "Should throw NullPointerException for null amount");
-            verify(accountRepository, never()).findById(any());
+            verify(accountRepository, never()).findById(anyLong());
         }
 
         @DisplayName("Should throw IllegalArgumentException for zero amount")
@@ -265,7 +267,7 @@ class AccountServiceTest {
             assertThrows(IllegalArgumentException.class,
                     () -> accountService.validateSufficientFunds(1L, BigDecimal.ZERO),
                     "Should throw IllegalArgumentException for zero amount");
-            verify(accountRepository, never()).findById(any());
+            verify(accountRepository, never()).findById(anyLong());
         }
 
         @DisplayName("Should throw IllegalArgumentException for negative amount")
@@ -274,7 +276,7 @@ class AccountServiceTest {
             assertThrows(IllegalArgumentException.class,
                     () -> accountService.validateSufficientFunds(1L, new BigDecimal("-100.00")),
                     "Should throw IllegalArgumentException for negative amount");
-            verify(accountRepository, never()).findById(any());
+            verify(accountRepository, never()).findById(anyLong());
         }
 
         @DisplayName("Should throw AccountNotFoundException when account not found")
@@ -293,6 +295,7 @@ class AccountServiceTest {
     class SaveAccountTests {
         @DisplayName("Should save account successfully")
         @Test
+        @SuppressWarnings("null")
         void testSaveAccountSuccess() {
             assertDoesNotThrow(() -> accountService.saveAccount(testAccount),
                     "Should not throw exception when saving valid account");
@@ -301,19 +304,21 @@ class AccountServiceTest {
 
         @DisplayName("Should throw NullPointerException for null account")
         @Test
+        @SuppressWarnings("null")
         void testSaveAccountNullAccount() {
             assertThrows(NullPointerException.class, () -> accountService.saveAccount(null),
                     "Should throw NullPointerException for null account");
-            verify(accountRepository, never()).save(any());
+            verify(accountRepository, never()).save(any(Account.class));
         }
 
         @DisplayName("Should call repository save method once")
         @Test
+        @SuppressWarnings("null")
         void testSaveAccountCallsRepository() {
             accountService.saveAccount(testAccount);
 
             verify(accountRepository, times(1)).save(testAccount);
-            verify(accountRepository, never()).findById(any());
+            verify(accountRepository, never()).findById(anyLong());
         }
     }
 }
