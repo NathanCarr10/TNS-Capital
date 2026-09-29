@@ -5,11 +5,10 @@ import com.neueda.leap.time.Clock;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.model.Account;
-import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.Order;
+import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
-import com.neueda.leap.utils.PositionKeyFactory;
 import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
@@ -18,6 +17,7 @@ import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -36,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderService {
     private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
+    private final OrderHistoryRepository orderHistoryRepository;
     private final PositionRepository positionRepository;
     private final OrderValidator validator;
     private final Map<OrderSide, OrderExecutionStrategy> strategies;
@@ -44,12 +44,14 @@ public class OrderService {
     public OrderService(
             AccountRepository accountRepository,
             OrderRepository orderRepository,
+            OrderHistoryRepository orderHistoryRepository,
             PositionRepository positionRepository,
             OrderValidator validator,
             Map<OrderSide, OrderExecutionStrategy> strategies,
             Clock clock) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
+        this.orderHistoryRepository = Objects.requireNonNull(orderHistoryRepository);
         this.positionRepository = Objects.requireNonNull(positionRepository);
         this.validator = Objects.requireNonNull(validator);
         this.strategies = Objects.requireNonNull(strategies);
@@ -115,6 +117,7 @@ public class OrderService {
      * 
      * Cancellation is only allowed for orders in NEW state.
      * Attempting to cancel FILLED, REJECTED, or CANCELLED orders throws a conflict exception.
+     * When an order is cancelled, it is archived to OrderHistory for audit trail.
      *
      * @param orderId the order ID to cancel
      * @return the cancelled order
@@ -138,6 +141,10 @@ public class OrderService {
         // Update order status to CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
+        
+        // Archive cancelled order to history for audit trail
+        OrderHistory history = new OrderHistory(order, clock);
+        orderHistoryRepository.save(history);
 
         return order;
     }

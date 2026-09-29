@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 
@@ -43,6 +44,16 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(
                         "ACCOUNT_NOT_ACTIVE",
                         "The account is not in an active state for this operation",
+                        LocalDateTime.now()
+                ));
+    }
+
+    @ExceptionHandler(AccountDeletionConflictException.class)
+    public ResponseEntity<ErrorResponse> handleAccountDeletionConflict(AccountDeletionConflictException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ErrorResponse(
+                        "ACCOUNT_DELETION_CONFLICT",
+                        e.getMessage(),
                         LocalDateTime.now()
                 ));
     }
@@ -129,6 +140,12 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(
+                        "NOT_FOUND",
+                        "Resource not found: " + e.getResourcePath(),
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         logger.warn("Access denied: {}", e.getMessage());

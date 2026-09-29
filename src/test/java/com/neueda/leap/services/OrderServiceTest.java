@@ -35,6 +35,7 @@ import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
@@ -48,6 +49,9 @@ class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private OrderHistoryRepository orderHistoryRepository;
 
     @Mock
     private PositionRepository positionRepository;
@@ -78,8 +82,8 @@ class OrderServiceTest {
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 
-        orderService = new OrderService(accountRepository, orderRepository, positionRepository, validator,
-                strategies, testClock);
+        orderService = new OrderService(accountRepository, orderRepository, orderHistoryRepository, 
+                positionRepository, validator, strategies, testClock);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -206,7 +210,7 @@ class OrderServiceTest {
             // Create service with empty strategies map
             Map<OrderSide, OrderExecutionStrategy> emptyStrategies = new HashMap<>();
             OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    positionRepository, validator, emptyStrategies, testClock);
+                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock);
 
             assertThrows(IllegalStateException.class,
                     () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),

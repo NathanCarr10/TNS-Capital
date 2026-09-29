@@ -1,19 +1,26 @@
 package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.AccountResponse;
+import com.neueda.leap.dtos.CreateAccountRequest;
+import com.neueda.leap.dtos.UpdateAccountRequest;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.PositionResponse;
 
+import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
+import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.time.Clock;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,13 +31,16 @@ public class AccountController {
         private final AccountRepository accountRepository;
         private final PositionRepository positionRepository;
         private final OrderRepository orderRepository;
+        private final Clock clock;
 
         public AccountController(AccountRepository accountRepository,
                         PositionRepository positionRepository,
-                        OrderRepository orderRepository) {
+                        OrderRepository orderRepository,
+                        Clock clock) {
                 this.accountRepository = accountRepository;
                 this.positionRepository = positionRepository;
                 this.orderRepository = orderRepository;
+                this.clock = clock;
         }
 
         @GetMapping
@@ -40,6 +50,51 @@ public class AccountController {
                                 .map(this::mapToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);
+        }
+
+        @PostMapping
+        public ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
+                // Creates new account with provided details; Clock ensures consistent timestamp
+                Account account = new Account(request.accountId(), request.holderName(), request.cashBalance(), clock);
+                Account savedAccount = accountRepository.save(account);
+                return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(savedAccount));
+        }
+
+        @PatchMapping("/{accountId}")
+        public ResponseEntity<AccountResponse> updateAccount(@PathVariable Long accountId, 
+                        @Valid @RequestBody UpdateAccountRequest request) {
+                // Retrieves existing account; throws exception if not found to maintain REST consistency
+                Account account = accountRepository.findById(accountId)
+                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
+                
+                // Updates only provided fields; supports partial updates via PATCH
+                if (request.holderName() != null && !request.holderName().trim().isEmpty()) {
+                        account.setHolderName(request.holderName());
+                }
+                
+                Account updatedAccount = accountRepository.save(account);
+                return ResponseEntity.ok(mapToResponse(updatedAccount));
+        }
+
+        @DeleteMapping("/{accountId}")
+        public ResponseEntity<Void> deleteAccount(@PathVariable Long accountId) {
+                // Validates account exists before deletion; prevents silently ignoring requests for non-existent accounts
+                Account account = accountRepository.findById(accountId)
+                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
+                
+                // Checks for active (NEW status) orders; prevents deletion of accounts with pending orders
+                List<Order> activeOrders = orderRepository.findByAccountId(accountId).stream()
+                                .filter(order -> order.getStatus() == OrderStatus.NEW)
+                                .collect(Collectors.toList());
+                
+                if (!activeOrders.isEmpty()) {
+                        throw new AccountDeletionConflictException(
+                                "Cannot delete account with " + activeOrders.size() + " active order(s)");
+                }
+                
+                // Deletes account and returns no content
+                accountRepository.delete(account);
+                return ResponseEntity.noContent().build();
         }
 
         @GetMapping("/{accountId}")
