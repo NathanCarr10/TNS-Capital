@@ -43,13 +43,13 @@ class GlobalExceptionHandlerTests {
         void testAccountNotFoundHandler() {
             AccountNotFoundException exception = new AccountNotFoundException("Account not found: 999");
             ResponseEntity<ErrorResponse> response = handler.handleAccountNotFound(exception);
-
+            ErrorResponse body = response.getBody();
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertEquals("ACCOUNT_NOT_FOUND", response.getBody().errorCode());
+            assertNotNull(body);
+            assertEquals("ACCOUNT_NOT_FOUND", body.errorCode());
             // Verify message is sanitized (doesn't expose specific account ID)
-            assertEquals("The requested account could not be found", response.getBody().message());
-            assertNotNull(response.getBody().timestamp());
+            assertEquals("The requested account could not be found", body.message());
+            assertNotNull(body.timestamp());
         }
 
         @DisplayName("AccountNotActiveException returns 409 with appropriate message")
@@ -59,9 +59,10 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleAccountNotActive(exception);
 
             assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertEquals("ACCOUNT_NOT_ACTIVE", response.getBody().errorCode());
-            assertNotNull(response.getBody().message());
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("ACCOUNT_NOT_ACTIVE", body.errorCode());
+            assertNotNull(body.message());
         }
 
         @DisplayName("InstrumentNotFoundException returns 404 with sanitized message")
@@ -71,9 +72,10 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleInstrumentNotFound(exception);
 
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertEquals("INSTRUMENT_NOT_FOUND", response.getBody().errorCode());
-            assertEquals("The requested instrument could not be found or is not tradable", response.getBody().message());
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("INSTRUMENT_NOT_FOUND", body.errorCode());
+            assertEquals("The requested instrument could not be found or is not tradable", body.message());
         }
 
         @DisplayName("DuplicateOrderException returns 409 with appropriate message")
@@ -83,9 +85,10 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleDuplicateOrder(exception);
 
             assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertEquals("DUPLICATE_ORDER", response.getBody().errorCode());
-            assertTrue(response.getBody().message().contains("idempotency key"));
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("DUPLICATE_ORDER", body.errorCode());
+            assertTrue(body.message().contains("idempotency key"));
         }
 
         @DisplayName("InsufficientFundsException returns 400 with appropriate message")
@@ -95,9 +98,10 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleInsufficientFunds(exception);
 
             assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertEquals("INSUFFICIENT_FUNDS", response.getBody().errorCode());
-            assertTrue(response.getBody().message().contains("sufficient funds"));
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("INSUFFICIENT_FUNDS", body.errorCode());
+            assertTrue(body.message().contains("sufficient funds"));
         }
 
         @DisplayName("InsufficientHoldingsException returns 400 with appropriate message")
@@ -107,9 +111,10 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleInsufficientHoldings(exception);
 
             assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-            assertNotNull(response.getBody());
-            assertEquals("INSUFFICIENT_HOLDINGS", response.getBody().errorCode());
-            assertTrue(response.getBody().message().contains("sufficient holdings"));
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("INSUFFICIENT_HOLDINGS", body.errorCode());
+            assertTrue(body.message().contains("sufficient holdings"));
         }
 
         @DisplayName("OrderNotFoundException returns 404")
@@ -119,7 +124,9 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleOrderNotFound(exception);
 
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-            assertEquals("ORDER_NOT_FOUND", response.getBody().errorCode());
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("ORDER_NOT_FOUND", body.errorCode());
         }
 
         @DisplayName("PositionNotFoundException returns 404")
@@ -129,7 +136,9 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handlePositionNotFound(exception);
 
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-            assertEquals("POSITION_NOT_FOUND", response.getBody().errorCode());
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertEquals("POSITION_NOT_FOUND", body.errorCode());
         }
     }
 
@@ -142,13 +151,14 @@ class GlobalExceptionHandlerTests {
         @DisplayName("AccessDeniedException returns 403 with generic message")
         @Test
         void testAccessDeniedHandler() {
-            org.springframework.security.access.AccessDeniedException exception =
-                    new org.springframework.security.access.AccessDeniedException("Access denied");
+            org.springframework.security.access.AccessDeniedException exception = new org.springframework.security.access.AccessDeniedException(
+                    "Access denied");
             ResponseEntity<ErrorResponse> response = handler.handleAccessDenied(exception);
-
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
             assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-            assertEquals("ACCESS_DENIED", response.getBody().errorCode());
-            assertEquals("You do not have permission to access this resource", response.getBody().message());
+            assertEquals("ACCESS_DENIED", body.errorCode());
+            assertEquals("You do not have permission to access this resource", body.message());
         }
 
         @DisplayName("IllegalArgumentException returns 400")
@@ -156,9 +166,11 @@ class GlobalExceptionHandlerTests {
         void testIllegalArgumentHandler() {
             IllegalArgumentException exception = new IllegalArgumentException("Invalid argument");
             ResponseEntity<ErrorResponse> response = handler.handleIllegalArgument(exception);
-
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
             assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-            assertEquals("INVALID_REQUEST", response.getBody().errorCode());
+            assertEquals("INVALID_REQUEST", body.errorCode());
+            assertEquals("The request contains invalid arguments", body.message());
         }
     }
 
@@ -171,7 +183,8 @@ class GlobalExceptionHandlerTests {
         @DisplayName("Validation errors include helpful field-specific messages")
         @Test
         void testValidationErrorHandler() {
-            // Note: In a real test, this would require a mock MethodArgumentNotValidException
+            // Note: In a real test, this would require a mock
+            // MethodArgumentNotValidException
             // For now, we verify the error code and structure
             assertTrue(true, "Validation error handler formats field errors with helpful messages");
         }
@@ -195,12 +208,14 @@ class GlobalExceptionHandlerTests {
         void testGenericExceptionHandler() {
             Exception exception = new RuntimeException("Unexpected error with sensitive details");
             ResponseEntity<ErrorResponse> response = handler.handleGenericException(exception);
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
 
             assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-            assertEquals("INTERNAL_SERVER_ERROR", response.getBody().errorCode());
+            assertEquals("INTERNAL_SERVER_ERROR", body.errorCode());
             // Verify message does NOT expose the actual exception details
-            assertNotEquals("Unexpected error with sensitive details", response.getBody().message());
-            assertTrue(response.getBody().message().contains("unexpected error"));
+            assertNotEquals("Unexpected error with sensitive details", body.message());
+            assertTrue(body.message().contains("unexpected error"));
         }
 
         @DisplayName("Generic exception message encourages contacting support")
@@ -208,9 +223,10 @@ class GlobalExceptionHandlerTests {
         void testGenericExceptionMessageHelpful() {
             Exception exception = new RuntimeException("Some internal error");
             ResponseEntity<ErrorResponse> response = handler.handleGenericException(exception);
-
-            assertTrue(response.getBody().message().contains("support"));
-            assertTrue(response.getBody().message().contains("timestamp"));
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertTrue(body.message().contains("support"));
+            assertTrue(body.message().contains("timestamp"));
         }
 
         @DisplayName("No stack trace is exposed in response body")
@@ -218,8 +234,10 @@ class GlobalExceptionHandlerTests {
         void testNoStackTraceExposed() {
             Exception exception = new RuntimeException("Line 1\nnot at com.example.Code\nat com.example.Main");
             ResponseEntity<ErrorResponse> response = handler.handleGenericException(exception);
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
 
-            String message = response.getBody().message();
+            String message = body.message();
             assertFalse(message.contains("at com.example"));
             assertFalse(message.contains("Exception"));
             assertFalse(message.contains(".java"));
@@ -260,9 +278,10 @@ class GlobalExceptionHandlerTests {
             Exception exception = new RuntimeException("Test");
             ResponseEntity<ErrorResponse> response = handler.handleGenericException(exception);
             LocalDateTime after = LocalDateTime.now().plusSeconds(1);
-
-            assertTrue(response.getBody().timestamp().isAfter(before));
-            assertTrue(response.getBody().timestamp().isBefore(after));
+            ErrorResponse body = response.getBody();
+            assertNotNull(body);
+            assertTrue(body.timestamp().isAfter(before));
+            assertTrue(body.timestamp().isBefore(after));
         }
     }
 
