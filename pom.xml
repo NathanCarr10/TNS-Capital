@@ -112,6 +112,20 @@
             <version>1.20.4</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Spring Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- TestContainers Kafka -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
