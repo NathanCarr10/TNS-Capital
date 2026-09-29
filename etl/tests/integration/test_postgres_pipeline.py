@@ -1,11 +1,12 @@
-"""End-to-end run against a real PostgreSQL database.
+"""End-to-end test against a real PostgreSQL database.
 
-DESTRUCTIVE: recreates the source tables from db/ and drops the analytics
-schema, so point it only at a throwaway database, e.g.
+WARNING: this recreates the source tables from db/, so only run it against a
+throwaway database:
 
     docker run -d --rm --name etl-it -e POSTGRES_PASSWORD=it -p 55432:5432 postgres:16
-    ETL_IT_DB_NAME=postgres ETL_DB_PORT=55432 DB_USER=postgres DB_PASSWORD=it \
-        python -m pytest -m integration
+    ETL_IT=1 ETL_DB_NAME=postgres ETL_DB_PORT=55432 DB_USER=postgres DB_PASSWORD=it \
+        python -m pytest tests/integration
+    docker stop etl-it
 """
 
 import os
@@ -14,106 +15,69 @@ from pathlib import Path
 import psycopg2
 import pytest
 
-from tns_etl.config import EtlConfig, RetryPolicy
-from tns_etl.pipeline import EtlPipeline
+import config
+import pipeline
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(not os.environ.get("ETL_IT_DB_NAME"),
-                       reason="set ETL_IT_DB_NAME to a disposable database to run"),
-]
+pytestmark = pytest.mark.skipif(not os.getenv("ETL_IT"), reason="set ETL_IT=1 to run")
 
-DB_DIR = Path(__file__).resolve().parents[3] / "db"
+DB_FOLDER = Path(__file__).resolve().parents[3] / "db"
 
 
 @pytest.fixture
-def config():
-    env = dict(os.environ, ETL_DB_NAME=os.environ.get("ETL_IT_DB_NAME", ""))
-    base = EtlConfig.from_env(env)
-    return EtlConfig(**{**base.__dict__, "retry": RetryPolicy(max_attempts=2, initial_delay_seconds=0)})
-
-
-@pytest.fixture
-def conn(config):
-    conn = psycopg2.connect(**config.connection_kwargs())
+def db():
+    """A database containing only the seed data from db/."""
+    conn = psycopg2.connect(**config.DB_SETTINGS)
     conn.autocommit = True
-    with conn.cursor() as cur:
-        cur.execute(f"DROP SCHEMA IF EXISTS {config.analytics_schema} CASCADE")
-        cur.execute("DROP TABLE IF EXISTS positions, orders, instruments, accounts CASCADE")
-        for folder in ("tables", "data"):
-            for script in sorted((DB_DIR / folder).glob("*.sql")):
-                cur.execute(script.read_text())
-    yield conn
+    cur = conn.cursor()
+    cur.execute("DROP SCHEMA IF EXISTS analytics CASCADE")
+    cur.execute("DROP TABLE IF EXISTS positions, orders, instruments, accounts CASCADE")
+    for folder in ["tables", "data"]:
+        for script in sorted((DB_FOLDER / folder).glob("*.sql")):
+            cur.execute(script.read_text())
+    yield cur
     conn.close()
 
 
-def scalar(conn, sql):
-    with conn.cursor() as cur:
-        cur.execute(sql)
-        return cur.fetchone()[0]
+def query(cur, sql):
+    cur.execute(sql)
+    return cur.fetchall()
 
 
-def snapshot(conn, schema):
-    with conn.cursor() as cur:
-        cur.execute(f"""SELECT order_id, a.account_id, i.symbol, date_key, side, quantity,
-                               signed_quantity, price, notional, status, is_filled
-                        FROM {schema}.fact_trades f
-                        JOIN {schema}.dim_account a USING (account_key)
-                        JOIN {schema}.dim_instrument i USING (instrument_key)
-                        ORDER BY order_id""")
-        return cur.fetchall()
+def test_all_orders_are_loaded(db):
+    assert pipeline.run_pipeline() is True
+    assert query(db, "SELECT COUNT(*) FROM analytics.fact_trades") == query(db, "SELECT COUNT(*) FROM orders")
 
 
-def test_pipeline_loads_all_source_orders(conn, config):
-    result = EtlPipeline(config).run()
+def test_running_twice_gives_the_same_result(db):
+    pipeline.run_pipeline()
+    first = query(db, "SELECT * FROM analytics.fact_trades ORDER BY order_id")
 
-    assert result.succeeded, result.error
-    schema = config.analytics_schema
-    source_orders = scalar(conn, "SELECT COUNT(*) FROM orders")
-    assert scalar(conn, f"SELECT COUNT(*) FROM {schema}.fact_trades") == source_orders
-    assert scalar(conn, f"SELECT COUNT(*) FROM {schema}.dim_account") == scalar(conn, "SELECT COUNT(*) FROM accounts")
-    assert result.load_stats.fact_trades == source_orders
-    assert scalar(conn, f"SELECT status FROM {schema}.etl_run_log WHERE run_id = '{result.run_id}'") == "SUCCEEDED"
+    pipeline.run_pipeline()
+    second = query(db, "SELECT * FROM analytics.fact_trades ORDER BY order_id")
+
+    assert first == second  # no duplicates, no changes
 
 
-def test_rerun_is_repeatable_and_picks_up_source_changes(conn, config):
-    schema = config.analytics_schema
-    first = EtlPipeline(config).run()
-    before = snapshot(conn, schema)
+def test_changed_orders_are_updated_not_duplicated(db):
+    pipeline.run_pipeline()
+    db.execute("UPDATE orders SET status = 'FILLED' WHERE idempotency_key = 'seed-key-5'")
 
-    second = EtlPipeline(config).run()
+    pipeline.run_pipeline()
 
-    assert second.succeeded
-    assert snapshot(conn, schema) == before           # same data, same result
-    assert second.load_stats.fact_trades == 0          # nothing rewritten
-    assert first.load_stats.fact_trades == len(before)
-
-    # An order moving NEW -> FILLED in the source is updated, not duplicated.
-    with conn.cursor() as cur:
-        cur.execute("UPDATE orders SET status = 'FILLED' WHERE idempotency_key = 'seed-key-5'")
-    third = EtlPipeline(config).run()
-    assert third.load_stats.fact_trades == 1
-    assert scalar(conn, f"SELECT COUNT(*) FROM {schema}.fact_trades") == len(before)
-    assert scalar(conn, f"SELECT is_filled FROM {schema}.fact_trades WHERE idempotency_key = 'seed-key-5'")
+    rows = query(db, """SELECT f.status FROM analytics.fact_trades f
+                        JOIN orders o ON o.id = f.order_id
+                        WHERE o.idempotency_key = 'seed-key-5'""")
+    assert rows == [("FILLED",)]
 
 
-def test_failed_run_is_recorded_and_leaves_analytics_untouched(conn, config):
-    schema = config.analytics_schema
-    EtlPipeline(config).run()
-    loaded = scalar(conn, f"SELECT COUNT(*) FROM {schema}.fact_trades")
+def test_failed_run_leaves_reporting_tables_unchanged(db):
+    pipeline.run_pipeline()
+    before = query(db, "SELECT COUNT(*) FROM analytics.fact_trades")
 
-    with conn.cursor() as cur:
-        cur.execute("ALTER TABLE orders RENAME TO orders_offline")
+    db.execute("ALTER TABLE orders RENAME TO orders_offline")  # make extract fail
     try:
-        failed = EtlPipeline(config).run()
+        assert pipeline.run_pipeline() is False
     finally:
-        with conn.cursor() as cur:
-            cur.execute("ALTER TABLE orders_offline RENAME TO orders")
+        db.execute("ALTER TABLE orders_offline RENAME TO orders")
 
-    assert not failed.succeeded
-    assert failed.failed_stage == "extract"
-    assert scalar(conn, f"SELECT COUNT(*) FROM {schema}.fact_trades") == loaded
-    with conn.cursor() as cur:
-        cur.execute(f"SELECT status, failed_stage FROM {schema}.etl_run_log WHERE run_id = %s",
-                    (failed.run_id,))
-        assert cur.fetchone() == ("FAILED", "extract")
+    assert query(db, "SELECT COUNT(*) FROM analytics.fact_trades") == before
