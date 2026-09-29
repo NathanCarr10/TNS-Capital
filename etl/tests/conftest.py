@@ -1,55 +1,40 @@
+"""Small sample tables shared by the tests (they look like what extract() returns)."""
+
 from datetime import datetime
 from decimal import Decimal
 
 import pandas as pd
 import pytest
 
-from tns_etl.extract import ExtractResult
 
-
-def make_order(**overrides) -> dict:
-    order = {
-        "order_id": "11111111-1111-1111-1111-111111111111",
-        "account_pk": 1,
-        "symbol": "ACME",
-        "side": "BUY",
-        "quantity": 100,
-        "price": Decimal("25.00"),
-        "status": "FILLED",
-        "idempotency_key": "key-1",
-        "created_on": datetime(2026, 8, 1, 9, 0),
-    }
-    order.update(overrides)
-    return order
+@pytest.fixture
+def accounts():
+    return pd.DataFrame({
+        "account_id": ["ACC-1001", "ACC-1002"],
+        "holder_name": ["Alice", "Bob"],
+        "status": ["ACTIVE", "SUSPENDED"],
+    })
 
 
 @pytest.fixture
-def accounts() -> pd.DataFrame:
-    return pd.DataFrame([
-        {"account_pk": 1, "account_id": "ACC-1001", "holder_name": "Alice", "status": "ACTIVE"},
-        {"account_pk": 2, "account_id": "ACC-1002", "holder_name": "Bob", "status": "SUSPENDED"},
-    ])
+def instruments():
+    return pd.DataFrame({
+        "symbol": ["ACME", "BOND1"],
+        "name": ["Acme Corp", "Gov Bond"],
+        "asset_class": ["EQUITY", "BOND"],
+        "currency": ["USD", "EUR"],
+    })
 
 
 @pytest.fixture
-def instruments() -> pd.DataFrame:
-    return pd.DataFrame([
-        {"symbol": "ACME", "name": "Acme Corp", "asset_class": "EQUITY", "currency": "USD", "tradable": True},
-        {"symbol": "BOND1", "name": "Gov Bond", "asset_class": "BOND", "currency": "EUR", "tradable": False},
-    ])
-
-
-@pytest.fixture
-def orders() -> pd.DataFrame:
-    return pd.DataFrame([
-        make_order(),
-        make_order(order_id="22222222-2222-2222-2222-222222222222", account_pk=2,
-                   symbol="BOND1", side="SELL", quantity=10, price=Decimal("41.00"),
-                   status="NEW", idempotency_key="key-2",
-                   created_on=datetime(2026, 8, 2, 10, 30)),
-    ])
-
-
-@pytest.fixture
-def extracted(accounts, instruments, orders) -> ExtractResult:
-    return ExtractResult(accounts=accounts, instruments=instruments, orders=orders)
+def orders():
+    return pd.DataFrame({
+        "order_id": ["order-1", "order-2"],
+        "account_id": ["ACC-1001", "ACC-1002"],
+        "symbol": ["ACME", "BOND1"],
+        "side": ["BUY", "SELL"],
+        "quantity": [100, 10],
+        "price": [Decimal("25.00"), Decimal("41.00")],  # Postgres returns prices as Decimal
+        "status": ["FILLED", "NEW"],
+        "created_on": [datetime(2026, 8, 1, 9, 0), datetime(2026, 8, 3, 10, 30)],
+    })
