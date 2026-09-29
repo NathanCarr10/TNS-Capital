@@ -8,3 +8,5 @@ target/
 /python/
 node_modules/
 /scripts/
+__pycache__/
+.pytest_cache/
