@@ -1,6 +1,9 @@
 """End-to-end test against a real PostgreSQL database.
 
-WARNING: this recreates the source tables from db/, so only run it against a
+It creates the app's tables from db/tables (so it checks the ETL still matches
+the real schema) and fills them with the small test data set below.
+
+WARNING: this drops and recreates tables, so only run it against a
 throwaway database:
 
     docker run -d --rm --name etl-it -e POSTGRES_PASSWORD=it -p 55432:5432 postgres:16
@@ -20,20 +23,38 @@ import pipeline
 
 pytestmark = pytest.mark.skipif(not os.getenv("ETL_IT"), reason="set ETL_IT=1 to run")
 
-DB_FOLDER = Path(__file__).resolve().parents[3] / "db"
+TABLES_FOLDER = Path(__file__).resolve().parents[3] / "db" / "tables"
+
+TEST_DATA = """
+    INSERT INTO accounts (account_number, holder_name, cash_balance, status) VALUES
+        ('ACC-1001', 'John Doe', 5000.00, 'ACTIVE'),
+        ('ACC-1002', 'Jane Smith', 12000.00, 'ACTIVE');
+
+    INSERT INTO instruments (symbol, name, asset_class, currency, tradable) VALUES
+        ('ACME', 'Acme Corp', 'EQUITY', 'USD', TRUE),
+        ('BOND1', 'Gov Bond', 'BOND', 'EUR', TRUE);
+
+    INSERT INTO orders (id, account_id, symbol, side, quantity, price, status, idempotency_key, created_on) VALUES
+        ('11111111-1111-1111-1111-111111111111', (SELECT id FROM accounts WHERE account_number = 'ACC-1001'),
+            'ACME', 'BUY', 100, 25.00, 'FILLED', 'seed-key-1', '2026-08-01 09:00:00'),
+        ('22222222-2222-2222-2222-222222222222', (SELECT id FROM accounts WHERE account_number = 'ACC-1002'),
+            'BOND1', 'BUY', 50, 40.00, 'FILLED', 'seed-key-2', '2026-08-02 10:00:00'),
+        ('55555555-5555-5555-5555-555555555555', (SELECT id FROM accounts WHERE account_number = 'ACC-1002'),
+            'BOND1', 'SELL', 10, 41.00, 'NEW', 'seed-key-5', '2026-08-04 13:15:00');
+"""
 
 
 @pytest.fixture
 def db():
-    """A database containing only the seed data from db/."""
+    """A database with the app's tables and a small set of test data."""
     conn = psycopg2.connect(**config.DB_SETTINGS)
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute("DROP SCHEMA IF EXISTS analytics CASCADE")
     cur.execute("DROP TABLE IF EXISTS positions, orders, instruments, accounts CASCADE")
-    for folder in ["tables", "data"]:
-        for script in sorted((DB_FOLDER / folder).glob("*.sql")):
-            cur.execute(script.read_text())
+    for script in sorted(TABLES_FOLDER.glob("*.sql")):
+        cur.execute(script.read_text())
+    cur.execute(TEST_DATA)
     yield cur
     conn.close()
 
