@@ -43,7 +43,7 @@ accounts, instruments, orders ──► EXTRACT ──► TRANSFORM ──► LO
 
 ```bash
 cd etl
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime deps + pytest
 
 python pipeline.py               # run once
 python pipeline.py --schedule    # run every day at ETL_SCHEDULE_TIME

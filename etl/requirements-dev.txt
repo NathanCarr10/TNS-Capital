@@ -1,0 +1,9 @@
+# Everything in requirements.txt, plus the test tools. Not installed in the container.
+-r requirements.txt
+
+pytest==9.1.1
+
+iniconfig==2.3.0              # via pytest
+packaging==26.3               # via pytest
+pluggy==1.6.0                 # via pytest
+Pygments==2.21.0              # via pytest

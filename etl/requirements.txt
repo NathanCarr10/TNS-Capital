@@ -1,5 +1,14 @@
-pandas>=2.0,<3
-psycopg2-binary>=2.9,<3
-python-dotenv>=1.0
-schedule>=1.2
-pytest>=8
+# Runtime dependencies for the ETL container, pinned to exact versions so builds are
+# repeatable and Trivy can check each one for known CVEs (it skips version ranges).
+# To upgrade: change the top-level version, then re-resolve in python:3.12-slim and
+# re-pin the libraries it pulls in (listed under "via ...").
+pandas==2.3.3
+psycopg2-binary==2.9.13
+python-dotenv==1.2.3
+schedule==1.2.2
+
+numpy==2.5.3                  # via pandas
+python-dateutil==2.9.0.post0  # via pandas
+pytz==2026.4                  # via pandas
+tzdata==2026.4                # via pandas
+six==1.17.0                   # via python-dateutil
