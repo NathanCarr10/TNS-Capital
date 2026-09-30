@@ -25,7 +25,6 @@ import org.mockito.MockitoAnnotations;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
-import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
@@ -35,9 +34,12 @@ import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.kafka.OrderEventPublisher;
+import com.neueda.leap.kafka.TradeEventPublisher;
 
 @DisplayName("OrderService Test Suite")
 class OrderServiceTest {
@@ -50,6 +52,9 @@ class OrderServiceTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private OrderHistoryRepository orderHistoryRepository;
+
+    @Mock
     private PositionRepository positionRepository;
 
     @Mock
@@ -60,6 +65,12 @@ class OrderServiceTest {
 
     @Mock
     private OrderExecutionStrategy sellStrategy;
+
+    @Mock
+    private OrderEventPublisher orderEventPublisher;
+
+    @Mock
+    private TradeEventPublisher tradeEventPublisher;
 
     private ClockTest testClock;
     private Account testAccount;
@@ -78,8 +89,8 @@ class OrderServiceTest {
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 
-        orderService = new OrderService(accountRepository, orderRepository, positionRepository, validator,
-                strategies, testClock);
+        orderService = new OrderService(accountRepository, orderRepository, orderHistoryRepository,
+                positionRepository, validator, strategies, testClock, orderEventPublisher, tradeEventPublisher);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -90,6 +101,7 @@ class OrderServiceTest {
     class PlaceOrderTests {
         @DisplayName("Should place buy order successfully")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderBuySuccess() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
 
@@ -111,6 +123,7 @@ class OrderServiceTest {
 
         @DisplayName("Should place sell order successfully")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderSellSuccess() {
             PlaceOrderRequest sellRequest = new PlaceOrderRequest(1L, "MSFT", OrderSide.SELL, 50,
                     new BigDecimal("300.00"), "ORDER-002");
@@ -129,15 +142,17 @@ class OrderServiceTest {
 
         @DisplayName("Should throw NullPointerException for null request")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderNullRequest() {
             assertThrows(NullPointerException.class, () -> orderService.placeOrder(null),
                     "Should throw NullPointerException for null request");
             verify(validator, never()).validate(any());
-            verify(orderRepository, never()).save(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
 
         @DisplayName("Should set order status to REJECTED on InsufficientFundsException")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderInsufficientFundsThrowsException() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             doThrow(new InsufficientFundsException("Insufficient funds")).when(buyStrategy).execute(any(), any(),
@@ -153,6 +168,7 @@ class OrderServiceTest {
 
         @DisplayName("Should set order status to REJECTED on InsufficientHoldingsException")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderInsufficientHoldingsThrowsException() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             doThrow(new InsufficientHoldingsException("Insufficient holdings")).when(sellStrategy).execute(any(),
@@ -171,6 +187,7 @@ class OrderServiceTest {
 
         @DisplayName("Should set order status to REJECTED on generic Exception")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderGenericExceptionThrowsException() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             doThrow(new RuntimeException("Unexpected error")).when(buyStrategy).execute(any(), any(), any());
@@ -185,6 +202,7 @@ class OrderServiceTest {
 
         @DisplayName("Should wrap AccountNotFoundException in IllegalStateException")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderAccountNotFound() {
             when(accountRepository.findById(999L)).thenReturn(Optional.empty());
             PlaceOrderRequest invalidRequest = new PlaceOrderRequest(999L, "AAPL", OrderSide.BUY, 100,
@@ -206,7 +224,7 @@ class OrderServiceTest {
             // Create service with empty strategies map
             Map<OrderSide, OrderExecutionStrategy> emptyStrategies = new HashMap<>();
             OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    positionRepository, validator, emptyStrategies, testClock);
+                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock, orderEventPublisher, tradeEventPublisher);
 
             assertThrows(IllegalStateException.class,
                     () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),
@@ -215,6 +233,7 @@ class OrderServiceTest {
 
         @DisplayName("Should save order even on exception")
         @Test
+        @SuppressWarnings("null")
         void testPlaceOrderSavesOrderOnException() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             doThrow(new InsufficientFundsException("Insufficient funds")).when(buyStrategy).execute(any(), any(),
@@ -315,6 +334,7 @@ class OrderServiceTest {
     class CancelOrderTests {
         @DisplayName("Should cancel NEW order successfully")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderSuccess() {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);
@@ -331,17 +351,19 @@ class OrderServiceTest {
 
         @DisplayName("Should throw OrderNotFoundException when order not found")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderNotFound() {
             UUID orderId = UUID.randomUUID();
             when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
 
             assertThrows(OrderNotFoundException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderNotFoundException when order not found");
-            verify(orderRepository, never()).save(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
 
         @DisplayName("Should throw OrderCancellationConflictException when order is FILLED")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderFilledConflict() {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-002", testClock);
@@ -351,11 +373,12 @@ class OrderServiceTest {
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is FILLED");
-            verify(orderRepository, never()).save(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
 
         @DisplayName("Should throw OrderCancellationConflictException when order is REJECTED")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderRejectedConflict() {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-003", testClock);
@@ -365,11 +388,12 @@ class OrderServiceTest {
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is REJECTED");
-            verify(orderRepository, never()).save(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
 
         @DisplayName("Should throw OrderCancellationConflictException when order is already CANCELLED")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderAlreadyCancelledConflict() {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-004", testClock);
@@ -379,16 +403,17 @@ class OrderServiceTest {
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is already CANCELLED");
-            verify(orderRepository, never()).save(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
 
         @DisplayName("Should throw NullPointerException for null order ID")
         @Test
+        @SuppressWarnings("null")
         void testCancelOrderNullOrderId() {
             assertThrows(NullPointerException.class, () -> orderService.cancelOrder(null),
                     "Should throw NullPointerException for null order ID");
             verify(orderRepository, never()).findById(any());
-            verify(orderRepository, never()).save(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
     }
 
@@ -399,8 +424,10 @@ class OrderServiceTest {
         @Test
         void testGetOrdersByAccountIdSuccess() {
             Long accountId = 1L;
-            Order order1 = new Order(accountId, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);
-            Order order2 = new Order(accountId, "GOOGL", OrderSide.SELL, 50, new BigDecimal("200.00"), "ORDER-002", testClock);
+            Order order1 = new Order(accountId, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001",
+                    testClock);
+            Order order2 = new Order(accountId, "GOOGL", OrderSide.SELL, 50, new BigDecimal("200.00"), "ORDER-002",
+                    testClock);
             List<Order> orders = Arrays.asList(order1, order2);
 
             when(orderRepository.findByAccountId(accountId)).thenReturn(orders);
