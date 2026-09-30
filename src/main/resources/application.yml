@@ -20,6 +20,22 @@ spring:
     show-sql: false
     open-in-view: false
 
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      group-id: tns-capital-orders
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
 jwt:
   shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
 
@@ -55,3 +71,4 @@ logging:
     org.springdoc: DEBUG
     org.springframework.web: DEBUG
     org.flywaydb: DEBUG
+    org.springframework.kafka: DEBUG
