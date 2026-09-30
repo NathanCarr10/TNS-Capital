@@ -4,7 +4,7 @@
 CREATE SCHEMA IF NOT EXISTS analytics;
 
 CREATE TABLE IF NOT EXISTS analytics.dim_account (
-    account_id      VARCHAR(32)  PRIMARY KEY,
+    account_number  VARCHAR(32)  PRIMARY KEY,
     holder_name     VARCHAR(255) NOT NULL,
     account_status  VARCHAR(20)  NOT NULL
 );
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS analytics.dim_date (
 
 CREATE TABLE IF NOT EXISTS analytics.fact_trades (
     order_id         UUID PRIMARY KEY,
-    account_id       VARCHAR(32)   NOT NULL REFERENCES analytics.dim_account(account_id),
+    account_number   VARCHAR(32)   NOT NULL REFERENCES analytics.dim_account(account_number),
     symbol           VARCHAR(20)   NOT NULL REFERENCES analytics.dim_instrument(symbol),
     date_key         INT           NOT NULL REFERENCES analytics.dim_date(date_key),
     side             VARCHAR(4)    NOT NULL,
