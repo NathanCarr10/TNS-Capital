@@ -13,7 +13,10 @@ import com.neueda.leap.utils.PositionKeyFactory;
 import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
+import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.repositories.AccountRepository;
@@ -55,15 +58,30 @@ public class OrderService {
         this.clock = Objects.requireNonNull(clock);
     }
 
+    /**
+     * Places an order and records it in the audit trail.
+     *
+     * Orders that break a business rule are saved as REJECTED and the exception is rethrown.
+     * noRollbackFor lets that REJECTED row commit; it is safe because the validator and
+     * strategies throw these exceptions before changing any balance or position.
+     * Duplicate keys and unknown accounts are not saved: the key is already taken, and
+     * there is no account for the row to belong to.
+     */
+    @Transactional(noRollbackFor = {
+            AccountNotActiveException.class,
+            InstrumentNotFoundException.class,
+            InsufficientFundsException.class,
+            InsufficientHoldingsException.class})
     public Order placeOrder(PlaceOrderRequest request) {
         Objects.requireNonNull(request);
 
-        validator.validate(request);
         String symbol = InputNormalizer.normalize(request.symbol());
         Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
                 request.price(), request.idempotencyKey(), clock);
 
         try {
+            validator.validate(request);
+
             // Retrieve account with null-safety
             Account account = accountRepository.findById(request.accountId())
                     .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
@@ -76,16 +94,19 @@ public class OrderService {
 
             strategy.execute(account, request, symbol);
             order.setStatus(OrderStatus.FILLED);
-        } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
+        } catch (AccountNotActiveException | InstrumentNotFoundException
+                | InsufficientFundsException | InsufficientHoldingsException ex) {
             order.setStatus(OrderStatus.REJECTED);
+            orderRepository.save(order);
+            throw ex;
+        } catch (DuplicateOrderException | AccountNotFoundException ex) {
             throw ex;
         } catch (Exception ex) {
-            order.setStatus(OrderStatus.REJECTED);
+            // The transaction rolls back, so nothing from this attempt is kept
             throw new IllegalStateException("Unexpected error during order execution", ex);
-        } finally {
-            orderRepository.save(order);
         }
 
+        orderRepository.save(order);
         return order;
     }
 

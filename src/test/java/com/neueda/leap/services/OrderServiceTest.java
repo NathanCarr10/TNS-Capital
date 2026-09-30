@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -18,11 +19,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
@@ -166,7 +171,7 @@ class OrderServiceTest {
             assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
         }
 
-        @DisplayName("Should set order status to REJECTED on generic Exception")
+        @DisplayName("Should wrap unexpected exceptions and save nothing, since the transaction rolls back")
         @Test
         void testPlaceOrderGenericExceptionThrowsException() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
@@ -175,24 +180,66 @@ class OrderServiceTest {
             assertThrows(IllegalStateException.class, () -> orderService.placeOrder(placeOrderRequest),
                     "Should throw IllegalStateException for unexpected errors");
 
-            ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
-            verify(orderRepository).save(orderCaptor.capture());
-            assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+            verify(orderRepository, never()).save(any());
         }
 
-        @DisplayName("Should wrap AccountNotFoundException in IllegalStateException")
+        @DisplayName("Should propagate AccountNotFoundException without saving an order")
         @Test
         void testPlaceOrderAccountNotFound() {
             when(accountRepository.findById(999L)).thenReturn(Optional.empty());
             PlaceOrderRequest invalidRequest = new PlaceOrderRequest(999L, "AAPL", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), "ORDER-004");
 
-            assertThrows(IllegalStateException.class, () -> orderService.placeOrder(invalidRequest),
-                    "Should wrap exception in IllegalStateException");
+            assertThrows(AccountNotFoundException.class, () -> orderService.placeOrder(invalidRequest));
+
+            verify(orderRepository, never()).save(any());
+        }
+
+        @DisplayName("Should save a REJECTED order when the account is not active")
+        @Test
+        void testPlaceOrderAccountNotActiveSavesRejectedOrder() {
+            doThrow(new AccountNotActiveException("Account not active: 1")).when(validator).validate(any());
+
+            assertThrows(AccountNotActiveException.class, () -> orderService.placeOrder(placeOrderRequest));
 
             ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(orderCaptor.capture());
             assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+            verify(buyStrategy, never()).execute(any(), any(), any());
+        }
+
+        @DisplayName("Should save a REJECTED order when the instrument is unknown")
+        @Test
+        void testPlaceOrderInstrumentNotFoundSavesRejectedOrder() {
+            doThrow(new InstrumentNotFoundException("Instrument not found: AAPL")).when(validator).validate(any());
+
+            assertThrows(InstrumentNotFoundException.class, () -> orderService.placeOrder(placeOrderRequest));
+
+            ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+            verify(orderRepository).save(orderCaptor.capture());
+            assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+        }
+
+        @DisplayName("Should not save a duplicate order")
+        @Test
+        void testPlaceOrderDuplicateSavesNothing() {
+            doThrow(new DuplicateOrderException("Order already submitted")).when(validator).validate(any());
+
+            assertThrows(DuplicateOrderException.class, () -> orderService.placeOrder(placeOrderRequest));
+
+            verify(orderRepository, never()).save(any());
+        }
+
+        @DisplayName("Should commit REJECTED orders instead of rolling them back")
+        @Test
+        void testPlaceOrderRejectionsDoNotRollBack() throws NoSuchMethodException {
+            Transactional tx = OrderService.class.getMethod("placeOrder", PlaceOrderRequest.class)
+                    .getAnnotation(Transactional.class);
+
+            assertNotNull(tx, "placeOrder must declare its own @Transactional");
+            assertEquals(Set.of(AccountNotActiveException.class, InstrumentNotFoundException.class,
+                    InsufficientFundsException.class, InsufficientHoldingsException.class),
+                    Set.of(tx.noRollbackFor()));
         }
 
         @DisplayName("Should throw IllegalStateException when strategy not found")
