@@ -9,7 +9,7 @@ Postgres image that loads the SQL below the first time it starts.
 db/
 ├── Dockerfile                 # Postgres 16 image preloaded with the SQL below
 ├── docker-entrypoint-init.sh  # runs the SQL subfolders, in order, on first start
-├── tables/                    # DDL: accounts, instruments, orders, positions
+├── tables/                    # DDL: accounts, instruments, orders, positions, order_history
 ├── data/                      # seed data: 10 accounts, 10 instruments, orders, positions
 └── scripts/                   # reserved for future use (currently empty)
 ```

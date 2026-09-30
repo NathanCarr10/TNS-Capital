@@ -22,6 +22,7 @@ spring:
         - file:db/tables/02_instruments.sql
         - file:db/tables/03_orders.sql
         - file:db/tables/04_positions.sql
+        - file:db/tables/05_order_history.sql
       data-locations:
         - file:db/data/01_accounts.sql
         - file:db/data/02_instruments.sql

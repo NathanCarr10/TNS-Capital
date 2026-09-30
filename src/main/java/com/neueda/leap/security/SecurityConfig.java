@@ -16,47 +16,86 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 
 /**
- * Validates JWTs from the auth service. Any valid token can call every API
- * endpoint; roles in the token are not checked.
+ * Security configuration for the API with JWT validation and security headers.
+ *
+ * Security Best Practices Implemented:
+ * - JWT authentication with HMAC-SHA256; any valid token can call every API
+ *   endpoint, roles in the token are not checked
+ * - Missing or invalid tokens get an AUTH-401 error body
+ * - Security headers to prevent common attacks
+ * - CSRF disabled for stateless API (appropriate for REST)
+ * - X-Frame-Options set to prevent clickjacking
  */
 @Configuration
 public class SecurityConfig {
 
-    @Value("${jwt.shared-secret}")
-    private String sharedSecret;
+        @Value("${jwt.shared-secret}")
+        private String sharedSecret;
 
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        // HMAC-SHA256 with the same secret the auth stub signs tokens with
-        SecretKeySpec secretKey = new SecretKeySpec(sharedSecret.getBytes(), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(secretKey).build();
-    }
+        /**
+         * Configures JWT decoder using the shared secret.
+         * This validates incoming JWT tokens signed with HMAC-SHA256.
+         */
+        @Bean
+        public JwtDecoder jwtDecoder() {
+                SecretKeySpec secretKey = new SecretKeySpec(sharedSecret.getBytes(), "HmacSHA256");
+                return NimbusJwtDecoder.withSecretKey(secretKey).build();
+        }
 
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        AuthenticationEntryPoint unauthorised = (request, response, e) ->
-                writeError(response, HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
+        /**
+         * Configures the security filter chain with:
+         * - JWT authentication for API endpoints
+         * - Security headers to prevent common attacks
+         * - Public access to Swagger/OpenAPI documentation
+         */
+        @Bean
+        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                AuthenticationEntryPoint unauthorised = (request, response, e) -> writeError(response,
+                                HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
 
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**")
-                        .permitAll()
-                        .anyRequest().authenticated())
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorised))
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .authenticationEntryPoint(unauthorised)
-                        .jwt(jwt -> jwt.decoder(jwtDecoder())));
+                http
+                                // Disable CSRF for stateless APIs (no session state)
+                                .csrf(csrf -> csrf.disable())
 
-        return http.build();
-    }
+                                // Add security headers to all responses
+                                .headers(headers -> headers
+                                                // Prevent clickjacking attacks
+                                                .frameOptions(frameOptions -> frameOptions.deny())
+                                                // Prevent MIME type sniffing - use correct method for Spring 6.x
+                                                .contentTypeOptions(contentTypeOptions -> {
+                                                })
+                                                // Enforce HTTPS (if available)
+                                                .httpStrictTransportSecurity(hsts -> hsts
+                                                                .includeSubDomains(true)
+                                                                .maxAgeInSeconds(31536000) // 1 year
+                                                ))
 
-    private static void writeError(HttpServletResponse response, int status, String errorCode, String message)
-            throws IOException {
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(String.format(
-                "{\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
-                errorCode, message, LocalDateTime.now()));
-    }
+                                // Configure request authorization
+                                .authorizeHttpRequests(auth -> auth
+                                                // Allow public access to Swagger/OpenAPI documentation
+                                                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
+                                                                "/v3/api-docs/**")
+                                                .permitAll()
+                                                // Require authentication for all other requests
+                                                .anyRequest().authenticated())
+
+                                // Return AUTH-401 JSON for missing or invalid tokens
+                                .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorised))
+
+                                // Configure OAuth2 resource server with JWT
+                                .oauth2ResourceServer(oauth2 -> oauth2
+                                                .authenticationEntryPoint(unauthorised)
+                                                .jwt(jwt -> jwt.decoder(jwtDecoder())));
+
+                return http.build();
+        }
+
+        private static void writeError(HttpServletResponse response, int status, String errorCode, String message)
+                        throws IOException {
+                response.setStatus(status);
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.getWriter().write(String.format(
+                                "{\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
+                                errorCode, message, LocalDateTime.now()));
+        }
 }

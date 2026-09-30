@@ -20,9 +20,31 @@ spring:
     show-sql: false
     open-in-view: false
 
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      group-id: tns-capital-orders
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
 jwt:
   # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
   shared-secret: ${JWT_SECRET}
+
+mybatis:
+  type-handlers-package: com.neueda.leap.config
+  type-aliases-package: com.neueda.leap.model
+  configuration:
+    map-underscore-to-camel-case: true
 
 server:
   port: 3000
@@ -49,3 +71,4 @@ logging:
   level:
     org.springdoc: DEBUG
     org.springframework.web: DEBUG
+    org.springframework.kafka: DEBUG

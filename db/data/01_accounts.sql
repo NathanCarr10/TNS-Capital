@@ -1,5 +1,5 @@
 -- Accounts seed data
-INSERT INTO accounts (account_id, holder_name, cash_balance, status, version, last_updated) VALUES
+INSERT INTO accounts (account_number, holder_name, cash_balance, status, version, last_updated) VALUES
     ('ACC-1001', 'John Doe', 5000.00, 'ACTIVE', 1, now()),
     ('ACC-1002', 'Jane Smith', 12000.00, 'ACTIVE', 1, now()),
     ('ACC-1003', 'Bob Lee', 1000.00, 'SUSPENDED', 1, now()),

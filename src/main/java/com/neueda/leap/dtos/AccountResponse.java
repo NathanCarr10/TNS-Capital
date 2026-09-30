@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 
 public record AccountResponse(
         Long id,
+        String accountNumber,
         String holderName,
         BigDecimal cashBalance,
         AccountStatus status,

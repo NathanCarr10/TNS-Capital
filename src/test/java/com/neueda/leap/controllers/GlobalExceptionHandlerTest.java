@@ -43,11 +43,12 @@ class GlobalExceptionHandlerTest {
     @ParameterizedTest(name = "{0} -> HTTP {1}")
     @MethodSource("catalog")
     void testCatalogMapping(String code, int status, Function<String, ResponseEntity<ErrorResponse>> handle) {
-        ResponseEntity<ErrorResponse> response = handle.apply("detail");
+        ResponseEntity<ErrorResponse> response = handle.apply("internal detail");
 
         assertEquals(status, response.getStatusCode().value());
         assertEquals(code, response.getBody().errorCode());
-        assertEquals("detail", response.getBody().message());
+        assertFalse(response.getBody().message().contains("internal detail"),
+                "Should return a fixed message, not the exception's internal message");
     }
 
     @Test

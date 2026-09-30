@@ -19,32 +19,32 @@ public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
-    @Column(unique = true, nullable = false)
-    private String accountId;
-    
+
+    @Column(name = "account_number", unique = true, nullable = false)
+    private String accountNumber;
+
     @Column(nullable = false)
     private String holderName;
-    
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal cashBalance;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AccountStatus status;
-    
+
     @Version
     private Integer version;
-    
+
     @Column(nullable = false)
     private Instant lastUpdated;
 
     public Account() {
     }
 
-    public Account(String accountId, String holderName, BigDecimal cashBalance, Clock clock) {
-        validateConstructorArgs(accountId, holderName, cashBalance);
-        this.accountId = accountId;
+    public Account(String accountNumber, String holderName, BigDecimal cashBalance, Clock clock) {
+        validateConstructorArgs(accountNumber, holderName, cashBalance);
+        this.accountNumber = accountNumber;
         this.holderName = holderName;
         this.cashBalance = new BigDecimal(cashBalance.toPlainString());
         this.status = AccountStatus.ACTIVE;
@@ -57,7 +57,7 @@ public class Account {
             throw new IllegalArgumentException("Source account cannot be null");
         }
         // this.id = other.id;
-        this.accountId = other.accountId;
+        this.accountNumber = other.accountNumber;
         this.holderName = other.holderName;
         this.cashBalance = new BigDecimal(other.cashBalance.toPlainString());
         this.status = other.status;
@@ -65,9 +65,9 @@ public class Account {
         this.lastUpdated = other.lastUpdated;
     }
 
-    private void validateConstructorArgs(String accountId, String holderName, BigDecimal cashBalance) {
-        if (accountId == null || accountId.trim().isEmpty()) {
-            throw new IllegalArgumentException("Account ID cannot be null or empty");
+    private void validateConstructorArgs(String accountNumber, String holderName, BigDecimal cashBalance) {
+        if (accountNumber == null || accountNumber.trim().isEmpty()) {
+            throw new IllegalArgumentException("Account number cannot be null or empty");
         }
         if (holderName == null || holderName.trim().isEmpty()) {
             throw new IllegalArgumentException("Holder name cannot be null or empty");
@@ -116,12 +116,19 @@ public class Account {
         this.id = id;
     }
 
-    public String getAccountId() {
-        return accountId;
+    public String getAccountNumber() {
+        return accountNumber;
     }
 
     public String getHolderName() {
         return holderName;
+    }
+
+    public void setHolderName(String holderName) {
+        if (holderName == null || holderName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Holder name cannot be null or empty");
+        }
+        this.holderName = holderName;
     }
 
     public BigDecimal getCashBalance() {
@@ -154,19 +161,19 @@ public class Account {
         if (obj == null || getClass() != obj.getClass())
             return false;
         Account other = (Account) obj;
-        return accountId != null && accountId.equals(other.accountId);
+        return accountNumber != null && accountNumber.equals(other.accountNumber);
     }
 
     @Override
     public int hashCode() {
-        return accountId != null ? accountId.hashCode() : 0;
+        return accountNumber != null ? accountNumber.hashCode() : 0;
     }
 
     @Override
     public String toString() {
         return "Account{" +
                 "id=" + id +
-                ", accountId='" + accountId + '\'' +
+                ", accountNumber='" + accountNumber + '\'' +
                 ", holderName='" + holderName + '\'' +
                 ", cashBalance=" + cashBalance +
                 ", status=" + status +
