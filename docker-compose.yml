@@ -38,6 +38,7 @@ services:
       POSTGRES_DB: tns_capital
       POSTGRES_USER: ${DB_USER:-tns-capital-db-user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DB_USER: ${DB_USER:-tns-capital-db-user}
     ports:
       - "5432:5432"
     volumes:
