@@ -17,7 +17,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class MessageEnvelope<T> {
     
-    @JsonProperty("timestamp")
+    @JsonProperty("timestamp")      
     private Instant timestamp;
     
     @JsonProperty("correlationId")
