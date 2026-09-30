@@ -41,11 +41,13 @@ pipeline {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     // Gitleaks scans the full git history, not just the current files,
                     // because a secret that was committed and later deleted is still exposed.
+                    // --log-opts=HEAD limits it to this branch's history; by default it scans
+                    // every branch in the clone, so one branch's leak would fail all builds.
                     // Any finding fails the stage. Confirmed false positives go in .gitleaksignore.
                     sh '''
                         docker run --rm --user "$(id -u):$(id -g)" \
                             -v "$WORKSPACE":/repo -w /repo \
-                            "$GITLEAKS_IMAGE" git /repo \
+                            "$GITLEAKS_IMAGE" git /repo --log-opts="HEAD" \
                             --redact --verbose \
                             --report-format sarif --report-path "/repo/$REPORTS_DIR/gitleaks.sarif"
                     '''
@@ -136,6 +138,10 @@ pipeline {
             // Security reports (SARIF) are attached to every build under "Build Artifacts",
             // whether the gates passed or not.
             archiveArtifacts artifacts: "${REPORTS_DIR}/**", allowEmptyArchive: true
+
+            // Each build tags a ~300MB image that nothing uses afterwards; remove it so
+            // the agent's disk doesn't fill up.
+            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} || true"
         }
         failure {
             // Notifies the team on build failure. Replace with your notification
