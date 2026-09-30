@@ -9,7 +9,7 @@ job is to check a token's *signature*, never to know a username or password.
 ```bash
 cd shared/auth-stub
 npm install
-npm start
+JWT_SECRET=<same value as in the project .env> npm start
 ```
 
 Listens on `http://localhost:4000`.
@@ -27,8 +27,7 @@ instead of a `MISSION_OPERATOR` one, or any wrong password to see a `401`.
 
 ## The shared secret
 
-The mission service (Java) and this stub both know the same HMAC secret
-(`mission-control-shared-secret-key-32-bytes-minimum` by default, overridable via the `JWT_SECRET`
-environment variable). That shared secret is the entire trust relationship — the mission service
+The mission service (Java) and this stub both know the same HMAC secret, read from the
+`JWT_SECRET` environment variable (set in the project's `.env`; there is no default). That shared secret is the entire trust relationship — the mission service
 never calls this service at request time; it just verifies a token's signature could only have
 been produced by something that knows the same secret.

@@ -95,6 +95,7 @@ src/main/java/com/neueda/leap/
 - **Services:**
   - `app` - Java application container (port 8080)
   - `postgres` - PostgreSQL database (port 5432)
+- **Setup:** `cp .env.example .env`, then set `DB_PASSWORD` and `JWT_SECRET` (generate one with `openssl rand -hex 32`). No secrets are committed, so the stack will not start without them.
 - **Usage:** `docker-compose up` to start both services
 
 #### **Dockerfile**

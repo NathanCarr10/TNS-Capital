@@ -22,7 +22,7 @@ services:
     build:
       context: ./shared/auth-stub
     environment:
-      JWT_SECRET: "mission-control-shared-secret-key-32-bytes-minimum"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       PORT: 4000
     ports:
       - "4000:4000"
@@ -38,6 +38,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-tns-capital-db-user}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     ports:
       - "3000:3000"
     depends_on:

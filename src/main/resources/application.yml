@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tns_capital}
     username: ${SPRING_DATASOURCE_USERNAME:tns-capital-db-user}
-    password: ${SPRING_DATASOURCE_PASSWORD:n3u3d4!}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   
   jpa:
@@ -21,7 +21,8 @@ spring:
     open-in-view: false
 
 jwt:
-  shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
+  # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
+  shared-secret: ${JWT_SECRET}
 
 server:
   port: 3000
