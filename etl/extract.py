@@ -6,15 +6,15 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-ACCOUNTS_SQL = "SELECT account_id, holder_name, status FROM accounts"
+ACCOUNTS_SQL = "SELECT account_number, holder_name, status FROM accounts"
 
 INSTRUMENTS_SQL = "SELECT symbol, name, asset_class, currency FROM instruments"
 
 # orders.account_id holds the account's database id (e.g. 1), so we join to
-# accounts to get the readable account ID (e.g. 'ACC-1001') instead.
+# accounts to get the account number (e.g. 'ACC-1001') instead.
 ORDERS_SQL = """
     SELECT o.id::text AS order_id,
-           a.account_id,
+           a.account_number,
            o.symbol,
            o.side,
            o.quantity,
