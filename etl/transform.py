@@ -40,7 +40,7 @@ def clean_orders(orders, instruments):
     known_symbols = instruments["symbol"].str.upper()
     is_valid = (
         df["order_id"].notna()
-        & df["account_id"].notna()
+        & df["account_number"].notna()
         & df["symbol"].isin(known_symbols)
         & df["side"].isin(VALID_SIDES)
         & df["status"].isin(VALID_STATUSES)
@@ -66,14 +66,14 @@ def build_fact_trades(clean_orders):
     fact["notional"] = (fact["price"] * fact["quantity"]).round(2)
     fact["is_filled"] = fact["status"] == "FILLED"
 
-    columns = ["order_id", "account_id", "symbol", "date_key", "side", "quantity",
+    columns = ["order_id", "account_number", "symbol", "date_key", "side", "quantity",
                "signed_quantity", "price", "notional", "status", "is_filled", "created_on"]
     return fact[columns].sort_values("order_id").reset_index(drop=True)
 
 
 def build_dim_account(accounts):
     dim = accounts.rename(columns={"status": "account_status"})
-    return dim.drop_duplicates(subset="account_id").sort_values("account_id").reset_index(drop=True)
+    return dim.drop_duplicates(subset="account_number").sort_values("account_number").reset_index(drop=True)
 
 
 def build_dim_instrument(instruments):
