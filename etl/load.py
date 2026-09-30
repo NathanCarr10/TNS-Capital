@@ -11,7 +11,7 @@ SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
 
 # The column that uniquely identifies a row in each table
 PRIMARY_KEYS = {
-    "dim_account": "account_id",
+    "dim_account": "account_number",
     "dim_instrument": "symbol",
     "dim_date": "date_key",
     "fact_trades": "order_id",
