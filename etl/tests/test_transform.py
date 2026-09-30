@@ -35,7 +35,7 @@ def test_text_is_made_consistent(orders, instruments):
 
 @pytest.mark.parametrize("column, bad_value", [
     ("order_id", None),
-    ("account_id", None),
+    ("account_number", None),
     ("symbol", "UNKNOWN"),
     ("side", "HOLD"),
     ("status", "PENDING"),
@@ -85,7 +85,7 @@ def test_fact_trades_reporting_columns(orders, instruments):
 
 def test_dim_account(accounts):
     dim = build_dim_account(accounts)
-    assert list(dim.columns) == ["account_id", "holder_name", "account_status"]
+    assert list(dim.columns) == ["account_number", "holder_name", "account_status"]
     assert len(dim) == 2
 
 
