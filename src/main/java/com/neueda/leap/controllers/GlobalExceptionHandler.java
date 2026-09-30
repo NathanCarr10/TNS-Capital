@@ -7,95 +7,66 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 
-
+/**
+ * Maps exceptions to the error catalog in section 21 of the specification.
+ * ORD-404, POS-404, NOT-404 and SYS-500 extend the catalog for cases it does not list.
+ */
 @ControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "ACCOUNT_NOT_FOUND",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.NOT_FOUND, "ACC-404", e.getMessage());
     }
 
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ErrorResponse> handleAccountNotActive(AccountNotActiveException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(
-                        "ACCOUNT_NOT_ACTIVE",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.FORBIDDEN, "ACC-403", e.getMessage());
     }
 
     @ExceptionHandler(InstrumentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleInstrumentNotFound(InstrumentNotFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "INSTRUMENT_NOT_FOUND",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
-    }
-
-    @ExceptionHandler(DuplicateOrderException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateOrder(DuplicateOrderException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(
-                        "DUPLICATE_ORDER",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.NOT_FOUND, "INS-404", e.getMessage());
     }
 
     @ExceptionHandler(InsufficientFundsException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientFunds(InsufficientFundsException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(
-                        "INSUFFICIENT_FUNDS",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.BAD_REQUEST, "ORD-400", e.getMessage());
     }
 
     @ExceptionHandler(InsufficientHoldingsException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientHoldings(InsufficientHoldingsException e) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(
-                        "INSUFFICIENT_HOLDINGS",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.CONFLICT, "ORD-409", e.getMessage());
     }
 
-    @ExceptionHandler(OrderNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException e) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ErrorResponse(
-                        "ORDER_NOT_FOUND",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+    @ExceptionHandler(DuplicateOrderException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateOrder(DuplicateOrderException e) {
+        return error(HttpStatus.CONFLICT, "ORD-409", e.getMessage());
     }
 
     @ExceptionHandler(OrderCancellationConflictException.class)
     public ResponseEntity<ErrorResponse> handleOrderCancellationConflict(OrderCancellationConflictException e) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ErrorResponse(
-                        "ORDER_CANCELLATION_CONFLICT",
-                        e.getMessage(),
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.CONFLICT, "ORD-409", e.getMessage());
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException e) {
+        return error(HttpStatus.NOT_FOUND, "ORD-404", e.getMessage());
+    }
+
+    @ExceptionHandler(PositionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePositionNotFound(PositionNotFoundException e) {
+        return error(HttpStatus.NOT_FOUND, "POS-404", e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -104,24 +75,35 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .reduce((m1, m2) -> m1 + ", " + m2)
                 .orElse("Validation failed");
-        
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(
-                        "VALIDATION_ERROR",
-                        message,
-                        LocalDateTime.now()
-                ));
+
+        return error(HttpStatus.UNPROCESSABLE_CONTENT, "VAL-422", message);
+    }
+
+    // Malformed JSON or an unknown enum value such as "side": "HOLD"
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return error(HttpStatus.UNPROCESSABLE_CONTENT, "VAL-422", "Request body is missing or malformed");
+    }
+
+    // A path variable of the wrong type, such as an order ID that is not a UUID
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return error(HttpStatus.UNPROCESSABLE_CONTENT, "VAL-422", "Invalid value for " + e.getName());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException e) {
+        return error(HttpStatus.NOT_FOUND, "NOT-404", "No endpoint at " + e.getResourcePath());
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGenericException(Exception e) {
         logger.error("Unexpected exception occurred: ", e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse(
-                        "INTERNAL_SERVER_ERROR",
-                        "An unexpected error occurred",
-                        LocalDateTime.now()
-                ));
+        return error(HttpStatus.INTERNAL_SERVER_ERROR, "SYS-500", "An unexpected error occurred");
     }
 
+    private ResponseEntity<ErrorResponse> error(HttpStatus status, String errorCode, String message) {
+        return ResponseEntity.status(status)
+                .body(new ErrorResponse(errorCode, message, LocalDateTime.now()));
+    }
 }
