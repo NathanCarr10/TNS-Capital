@@ -19,6 +19,7 @@ import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.kafka.OrderEventPublisher;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,7 @@ public class OrderService {
     private final OrderValidator validator;
     private final Map<OrderSide, OrderExecutionStrategy> strategies;
     private final Clock clock;
+    private final OrderEventPublisher orderEventPublisher;
 
     public OrderService(
             AccountRepository accountRepository,
@@ -48,7 +50,8 @@ public class OrderService {
             PositionRepository positionRepository,
             OrderValidator validator,
             Map<OrderSide, OrderExecutionStrategy> strategies,
-            Clock clock) {
+            Clock clock,
+            OrderEventPublisher orderEventPublisher) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
         this.orderHistoryRepository = Objects.requireNonNull(orderHistoryRepository);
@@ -56,6 +59,7 @@ public class OrderService {
         this.validator = Objects.requireNonNull(validator);
         this.strategies = Objects.requireNonNull(strategies);
         this.clock = Objects.requireNonNull(clock);
+        this.orderEventPublisher = Objects.requireNonNull(orderEventPublisher);
     }
 
     @SuppressWarnings("null")
@@ -89,6 +93,9 @@ public class OrderService {
         } finally {
             orderRepository.save(order);
         }
+
+        // Publish order event to Kafka
+        orderEventPublisher.publish(order);
 
         return order;
     }
