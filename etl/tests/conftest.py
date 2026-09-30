@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture
 def accounts():
     return pd.DataFrame({
-        "account_id": ["ACC-1001", "ACC-1002"],
+        "account_number": ["ACC-1001", "ACC-1002"],
         "holder_name": ["Alice", "Bob"],
         "status": ["ACTIVE", "SUSPENDED"],
     })
@@ -30,7 +30,7 @@ def instruments():
 def orders():
     return pd.DataFrame({
         "order_id": ["order-1", "order-2"],
-        "account_id": ["ACC-1001", "ACC-1002"],
+        "account_number": ["ACC-1001", "ACC-1002"],
         "symbol": ["ACME", "BOND1"],
         "side": ["BUY", "SELL"],
         "quantity": [100, 10],
