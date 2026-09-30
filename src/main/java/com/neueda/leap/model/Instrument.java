@@ -2,6 +2,8 @@ package com.neueda.leap.model;
 
 import com.neueda.leap.utils.InputNormalizer;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Instrument domain entity.
@@ -10,13 +12,11 @@ import jakarta.persistence.*;
  * Follows Domain-Driven Design principles.
  */
 @Entity
-@Table(name = "instruments", uniqueConstraints = @UniqueConstraint(columnNames = "symbol"))
+@Table(name = "instruments")
 public class Instrument {
+    // symbol is the primary key of the instruments table
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String symbol;
     
     @Column(nullable = false)
@@ -25,7 +25,9 @@ public class Instrument {
     @Column(nullable = false)
     private String assetClass;
     
-    @Column(nullable = false)
+    // The column is CHAR(3), so map it as CHAR rather than the default VARCHAR
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(nullable = false, length = 3)
     private String currency;
     
     @Column(nullable = false)
@@ -47,7 +49,6 @@ public class Instrument {
         if (other == null) {
             throw new IllegalArgumentException("Source instrument cannot be null");
         }
-        this.id = other.id;
         this.symbol = other.symbol;
         this.name = other.name;
         this.assetClass = other.assetClass;
@@ -75,10 +76,6 @@ public class Instrument {
     }
 
     // Getters
-    public Long getId() {
-        return id;
-    }
-
     public String getSymbol() {
         return symbol;
     }
@@ -113,17 +110,12 @@ public class Instrument {
     @Override
     public String toString() {
         return "Instrument{" +
-                "id=" + id +
-                ", symbol='" + symbol + '\'' +
+                "symbol='" + symbol + '\'' +
                 ", name='" + name + '\'' +
                 ", assetClass='" + assetClass + '\'' +
                 ", currency='" + currency + '\'' +
                 ", tradable=" + tradable +
                 '}';
-    }
-
-    public void setId(Long id) {
-        this.id = id;
     }
 
     public void setSymbol(String symbol) {

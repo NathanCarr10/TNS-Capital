@@ -49,6 +49,12 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, "ACC-409", e.getMessage());
     }
 
+    @ExceptionHandler(DuplicateInstrumentException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateInstrument(DuplicateInstrumentException e) {
+        logger.warn("Duplicate instrument: {}", e.getMessage());
+        return error(HttpStatus.CONFLICT, "INS-409", "An instrument with this symbol already exists");
+    }
+
     @ExceptionHandler(InstrumentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleInstrumentNotFound(InstrumentNotFoundException e) {
         logger.warn("Instrument not found: {}", e.getMessage());

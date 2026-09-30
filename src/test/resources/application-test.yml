@@ -22,12 +22,13 @@ spring:
         - file:db/tables/02_instruments.sql
         - file:db/tables/03_orders.sql
         - file:db/tables/04_positions.sql
-        - file:db/tables/05_order_history.sql
+        - file:db/tables/05_executions.sql
       data-locations:
-        - file:db/data/01_accounts.sql
-        - file:db/data/02_instruments.sql
-        - file:db/data/03_orders.sql
-        - file:db/data/04_positions.sql
+        - file:db/data/01_accounts_seed.sql
+        - file:db/data/02_instruments_seed.sql
+        - file:db/data/03_orders_seed.sql
+        - file:db/data/04_positions_seed.sql
+        - file:db/data/05_executions_seed.sql
 
   jpa:
     hibernate:
