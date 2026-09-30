@@ -177,7 +177,9 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
         DeadLetterMessage dlqMsg = dlqMessages.get(0);
 
         // Step 4: Admin deposits funds to account
-        poorAccount.setCashBalance(new BigDecimal("200000.00"));
+        BigDecimal currentBalance = poorAccount.getCashBalance();
+        BigDecimal amountToDeposit = new BigDecimal("200000.00").subtract(currentBalance);
+        poorAccount.credit(amountToDeposit);
         accountRepository.save(poorAccount);
 
         // Step 5: Admin replays the message
