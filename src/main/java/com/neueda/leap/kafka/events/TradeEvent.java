@@ -58,5 +58,11 @@ public class TradeEvent {
         
         @JsonProperty("status")
         private String status;
+        
+        @JsonProperty("previousStatus")
+        private String previousStatus;
+        
+        @JsonProperty("reason")
+        private String reason;
     }
 }

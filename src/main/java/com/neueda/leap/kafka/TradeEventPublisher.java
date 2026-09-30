@@ -2,6 +2,7 @@ package com.neueda.leap.kafka;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.TradeEvent;
 import com.neueda.leap.model.Order;
@@ -12,18 +13,25 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * Publishes executed trades to the {@code trade-events} topic.
+ * Publishes trade lifecycle events to the {@code trade-events} topic.
  * 
- * Trade events represent completed order executions (FILLED status).
- * Unlike order events (which are published when orders are placed), trade events
- * are published when orders are actually executed.
+ * Trade events represent order status changes across the complete lifecycle:
+ * NEW, FILLED, REJECTED, CANCELLED.
+ * 
+ * Each event includes:
+ * - The originating order ID for tracking and auditing
+ * - Current and previous status for lifecycle tracking
+ * - Optional reason for status changes (e.g., rejection or cancellation reason)
  * 
  * Sending is fire-and-forget from the caller's point of view: a failed send 
- * is only logged, because the trade execution is already safely stored in the database 
+ * is only logged, because the order status is already safely stored in the database 
  * and could be republished by an async retry mechanism if needed.
  * 
- * Messages are keyed by accountId so all trades for one account land on the 
+ * Messages are keyed by accountId so all events for one account land on the 
  * same partition and are processed in order.
+ * 
+ * Consumers can subscribe independently using different consumer group IDs
+ * without impacting the producer or other consumers.
  */
 @Component
 @Slf4j
@@ -43,15 +51,18 @@ public class TradeEventPublisher {
     }
 
     /**
-     * Publishes a trade event to the trade-events topic.
+     * Publishes a trade lifecycle event to the trade-events topic.
      * 
-     * Called when an order is executed (FILLED status).
+     * Called whenever an order status changes (NEW, FILLED, REJECTED, CANCELLED).
+     * Each event includes the originating order ID for audit and tracking purposes.
      * 
-     * @param order the executed order to publish as a trade event
+     * @param order the order with the current status
+     * @param previousStatus the order's previous status (null if transitioning from initial state)
+     * @param reason optional reason for status change (e.g., rejection reason, cancellation reason)
      */
-    public void publish(Order order) {
+    public void publish(Order order, OrderStatus previousStatus, String reason) {
         try {
-            TradeEvent tradeEvent = buildTradeEvent(order);
+            TradeEvent tradeEvent = buildTradeEvent(order, previousStatus, reason);
             MessageEnvelope<TradeEvent> envelope = buildEnvelope(tradeEvent);
             String json = objectMapper.writeValueAsString(envelope);
             
@@ -59,11 +70,11 @@ public class TradeEventPublisher {
             kafkaTemplate.send(tradeEventsTopic, accountId, json)
                 .whenComplete((result, error) -> {
                     if (error != null) {
-                        log.warn("Failed to publish trade event for order {} to {}; it will be retried: {}", 
-                            order.getId(), tradeEventsTopic, error.getMessage());
+                        log.warn("Failed to publish trade event for order {} (status: {}) to {}; it will be retried: {}", 
+                            order.getId(), order.getStatus(), tradeEventsTopic, error.getMessage());
                     } else {
-                        log.info("Published trade event for order {} to {}-{}@{}", 
-                            order.getId(), tradeEventsTopic,
+                        log.info("Published {} event for order {} to {}-{}@{}", 
+                            order.getStatus(), order.getId(), tradeEventsTopic,
                             result.getRecordMetadata().partition(), 
                             result.getRecordMetadata().offset());
                     }
@@ -74,12 +85,12 @@ public class TradeEventPublisher {
         }
     }
 
-    private TradeEvent buildTradeEvent(Order order) {
+    private TradeEvent buildTradeEvent(Order order, OrderStatus previousStatus, String reason) {
         return new TradeEvent(
             order.getCreatedOn(),
             UUID.randomUUID().toString(),
             "1.0",
-            "trade_executed",
+            "order_status_changed",
             new TradeEvent.TradeEventPayload(
                 order.getId().toString(),
                 order.getAccountId(),
@@ -87,7 +98,9 @@ public class TradeEventPublisher {
                 order.getSide().toString(),
                 order.getQuantity(),
                 order.getPrice().toString(),
-                order.getStatus().toString()
+                order.getStatus().toString(),
+                previousStatus != null ? previousStatus.toString() : null,
+                reason
             )
         );
     }
