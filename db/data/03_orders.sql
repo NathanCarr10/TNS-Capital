@@ -1,5 +1,5 @@
--- Insert seed orders data
--- Uses gen_random_uuid() for unique order IDs and subqueries to lookup account IDs
+-- Orders seed data
+-- Uses gen_random_uuid() for order IDs and subqueries to look up account IDs
 INSERT INTO orders (id, account_id, symbol, side, quantity, price, status, idempotency_key, created_on) VALUES
     (gen_random_uuid(), (SELECT id FROM accounts WHERE account_id = 'ACC-1001'), 'ACME', 'BUY', 100, 25.00, 'FILLED', 'seed-key-1', now()),
     (gen_random_uuid(), (SELECT id FROM accounts WHERE account_id = 'ACC-1002'), 'GLOB', 'BUY', 200, 10.00, 'FILLED', 'seed-key-2', now()),

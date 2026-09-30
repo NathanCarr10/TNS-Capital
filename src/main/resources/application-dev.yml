@@ -12,6 +12,22 @@ spring:
     console:
       enabled: true
   
+  # In-memory H2 has no db/ image, so load the same SQL files at startup.
+  # Paths are relative to the repo root, where the app is run from.
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - file:db/tables/01_accounts.sql
+        - file:db/tables/02_instruments.sql
+        - file:db/tables/03_orders.sql
+        - file:db/tables/04_positions.sql
+      data-locations:
+        - file:db/data/01_accounts.sql
+        - file:db/data/02_instruments.sql
+        - file:db/data/03_orders.sql
+        - file:db/data/04_positions.sql
+
   jpa:
     hibernate:
       ddl-auto: validate

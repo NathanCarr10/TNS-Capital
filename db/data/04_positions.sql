@@ -1,5 +1,5 @@
--- Insert seed positions data
--- Uses subqueries to lookup account and instrument IDs
+-- Positions seed data
+-- Uses subqueries to look up account IDs
 INSERT INTO positions (account_id, symbol, quantity, average_cost) VALUES
     ((SELECT id FROM accounts WHERE account_id = 'ACC-1001'), 'ACME', 100, 25.00),
     ((SELECT id FROM accounts WHERE account_id = 'ACC-1002'), 'GLOB', 200, 10.00),

@@ -1,6 +1,3 @@
--- Test if Flyway is running
--- This comment should appear in logs if Flyway executes this file
-
 -- Instruments seed data
 INSERT INTO instruments (symbol, name, asset_class, currency, tradable) VALUES
     ('ACME',  'Acme Corp',            'EQUITY', 'USD', TRUE),
