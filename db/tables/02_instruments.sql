@@ -1,9 +1,10 @@
--- Instruments table: tradable instruments / securities
-CREATE TABLE instruments (
-    id BIGSERIAL PRIMARY KEY,
-    symbol VARCHAR(50) NOT NULL UNIQUE,
-    name VARCHAR(255) NOT NULL,
-    asset_class VARCHAR(50) NOT NULL,
-    currency VARCHAR(10) NOT NULL,
-    tradable BOOLEAN NOT NULL
+-- Instruments table
+CREATE TABLE IF NOT EXISTS instruments (
+    symbol      VARCHAR(20)     PRIMARY KEY,
+    name        VARCHAR(255)    NOT NULL,
+    asset_class VARCHAR(20)     NOT NULL,
+    currency    CHAR(3)         NOT NULL,
+    tradable    BOOLEAN         NOT NULL DEFAULT TRUE
 );
+
+COMMENT ON TABLE instruments IS 'Tradable instruments';

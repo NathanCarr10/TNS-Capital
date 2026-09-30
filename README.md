@@ -76,6 +76,12 @@ src/main/java/com/neueda/leap/
 
 ---
 
+## Trade ETL Pipeline
+
+A scheduled Python pipeline in [`etl/`](etl/README.md) extracts trade data from PostgreSQL, transforms it into a reporting star schema and loads it into the `analytics` schema. See [etl/README.md](etl/README.md).
+
+---
+
 ## Database Setup
 
 ### Architecture

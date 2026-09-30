@@ -33,13 +33,12 @@ services:
       start_period: 30s
 
   postgres:
-    build:
-      context: ./db
-      dockerfile: Dockerfile
+    build: ./db
     environment:
       POSTGRES_DB: tns_capital
       POSTGRES_USER: ${DB_USER:-tns-capital-db-user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DB_USER: ${DB_USER:-tns-capital-db-user}
     ports:
       - "5432:5432"
     volumes:
@@ -82,6 +81,30 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+
+  etl:
+    build: ./etl
+    environment:
+      ETL_DB_HOST: postgres
+      DB_USER: ${DB_USER:-tns-capital-db-user}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.5.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: trading-platform
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "${KAFKA_UI_PORT:-8090}:8080"
+    restart: unless-stopped
 
 volumes:
   pgdata:

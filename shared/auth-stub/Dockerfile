@@ -10,5 +10,8 @@ RUN npm install --omit=dev
 
 COPY server.js .
 
+# Drop root: the node:alpine image ships an unprivileged "node" user.
+USER node
+
 EXPOSE 4000
 CMD ["node", "server.js"]

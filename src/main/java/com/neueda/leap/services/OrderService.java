@@ -22,6 +22,8 @@ import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.kafka.OrderEventPublisher;
+import com.neueda.leap.kafka.TradeEventPublisher;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,8 @@ public class OrderService {
     private final OrderValidator validator;
     private final Map<OrderSide, OrderExecutionStrategy> strategies;
     private final Clock clock;
+    private final OrderEventPublisher orderEventPublisher;
+    private final TradeEventPublisher tradeEventPublisher;
 
     public OrderService(
             AccountRepository accountRepository,
@@ -51,7 +55,9 @@ public class OrderService {
             PositionRepository positionRepository,
             OrderValidator validator,
             Map<OrderSide, OrderExecutionStrategy> strategies,
-            Clock clock) {
+            Clock clock,
+            OrderEventPublisher orderEventPublisher,
+            TradeEventPublisher tradeEventPublisher) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
         this.orderHistoryRepository = Objects.requireNonNull(orderHistoryRepository);
@@ -59,6 +65,8 @@ public class OrderService {
         this.validator = Objects.requireNonNull(validator);
         this.strategies = Objects.requireNonNull(strategies);
         this.clock = Objects.requireNonNull(clock);
+        this.orderEventPublisher = Objects.requireNonNull(orderEventPublisher);
+        this.tradeEventPublisher = Objects.requireNonNull(tradeEventPublisher);
     }
 
     /**
@@ -111,6 +119,15 @@ public class OrderService {
         }
 
         orderRepository.save(order);
+
+        // Publish order event to Kafka (when order is placed)
+        orderEventPublisher.publish(order);
+
+        // Publish trade event to Kafka (when order is filled)
+        if (order.getStatus() == OrderStatus.FILLED) {
+            tradeEventPublisher.publish(order);
+        }
+
         return order;
     }
 

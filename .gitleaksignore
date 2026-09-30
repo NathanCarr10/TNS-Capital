@@ -1,0 +1,5 @@
+# Gitleaks false positives, one fingerprint per line (<commit>:<file>:<rule>:<line>).
+# Only add an entry after confirming the value is NOT a real credential.
+
+# Truncated example token ("Bearer eyJhbGc...") in the curl sample.
+bd4842431ff067c7543492e303d122f2db4d9508:docs/SECURITY_GUIDE.md:curl-auth-header:474

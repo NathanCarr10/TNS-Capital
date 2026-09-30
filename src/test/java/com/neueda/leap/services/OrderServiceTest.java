@@ -44,6 +44,8 @@ import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.kafka.OrderEventPublisher;
+import com.neueda.leap.kafka.TradeEventPublisher;
 
 @DisplayName("OrderService Test Suite")
 class OrderServiceTest {
@@ -70,6 +72,12 @@ class OrderServiceTest {
     @Mock
     private OrderExecutionStrategy sellStrategy;
 
+    @Mock
+    private OrderEventPublisher orderEventPublisher;
+
+    @Mock
+    private TradeEventPublisher tradeEventPublisher;
+
     private ClockTest testClock;
     private Account testAccount;
     private PlaceOrderRequest placeOrderRequest;
@@ -88,7 +96,7 @@ class OrderServiceTest {
         strategies.put(OrderSide.SELL, sellStrategy);
 
         orderService = new OrderService(accountRepository, orderRepository, orderHistoryRepository,
-                positionRepository, validator, strategies, testClock);
+                positionRepository, validator, strategies, testClock, orderEventPublisher, tradeEventPublisher);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -264,7 +272,7 @@ class OrderServiceTest {
             // Create service with empty strategies map
             Map<OrderSide, OrderExecutionStrategy> emptyStrategies = new HashMap<>();
             OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock);
+                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock, orderEventPublisher, tradeEventPublisher);
 
             assertThrows(IllegalStateException.class,
                     () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),

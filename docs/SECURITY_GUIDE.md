@@ -528,5 +528,56 @@ curl -X POST http://localhost:3000/api/v1/orders \
 
 ---
 
-**Last Updated:** 2026-09-28  
+## 15. 🔍 CI Security Scanning (DevSecOps)
+
+Every Jenkins build (all branches and pull requests) runs automated security scans defined in the [Jenkinsfile](../Jenkinsfile). The scanners run as pinned Docker images, so the Jenkins agent only needs Docker.
+
+| Stage | Tool | What it checks | Fails the build when |
+|---|---|---|---|
+| Secret Scan | Gitleaks | Full git history for committed credentials (keys, tokens, passwords) | Any secret is found |
+| SAST | Semgrep (`p/java`, `p/owasp-top-ten`) | Source code and Dockerfiles for insecure patterns | An `ERROR`-severity rule matches |
+| Dependency Scan | Trivy (`fs` + `image`) | `pom.xml`, `package-lock.json`, and every library and OS package in the built image, for known CVEs | A `CRITICAL` CVE with an available fix is found |
+
+Each security stage uses `catchError`, so a failed gate marks the build **FAILED** but the remaining stages still run. That way one build reports every finding.
+
+### Reading the results
+
+- **Console output:** each stage prints its findings in the Jenkins console log.
+- **Reports:** SARIF files are archived on every build under **Build Artifacts → `security-reports/`**:
+  - `gitleaks.sarif`, `semgrep.sarif`, `trivy-fs.sarif`, `trivy-image.sarif`
+  - Trivy reports include `HIGH` findings as well as `CRITICAL` ones. `HIGH` findings do not fail the build but should be triaged.
+  - SARIF opens in VS Code with the *SARIF Viewer* extension.
+
+### Fixing or suppressing a finding
+
+Always prefer fixing the finding. Only suppress it after confirming it is a false positive or an accepted risk, and say why in the PR.
+
+| Tool | How to fix | How to suppress |
+|---|---|---|
+| Gitleaks | **Rotate the credential first**, since it is exposed in git history. Then move it to an env var or secret store. | Add the finding's fingerprint (`<commit>:<file>:<rule>:<line>`, printed in the log) to `.gitleaksignore` |
+| Semgrep | Change the code as the rule message suggests | Add `// nosemgrep: <rule-id>` on the flagged line |
+| Trivy | Upgrade the library. For Spring-managed libraries, bump the Spring Boot parent or override the version property in `pom.xml` (e.g. `<tomcat.version>`). | Add the CVE ID with a reason and owner to `.trivyignore` |
+
+### Running the scans locally
+
+Run these from the repo root before pushing:
+
+```bash
+# Secrets
+docker run --rm -v "$PWD":/repo -w /repo zricethezav/gitleaks:v8.21.2 git /repo --redact
+
+# SAST
+docker run --rm -v "$PWD":/src -w /src semgrep/semgrep:1.99.0 \
+  semgrep scan --config p/java --config p/owasp-top-ten --metrics=off --exclude target
+
+# Dependencies (repo manifests), then the built image
+docker run --rm -v "$PWD":/src:ro aquasec/trivy:0.57.1 fs --scanners vuln /src
+docker build -t tns-capital-skeleton:local .
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.1 \
+  image --scanners vuln tns-capital-skeleton:local
+```
+
+---
+
+**Last Updated:** 2026-09-30  
 **Status:** ✅ Complete - All Acceptance Criteria Met
