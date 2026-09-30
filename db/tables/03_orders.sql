@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS orders (
     price            NUMERIC(18,2)       NOT NULL CHECK (price > 0),
     status           VARCHAR(20)         NOT NULL CHECK (status IN ('NEW', 'FILLED', 'REJECTED', 'CANCELLED')) DEFAULT 'NEW',
     idempotency_key  VARCHAR(100)        NOT NULL UNIQUE,
-    status_reason     VARCHAR(255),
+    status_reason    VARCHAR(255),
     created_on       TIMESTAMP           NOT NULL DEFAULT NOW()
 );
 
