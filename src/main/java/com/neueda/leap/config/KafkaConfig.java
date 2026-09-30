@@ -27,14 +27,30 @@ public class KafkaConfig {
     public static final String ORDERS_DLQ_TOPIC = "orders.dlq";
 
     /**
+     * Trade events topic for executed trades.
+     * Published whenever an order is successfully executed.
+     * Partitioned by Account ID to ensure ordering per account.
+     */
+    public static final String TRADE_EVENTS_TOPIC = "trade-events";
+
+    /**
+     * Dead-Letter Queue topic for failed trade events.
+     * Trade events that fail publishing are routed here.
+     */
+    public static final String TRADE_EVENTS_DLQ_TOPIC = "trade-events.dlq";
+
+    /**
      * Creates the main orders topic.
+     * 
+     * Partitioned by Account ID (3 partitions) to ensure all orders for one
+     * account land on the same partition and are processed in order.
      * 
      * @return NewTopic bean for the orders topic
      */
     @Bean
     public NewTopic ordersTopic() {
         return TopicBuilder.name(ORDERS_TOPIC)
-                .partitions(1)
+                .partitions(3)
                 .replicas(1)
                 .build();
     }
@@ -47,6 +63,37 @@ public class KafkaConfig {
     @Bean
     public NewTopic ordersDlqTopic() {
         return TopicBuilder.name(ORDERS_DLQ_TOPIC)
+                .partitions(1)
+                .replicas(1)
+                .build();
+    }
+
+    /**
+     * Creates the trade-events topic.
+     * 
+     * Partitioned by Account ID (3 partitions) to ensure:
+     * - Settlement system sees trades ordered per account
+     * - Risk Dashboard sees trades ordered per account
+     * - Compliance Audit has scalable consumption
+     * 
+     * @return NewTopic bean for the trade-events topic
+     */
+    @Bean
+    public NewTopic tradeEventsTopic() {
+        return TopicBuilder.name(TRADE_EVENTS_TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
+
+    /**
+     * Creates the dead-letter queue topic for failed trade events.
+     * 
+     * @return NewTopic bean for the trade-events DLQ topic
+     */
+    @Bean
+    public NewTopic tradeEventsDlqTopic() {
+        return TopicBuilder.name(TRADE_EVENTS_DLQ_TOPIC)
                 .partitions(1)
                 .replicas(1)
                 .build();

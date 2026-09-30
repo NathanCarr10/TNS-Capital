@@ -26,15 +26,24 @@ spring:
       acks: all
       retries: 3
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      enable-idempotence: true
+      properties:
+        linger.ms: 10
+        batch.size: 32768
     consumer:
       bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       group-id: tns-capital-orders
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "*"
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+trading:
+  kafka:
+    topics:
+      orders: orders
+      trades: trade-events
+      market-data: market-data
 
 jwt:
   shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
