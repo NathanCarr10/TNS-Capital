@@ -5,6 +5,8 @@ import com.neueda.leap.dtos.ErrorResponse;
 import com.neueda.leap.exceptions.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -52,6 +54,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateOrderException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateOrder(DuplicateOrderException e) {
         return error(HttpStatus.CONFLICT, "ORD-409", e.getMessage());
+    }
+
+    // Two requests with the same idempotency key can both pass the duplicate check;
+    // the unique constraint then rejects the second one when it commits
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(e);
+        String detail = String.valueOf(cause.getMessage()).toLowerCase();
+        if (detail.contains("idempotency_key")) {
+            return error(HttpStatus.CONFLICT, "ORD-409", "Order already submitted");
+        }
+        return handleGenericException(e);
     }
 
     @ExceptionHandler(OrderCancellationConflictException.class)

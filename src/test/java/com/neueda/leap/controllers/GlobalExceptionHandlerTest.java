@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 
 import com.neueda.leap.dtos.ErrorResponse;
@@ -47,6 +48,30 @@ class GlobalExceptionHandlerTest {
         assertEquals(status, response.getStatusCode().value());
         assertEquals(code, response.getBody().errorCode());
         assertEquals("detail", response.getBody().message());
+    }
+
+    @Test
+    @DisplayName("Idempotency key constraint violations return ORD-409")
+    void testIdempotencyKeyConstraintViolation() {
+        var e = new DataIntegrityViolationException("could not execute batch",
+                new java.sql.SQLException("duplicate key value violates unique constraint \"orders_idempotency_key_key\""));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataIntegrityViolation(e);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals("ORD-409", response.getBody().errorCode());
+    }
+
+    @Test
+    @DisplayName("Other constraint violations return SYS-500")
+    void testOtherConstraintViolation() {
+        var e = new DataIntegrityViolationException("could not execute batch",
+                new java.sql.SQLException("insert or update on table \"orders\" violates foreign key constraint"));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataIntegrityViolation(e);
+
+        assertEquals(500, response.getStatusCode().value());
+        assertEquals("SYS-500", response.getBody().errorCode());
     }
 
     @Test
