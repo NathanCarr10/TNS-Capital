@@ -75,6 +75,10 @@ public class OrderService {
         Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
                 request.price(), request.idempotencyKey(), clock);
 
+        // Track previous status for lifecycle events
+        OrderStatus previousStatus = null;
+        String rejectionReason = null;
+
         try {
             // Retrieve account with null-safety
             Account account = accountRepository.findById(request.accountId())
@@ -87,24 +91,27 @@ public class OrderService {
             }
 
             strategy.execute(account, request, symbol);
+            previousStatus = order.getStatus();
             order.setStatus(OrderStatus.FILLED);
         } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
+            previousStatus = order.getStatus();
             order.setStatus(OrderStatus.REJECTED);
+            rejectionReason = ex.getMessage();
             throw ex;
         } catch (Exception ex) {
+            previousStatus = order.getStatus();
             order.setStatus(OrderStatus.REJECTED);
+            rejectionReason = ex.getMessage();
             throw new IllegalStateException("Unexpected error during order execution", ex);
         } finally {
             orderRepository.save(order);
+            
+            // Publish lifecycle event to Kafka for all status changes
+            tradeEventPublisher.publish(order, previousStatus, rejectionReason);
         }
 
         // Publish order event to Kafka (when order is placed)
         orderEventPublisher.publish(order);
-        
-        // Publish trade event to Kafka (when order is filled)
-        if (order.getStatus() == OrderStatus.FILLED) {
-            tradeEventPublisher.publish(order);
-        }
 
         return order;
     }
@@ -135,7 +142,8 @@ public class OrderService {
      * Cancellation is only allowed for orders in NEW state.
      * Attempting to cancel FILLED, REJECTED, or CANCELLED orders throws a conflict
      * exception.
-     * When an order is cancelled, it is archived to OrderHistory for audit trail.
+     * When an order is cancelled, it is archived to OrderHistory for audit trail
+     * and a lifecycle event is published to Kafka.
      *
      * @param orderId the order ID to cancel
      * @return the cancelled order
@@ -156,6 +164,9 @@ public class OrderService {
                             order.getStatus()));
         }
 
+        // Track status transition for event
+        OrderStatus previousStatus = order.getStatus();
+        
         // Update order status to CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
@@ -163,6 +174,9 @@ public class OrderService {
         // Archive cancelled order to history for audit trail
         OrderHistory history = new OrderHistory(order, clock);
         orderHistoryRepository.save(history);
+        
+        // Publish lifecycle event to Kafka
+        tradeEventPublisher.publish(order, previousStatus, "User requested cancellation");
 
         return order;
     }
