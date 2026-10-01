@@ -109,18 +109,13 @@ public class OrderService {
             throw new IllegalStateException("Unexpected error during order execution", ex);
         } finally {
             orderRepository.save(order);
-            
+
             // Publish lifecycle event to Kafka for all status changes
             tradeEventPublisher.publish(order, previousStatus, rejectionReason);
         }
 
         // Publish order event to Kafka (when order is placed)
         orderEventPublisher.publish(order);
-
-        // Publish trade event to Kafka (when order is filled)
-        if (order.getStatus() == OrderStatus.FILLED) {
-            tradeEventPublisher.publish(order);
-        }
 
         return order;
     }
@@ -186,6 +181,7 @@ public class OrderService {
             }
 
             strategy.execute(account, request, symbol);
+            OrderStatus previousStatus = order.getStatus();
             order.setStatus(OrderStatus.FILLED);
 
             // Save the successfully processed order
@@ -193,7 +189,7 @@ public class OrderService {
 
             // Publish trade event if order was filled
             if (order.getStatus() == OrderStatus.FILLED) {
-                tradeEventPublisher.publish(order);
+                tradeEventPublisher.publish(order, previousStatus, null);
             }
 
             return order;
@@ -231,7 +227,7 @@ public class OrderService {
     private void saveRejectedOrder(OrderEvent event, String symbol) {
         try {
             log.info("Attempting to save REJECTED order: orderId={}, accountId={}", event.orderId(), event.accountId());
-            
+
             Order order = new Order(
                     event.accountId(),
                     symbol,
@@ -243,10 +239,10 @@ public class OrderService {
             order.setId(event.orderId());
             order.setStatus(OrderStatus.REJECTED);
             orderRepository.save(order);
-            
+
             log.info("Successfully saved REJECTED order: orderId={}", event.orderId());
         } catch (Exception ex) {
-            log.error("Failed to save rejected order: orderId={}, accountId={}, error={}", 
+            log.error("Failed to save rejected order: orderId={}, accountId={}, error={}",
                     event.orderId(), event.accountId(), ex.getMessage(), ex);
         }
     }
@@ -301,7 +297,7 @@ public class OrderService {
 
         // Track status transition for event
         OrderStatus previousStatus = order.getStatus();
-        
+
         // Update order status to CANCELLED
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
@@ -309,7 +305,7 @@ public class OrderService {
         // Archive cancelled order to history for audit trail
         OrderHistory history = new OrderHistory(order, clock);
         orderHistoryRepository.save(history);
-        
+
         // Publish lifecycle event to Kafka
         tradeEventPublisher.publish(order, previousStatus, "User requested cancellation");
 
