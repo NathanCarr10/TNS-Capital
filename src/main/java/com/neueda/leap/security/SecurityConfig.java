@@ -3,6 +3,7 @@ package com.neueda.leap.security;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -21,8 +22,10 @@ import javax.crypto.spec.SecretKeySpec;
  * - Rate limiting headers configured
  * - X-Frame-Options set to prevent clickjacking
  * - Content-Security-Policy to prevent XSS
+ * - Method-level security for role-based access control on endpoints
  */
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
         @Value("${jwt.shared-secret}")
