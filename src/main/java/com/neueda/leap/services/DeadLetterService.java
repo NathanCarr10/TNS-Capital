@@ -13,8 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -95,10 +93,12 @@ public class DeadLetterService {
             }
 
             try {
-                // Deserialize the original message envelope
+                // Deserialize the original message envelope using TypeReference to preserve
+                // generic type
                 MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
                         dlqMessage.getOriginalMessage(),
-                        MessageEnvelope.class);
+                        new com.fasterxml.jackson.core.type.TypeReference<MessageEnvelope<OrderEvent>>() {
+                        });
 
                 // Re-process the order event
                 OrderEvent event = envelope.getPayload();
@@ -155,20 +155,13 @@ public class DeadLetterService {
     }
 
     /**
-     * Builds a detailed failure reason string from an exception.
+     * Builds a failure reason string from an exception.
+     * Returns just the exception message, not the full stack trace.
      * 
      * @param exception the exception to format
-     * @return formatted string with exception type, message, and stack trace
+     * @return exception message
      */
     private String buildFailureReason(Exception exception) {
-        StringWriter sw = new StringWriter();
-        PrintWriter pw = new PrintWriter(sw);
-
-        pw.println("Exception Type: " + exception.getClass().getName());
-        pw.println("Message: " + exception.getMessage());
-        pw.println("Stack Trace:");
-        exception.printStackTrace(pw);
-
-        return sw.toString();
+        return exception.getClass().getSimpleName() + ": " + exception.getMessage();
     }
 }

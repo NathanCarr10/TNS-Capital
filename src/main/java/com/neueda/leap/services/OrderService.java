@@ -218,6 +218,8 @@ public class OrderService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     private void saveRejectedOrder(OrderEvent event, String symbol) {
         try {
+            log.info("Attempting to save REJECTED order: orderId={}, accountId={}", event.orderId(), event.accountId());
+            
             Order order = new Order(
                     event.accountId(),
                     symbol,
@@ -229,9 +231,11 @@ public class OrderService {
             order.setId(event.orderId());
             order.setStatus(OrderStatus.REJECTED);
             orderRepository.save(order);
-            log.info("Saved REJECTED order: orderId={}", event.orderId());
+            
+            log.info("Successfully saved REJECTED order: orderId={}", event.orderId());
         } catch (Exception ex) {
-            log.error("Failed to save rejected order: orderId={}, error={}", event.orderId(), ex.getMessage());
+            log.error("Failed to save rejected order: orderId={}, accountId={}, error={}", 
+                    event.orderId(), event.accountId(), ex.getMessage(), ex);
         }
     }
 

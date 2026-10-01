@@ -39,6 +39,7 @@ public class KafkaConfig {
 
     private final DeadLetterService deadLetterService;
     private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Value("${trading.kafka.topics.orders:orders}")
     private String ordersTopic;
@@ -238,8 +239,12 @@ public class KafkaConfig {
                     });
 
             // Capture the failed message to DLQ database table
-            // Max failures = 3, so retryCount = 3
             deadLetterService.captureFailedMessage(envelope, exception, 3);
+
+            // Also publish to orders.dlq Kafka topic for audit trail
+            kafkaTemplate.send("orders.dlq", envelope.getPayload().accountId().toString(),
+                    (String) consumerRecord.value());
+            log.info("Published failed message to orders.dlq topic: orderId={}", envelope.getPayload().orderId());
 
         } catch (JsonProcessingException jsonException) {
             // Message deserialization failed - log the raw message for manual investigation
