@@ -29,6 +29,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -189,18 +190,8 @@ public class OrderService {
             log.warn("Order rejected due to insufficient resources: orderId={}, error={}", event.orderId(),
                     ex.getMessage());
 
-            // Create order in REJECTED status
-            Order order = new Order(
-                    event.accountId(),
-                    symbol,
-                    event.side(),
-                    event.quantity(),
-                    event.price(),
-                    event.orderId().toString(),
-                    clock);
-            order.setId(event.orderId());
-            order.setStatus(OrderStatus.REJECTED);
-            orderRepository.save(order);
+            // Save rejected order in separate transaction before exception causes rollback
+            saveRejectedOrder(event, symbol);
 
             throw ex;
 
@@ -208,7 +199,25 @@ public class OrderService {
             log.error("Unexpected error processing order event: orderId={}, error={}", event.orderId(), ex.getMessage(),
                     ex);
 
-            // Create order in REJECTED status
+            // Save rejected order in separate transaction before exception causes rollback
+            saveRejectedOrder(event, symbol);
+
+            throw new IllegalStateException("Unexpected error during order event processing: " + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Saves a REJECTED order in a separate transaction.
+     * 
+     * Uses Propagation.REQUIRES_NEW to ensure the order is persisted even if
+     * the parent transaction rolls back due to an exception.
+     * 
+     * @param event  the order event
+     * @param symbol the normalized order symbol
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    private void saveRejectedOrder(OrderEvent event, String symbol) {
+        try {
             Order order = new Order(
                     event.accountId(),
                     symbol,
@@ -220,8 +229,9 @@ public class OrderService {
             order.setId(event.orderId());
             order.setStatus(OrderStatus.REJECTED);
             orderRepository.save(order);
-
-            throw new IllegalStateException("Unexpected error during order event processing: " + ex.getMessage(), ex);
+            log.info("Saved REJECTED order: orderId={}", event.orderId());
+        } catch (Exception ex) {
+            log.error("Failed to save rejected order: orderId={}, error={}", event.orderId(), ex.getMessage());
         }
     }
 
