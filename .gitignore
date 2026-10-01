@@ -8,6 +8,6 @@ target/
 /python/
 node_modules/
 /scripts/
-etl/
+security-reports/
 __pycache__/
 .pytest_cache/
