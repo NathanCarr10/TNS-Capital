@@ -1,9 +1,10 @@
 package com.neueda.leap.kafka;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.kafka.events.MessageEnvelope;
-import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.services.DeadLetterService;
+import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,10 +45,12 @@ public class OrderMessageListener {
         try {
             log.debug("Received order event from Kafka topic");
 
-            // Deserialize the message envelope
+            // Deserialize the message envelope using TypeReference to preserve generic type
+            // info
             MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
                     message,
-                    MessageEnvelope.class);
+                    new TypeReference<MessageEnvelope<OrderEvent>>() {
+                    });
 
             OrderEvent event = envelope.getPayload();
 

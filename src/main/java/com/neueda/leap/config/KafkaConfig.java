@@ -1,12 +1,16 @@
 package com.neueda.leap.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.kafka.events.MessageEnvelope;
+import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.services.DeadLetterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -38,6 +42,9 @@ public class KafkaConfig {
 
     @Value("${trading.kafka.topics.orders:orders}")
     private String ordersTopic;
+
+    @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
+    private String bootstrapServers;
 
     /**
      * Main topic for order events.
@@ -138,7 +145,7 @@ public class KafkaConfig {
     @Bean
     public ConsumerFactory<String, String> consumerFactory() {
         Map<String, Object> configProps = new HashMap<>();
-        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         configProps.put(ConsumerConfig.GROUP_ID_CONFIG, "tns-capital-orders");
         configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -182,25 +189,71 @@ public class KafkaConfig {
      * - Initial backoff: 1000ms (1 second)
      * - Max backoff: 10000ms (10 seconds)
      * - Multiplier: 2.0 (exponential increase)
-     * - Max backoff: 10000ms (10 seconds)
-     * - Multiplier: 2.0 (exponential increase)
+     * - Max failures: 3 (after 3 retries, message is routed to DLQ via recovery
+     * callback)
      * 
-     * The DefaultErrorHandler with ExponentialBackOff will automatically retry
-     * failed messages with exponential backoff intervals until max retries are
-     * exhausted,
-     * at which point the message is considered a failure.
+     * When max failures are exhausted, the recovery callback is invoked which:
+     * 1. Deserializes the message envelope from the ConsumerRecord
+     * 2. Extracts the OrderEvent and failure details
+     * 3. Calls DeadLetterService.captureFailedMessage() to persist in dlq_messages
+     * table
+     * 4. Message is marked with status=PENDING for administrative review and replay
      * 
-     * @return CommonErrorHandler with exponential backoff strategy
+     * @return CommonErrorHandler with exponential backoff strategy and DLQ recovery
      */
     @Bean
     public CommonErrorHandler kafkaErrorHandler() {
         ExponentialBackOff backOff = new ExponentialBackOff(1000, 2.0);
         backOff.setMaxInterval(10000); // Max 10 seconds between retries
+        backOff.setMaxElapsedTime(30000); // Give up after ~30 seconds of retrying
 
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler(backOff);
+        // Recovery callback: invoked when backoff strategy exhausted
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(
+                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception),
+                backOff);
 
         log.info(
-                "Kafka error handler configured with exponential backoff: initialInterval=1s, multiplier=2x, maxInterval=10s");
+                "Kafka error handler configured: exponential backoff (1s initial, 2x multiplier, 10s max interval, 30s max elapsed), DLQ recovery enabled");
         return errorHandler;
+    }
+
+    /**
+     * Handles recovery when a message fails after max retries.
+     * Captures the failed message to the Dead-Letter Queue for administrative
+     * review.
+     * 
+     * @param consumerRecord the Kafka consumer record that failed
+     * @param exception      the exception that caused the failure
+     */
+    private void handleRecovery(ConsumerRecord<?, ?> consumerRecord, Exception exception) {
+        try {
+            log.warn("Max retries exhausted, capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
+                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                    exception.getMessage());
+
+            // Deserialize the message envelope from the Kafka record using TypeReference
+            MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
+                    (String) consumerRecord.value(),
+                    new TypeReference<MessageEnvelope<OrderEvent>>() {
+                    });
+
+            // Capture the failed message to DLQ database table
+            // Max failures = 3, so retryCount = 3
+            deadLetterService.captureFailedMessage(envelope, exception, 3);
+
+        } catch (JsonProcessingException jsonException) {
+            // Message deserialization failed - log the raw message for manual investigation
+            log.error(
+                    "Failed to deserialize order message for DLQ capture (message will remain in orders topic): topic={}, partition={}, offset={}, deserializationError={}",
+                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                    jsonException.getMessage(), jsonException);
+        } catch (Exception recoveryException) {
+            // Unexpected error during recovery - log but don't throw to prevent cascading
+            // failures
+            log.error(
+                    "Unexpected error while capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
+                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                    recoveryException.getMessage(), recoveryException);
+        }
     }
 }

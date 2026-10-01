@@ -3,53 +3,83 @@ package com.neueda.leap.controllers;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.kafka.OrderEventPublisher;
+import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.services.OrderService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+@RequiredArgsConstructor
+@Slf4j
 public class OrderController {
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
+    private final OrderEventPublisher orderEventPublisher;
 
-    public OrderController(OrderRepository orderRepository,
-            AccountRepository accountRepository,
-            OrderHistoryRepository orderHistoryRepository,
-            OrderService orderService) {
-
-        this.orderRepository = orderRepository;
-        this.accountRepository = accountRepository;
-        this.orderHistoryRepository = orderHistoryRepository;
-        this.orderService = orderService;
-    }
-
-    @SuppressWarnings("null")
+    /**
+     * Places an order asynchronously by publishing to Kafka.
+     * 
+     * Returns 202 ACCEPTED immediately; processing happens asynchronously by the
+     * OrderMessageListener. Clients should poll GET /api/v1/orders/{orderId} to
+     * track order status.
+     * 
+     * Failures (invalid account, insufficient funds, etc.) are captured in the DLQ
+     * for administrative review and replay.
+     * 
+     * @param request the order placement request with validation
+     * @return 202 ACCEPTED with order ID for client tracking
+     */
     @PostMapping
-    public ResponseEntity<OrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
-        // Validates account exists before delegating to service; prevents orphaned
-        // orders against non-existent accounts
-        accountRepository.findById(request.accountId())
-                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
+    public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+        // Generate order ID for this request
+        UUID orderId = UUID.randomUUID();
 
-        // Delegates order processing to service layer; controller owns HTTP routing,
-        // service owns business logic
-        Order order = orderService.placeOrder(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(order));
+        // Create order event from request
+        OrderEvent event = new OrderEvent(
+                orderId,
+                request.accountId(),
+                request.symbol(),
+                request.side(),
+                request.quantity(),
+                request.price(),
+                Instant.now());
+
+        // Publish to Kafka for async processing
+        // Message will be retried with exponential backoff and routed to DLQ on failure
+        orderEventPublisher.publishEvent(event, request.accountId());
+
+        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}", 
+                orderId, request.accountId(), request.symbol());
+
+        // Return 202 ACCEPTED with order ID for client tracking
+        Map<String, Object> response = new HashMap<>();
+        response.put("orderId", orderId.toString());
+        response.put("status", "ACCEPTED");
+        response.put("message", "Order accepted for processing. Poll GET /api/v1/orders/{orderId} to track status.");
+
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
     @GetMapping
