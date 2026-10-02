@@ -49,8 +49,11 @@ public class DeadLetterService {
         try {
             OrderEvent event = envelope.getPayload();
             String originalMessage = objectMapper.writeValueAsString(envelope);
+
+            // Extract root cause exception to get the actual business error
+            Throwable rootCause = getRootCause(exception);
             String failureReason = buildFailureReason(exception);
-            String failureType = exception.getClass().getSimpleName();
+            String failureType = rootCause.getClass().getSimpleName();
 
             DeadLetterMessage dlqMessage = new DeadLetterMessage(
                     UUID.randomUUID(),
@@ -155,13 +158,35 @@ public class DeadLetterService {
     }
 
     /**
+     * Extracts the root cause from an exception chain.
+     * Traverses the exception chain by following getCause() until reaching the
+     * original cause.
+     * 
+     * @param exception the exception to unwrap
+     * @return the root cause Throwable
+     */
+    private static Throwable getRootCause(Throwable exception) {
+        Throwable rootCause = exception;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+        return rootCause;
+    }
+
+    /**
      * Builds a failure reason string from an exception.
-     * Returns just the exception message, not the full stack trace.
+     * Extracts the root cause first, then formats it as "ExceptionName: message".
+     * Handles null messages gracefully by using empty string.
      * 
      * @param exception the exception to format
-     * @return exception message
+     * @return failure reason string with root cause class name and message
      */
     private String buildFailureReason(Exception exception) {
-        return exception.getClass().getSimpleName() + ": " + exception.getMessage();
+        Throwable rootCause = getRootCause(exception);
+        String message = rootCause.getMessage();
+        if (message == null) {
+            message = "";
+        }
+        return rootCause.getClass().getSimpleName() + ": " + message;
     }
 }
