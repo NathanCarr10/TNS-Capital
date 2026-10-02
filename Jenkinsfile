@@ -100,6 +100,23 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    // Uploads the analysis (including the JaCoCo coverage report from the
+                    // Test stage) to the SonarQube server configured as 'sonarserver'.
+                    // sonar.qualitygate.wait=true blocks until SonarQube has evaluated the
+                    // Quality Gate and fails the stage if it does not pass — without it the
+                    // stage would succeed as soon as the report was uploaded.
+                    withSonarQubeEnv('sonarserver') {
+                        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                            sh 'mvn -B sonar:sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true'
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Dependency Scan') {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
