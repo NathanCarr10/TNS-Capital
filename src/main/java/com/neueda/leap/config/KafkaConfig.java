@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.exceptions.NonRetryableOrderException;
+import com.neueda.leap.kafka.TradeEventPublisher;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.repositories.OrderRepository;
@@ -42,6 +43,7 @@ public class KafkaConfig {
 
     private final OrderRepository orderRepository;
     private final DeadLetterService deadLetterService;
+    private final TradeEventPublisher tradeEventPublisher;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, String> kafkaTemplate;
 
@@ -232,9 +234,13 @@ public class KafkaConfig {
      * Captures the failed message to the Dead-Letter Queue for administrative
      * review and explicitly updates order status to REJECTED.
      * 
+     * Also publishes a trade lifecycle event to notify downstream systems
+     * (Settlement, Risk Dashboard) that the order was rejected.
+     * 
      * DEFENSIVE GUARANTEE: This method ensures that every order reaching the DLQ
-     * has status=REJECTED, even if saveRejectedOrder() failed in the async
-     * consumer.
+     * has status=REJECTED and an associated lifecycle event, even if
+     * saveRejectedOrder()
+     * failed in the async consumer.
      * 
      * @param consumerRecord the Kafka consumer record that failed
      * @param exception      the exception that caused the failure
@@ -261,11 +267,17 @@ public class KafkaConfig {
             // This ensures status is REJECTED even if saveRejectedOrder() failed earlier
             orderRepository.findById(event.orderId())
                     .ifPresent(order -> {
+                        OrderStatus previousStatus = order.getStatus();
                         order.setStatus(OrderStatus.REJECTED);
                         orderRepository.save(order);
                         log.info(
                                 "Updated order status to REJECTED in recovery handler: orderId={}, reason=EXHAUSTED_RETRIES",
                                 event.orderId());
+
+                        // Publish trade event to notify downstream systems
+                        tradeEventPublisher.publish(order, previousStatus, "EXHAUSTED_RETRIES");
+                        log.info("Published REJECTED trade event in recovery handler: orderId={}, previousStatus={}",
+                                event.orderId(), previousStatus);
                     });
 
             // Capture the failed message to DLQ database table

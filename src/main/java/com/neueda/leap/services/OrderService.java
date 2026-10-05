@@ -26,6 +26,7 @@ import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DataIntegrityViolationException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -140,15 +141,18 @@ public class OrderService {
      * 
      * EXCEPTION DIFFERENTIATION:
      * - Not-found exceptions (Account/Instrument missing): Wrapped in
-     *   NonRetryableOrderException. Error handler will skip retries and route to DLQ.
-     * - Business logic exceptions (Insufficient funds/holdings, Account not active):
-     *   Re-thrown directly. Error handler will retry 3 times before DLQ.
+     * NonRetryableOrderException. Error handler will skip retries and route to DLQ.
+     * - Business logic exceptions (Insufficient funds/holdings, Account not
+     * active):
+     * Re-thrown directly. Error handler will retry 3 times before DLQ.
      * 
      * @param event the order event to process
      * @return the processed order
-     * @throws NonRetryableOrderException if account/instrument not found (non-retryable)
-     * @throws InsufficientFundsException if order fails business logic validation (retryable)
-     * @throws Exception for other unexpected errors
+     * @throws NonRetryableOrderException if account/instrument not found
+     *                                    (non-retryable)
+     * @throws InsufficientFundsException if order fails business logic validation
+     *                                    (retryable)
+     * @throws Exception                  for other unexpected errors
      */
     @Transactional
     public Order processOrderEvent(OrderEvent event) {
@@ -177,7 +181,8 @@ public class OrderService {
             validator.validate(request);
 
             // DEFENSIVE VALIDATION: Retrieve account (may throw AccountNotFoundException)
-            // This catches race conditions where account was deleted between REST validation
+            // This catches race conditions where account was deleted between REST
+            // validation
             // and async processing
             Account account = accountRepository.findById(event.accountId())
                     .orElseThrow(() -> new AccountNotFoundException("Account not found: " + event.accountId()));
@@ -223,7 +228,7 @@ public class OrderService {
                     ex.getMessage());
 
             // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol, false); // false = retryable (business logic error)
+            saveRejectedOrder(event, symbol, ex.getMessage(), false); // false = retryable (business logic error)
 
             // Re-throw to allow Kafka error handler to retry
             throw ex;
@@ -233,7 +238,7 @@ public class OrderService {
                     event.orderId(), ex.getMessage(), ex.getClass().getSimpleName());
 
             // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol, true); // true = non-retryable (not-found error)
+            saveRejectedOrder(event, symbol, ex.getMessage(), true); // true = non-retryable (not-found error)
 
             // Wrap in NonRetryableOrderException to signal error handler to skip retries
             throw new NonRetryableOrderException(
@@ -245,7 +250,7 @@ public class OrderService {
                     ex);
 
             // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol, true); // true = non-retryable (unexpected error)
+            saveRejectedOrder(event, symbol, ex.getMessage(), true); // true = non-retryable (unexpected error)
 
             // Wrap in NonRetryableOrderException for non-business-logic errors
             throw new NonRetryableOrderException(
@@ -255,20 +260,30 @@ public class OrderService {
     }
 
     /**
-     * Saves a REJECTED order in a separate transaction.
+     * Saves a REJECTED order in a separate transaction and publishes a trade
+     * lifecycle event.
      * 
      * Uses Propagation.REQUIRES_NEW to ensure the order is persisted even if
      * the parent transaction rolls back due to an exception.
      * 
-     * @param event  the order event
-     * @param symbol the normalized order symbol
-     * @param isNonRetryable true if this is a non-retryable error (not-found), false if retryable
+     * DEFENSIVE HANDLING: If order already exists (duplicate idempotencyKey),
+     * updates
+     * the status to REJECTED instead of failing.
+     * 
+     * TRADE EVENT PUBLISHING: After successful save, publishes a trade event to
+     * notify downstream systems (Settlement, Risk Dashboard) of the rejection.
+     * 
+     * @param event           the order event
+     * @param symbol          the normalized order symbol
+     * @param rejectionReason the reason the order was rejected (exception message)
+     * @param isNonRetryable  true if this is a non-retryable error (not-found),
+     *                        false if retryable
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    private void saveRejectedOrder(OrderEvent event, String symbol, boolean isNonRetryable) {
+    private void saveRejectedOrder(OrderEvent event, String symbol, String rejectionReason, boolean isNonRetryable) {
         try {
-            log.info("Attempting to save REJECTED order: orderId={}, accountId={}, isNonRetryable={}",
-                    event.orderId(), event.accountId(), isNonRetryable);
+            log.info("Attempting to save REJECTED order: orderId={}, accountId={}, reason={}, isNonRetryable={}",
+                    event.orderId(), event.accountId(), rejectionReason, isNonRetryable);
 
             Order order = new Order(
                     event.accountId(),
@@ -280,9 +295,25 @@ public class OrderService {
                     clock);
             order.setId(event.orderId());
             order.setStatus(OrderStatus.REJECTED);
-            orderRepository.save(order);
+
+            try {
+                orderRepository.save(order);
+            } catch (DataIntegrityViolationException e) {
+                // Order already exists (duplicate idempotencyKey): update status instead
+                log.warn("Order already exists, updating status to REJECTED: orderId={}", event.orderId());
+                orderRepository.findById(event.orderId())
+                        .ifPresent(existingOrder -> {
+                            existingOrder.setStatus(OrderStatus.REJECTED);
+                            orderRepository.save(existingOrder);
+                        });
+            }
 
             log.info("Successfully saved REJECTED order: orderId={}", event.orderId());
+
+            // Publish trade event to notify downstream systems of rejection
+            tradeEventPublisher.publish(order, OrderStatus.NEW, rejectionReason);
+            log.info("Published REJECTED trade event: orderId={}, reason={}", event.orderId(), rejectionReason);
+
         } catch (Exception ex) {
             log.error("Failed to save rejected order: orderId={}, accountId={}, error={}",
                     event.orderId(), event.accountId(), ex.getMessage(), ex);
