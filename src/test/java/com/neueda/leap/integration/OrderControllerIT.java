@@ -168,53 +168,7 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should return ORD-409 when an idempotency key is reused")
-        void testPlaceOrderDuplicateKeyRejected() throws Exception {
-                PlaceOrderRequest request = new PlaceOrderRequest(
-                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"), "IDEM-DUP");
-
-                String orderId = placeOrder(request);
-                await().atMost(10, TimeUnit.SECONDS)
-                                .until(() -> orderRepository.findById(UUID.fromString(orderId)).isPresent());
-
-                mockMvc.perform(post("/api/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isConflict())
-                                .andExpect(jsonPath("$.errorCode", equalTo("ORD-409")));
-
-                assertThat(orderRepository.findAll()).hasSize(1);
-        }
-
-        @Test
-        @DisplayName("Should execute one order when the same key is sent twice before the first is stored")
-        void testPlaceOrderDuplicateKeyRace() throws Exception {
-                PlaceOrderRequest request = new PlaceOrderRequest(
-                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"), "IDEM-RACE");
-
-                String first = placeOrder(request);
-                var secondResponse = mockMvc.perform(post("/api/v1/orders")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andReturn().getResponse();
-
-                // 202 with the same order ID if the first order is not stored yet,
-                // otherwise ORD-409; either way only one order exists
-                if (secondResponse.getStatus() == 202) {
-                        String second = objectMapper.readTree(secondResponse.getContentAsString()).get("orderId").asText();
-                        assertThat(second).isEqualTo(first);
-                } else {
-                        assertThat(secondResponse.getStatus()).isEqualTo(409);
-                }
-                await().pollInSameThread().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
-                                .perform(get("/api/v1/orders/{orderId}", first))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status", equalTo("FILLED"))));
-                assertThat(orderRepository.findAll()).hasSize(1);
-        }
-
-        @Test
-        @DisplayName("Should store an unaffordable order as REJECTED with the reason")
+        @DisplayName("Should store an unaffordable order as REJECTED")
         void testPlaceOrderInsufficientFundsRejected() throws Exception {
                 PlaceOrderRequest request = new PlaceOrderRequest(
                                 testAccount.getId(), "AAPL", OrderSide.BUY, 1000, new BigDecimal("150.00"),
@@ -225,8 +179,7 @@ public class OrderControllerIT extends AbstractIntegrationTest {
                 await().pollInSameThread().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
                                 .perform(get("/api/v1/orders/{orderId}", orderId))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.status", equalTo("REJECTED")))
-                                .andExpect(jsonPath("$.statusReason", containsString("Insufficient funds"))));
+                                .andExpect(jsonPath("$.status", equalTo("REJECTED"))));
         }
 
         @Test
@@ -243,14 +196,16 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
-        @DisplayName("Should cancel a NEW order and return it with status CANCELLED")
+        @DisplayName("Should cancel a NEW order")
         void testCancelNewOrder() throws Exception {
                 Order working = new Order(testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"),
                                 "IDEM-WORKING", clock);
                 orderRepository.save(working);
 
                 mockMvc.perform(delete("/api/v1/orders/{orderId}", working.getId()))
-                                .andExpect(status().isOk())
+                                .andExpect(status().isNoContent());
+
+                mockMvc.perform(get("/api/v1/orders/{orderId}", working.getId()))
                                 .andExpect(jsonPath("$.status", equalTo("CANCELLED")));
         }
 

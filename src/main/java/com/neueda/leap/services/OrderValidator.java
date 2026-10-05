@@ -5,7 +5,6 @@ import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
-import com.neueda.leap.exceptions.InstrumentNotTradableException;
 import com.neueda.leap.mappers.AccountMapper;
 import com.neueda.leap.mappers.InstrumentMapper;
 import com.neueda.leap.mappers.OrderMapper;
@@ -60,7 +59,7 @@ public class OrderValidator {
             throw new InstrumentNotFoundException("Instrument not found: " + symbol);
         }
         if (!instrument.isTradable()) {
-            throw new InstrumentNotTradableException("Instrument not tradable: " + symbol);
+            throw new InstrumentNotFoundException("Instrument not tradable: " + symbol);
         }
     }
 }

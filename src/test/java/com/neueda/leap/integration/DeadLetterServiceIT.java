@@ -80,8 +80,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
 
         testEnvelope = new MessageEnvelope<>(
                 clock.now(),
@@ -167,8 +166,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
 
         MessageEnvelope<OrderEvent> invalidEnvelope = new MessageEnvelope<>(
                 clock.now(),
@@ -257,7 +255,6 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
     @DisplayName("Should track multiple retries correctly")
     void testTrackMultipleRetries() throws Exception {
         // Arrange
-        // An order for an account that does not exist fails every replay
         OrderEvent invalidEvent = new OrderEvent(
                 UUID.randomUUID(),
                 99999L,
@@ -265,8 +262,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
         MessageEnvelope<OrderEvent> invalidEnvelope = new MessageEnvelope<>(
                 clock.now(), UUID.randomUUID().toString(), "1.0", "ORDER_ACCEPTED", invalidEvent);
         Exception testException = new IllegalArgumentException("Multi-retry test");

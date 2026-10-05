@@ -156,7 +156,6 @@ Codes follow section 21 of the specification; the codes marked * extend it for c
 | `InsufficientFundsException` | 400 | `ORD-400` | "The account does not have sufficient funds for this operation" |
 | `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` | 409 | `ORD-409` | Insufficient holdings / duplicate idempotency key / order cannot be cancelled |
 | `OrderNotFoundException` | 404 | `ORD-404`* | "The requested order could not be found" |
-| `OrderSubmissionException` | 503 | `ORD-503`* | Order could not be queued on Kafka; safe to retry |
 | `MethodArgumentNotValidException`, malformed JSON, bad path variable | 422 | `VAL-422` | Field-specific validation messages |
 | Missing or invalid JWT | 401 | `AUTH-401` | "Unauthorised or invalid token" |
 | `AccessDeniedException` | 403 | `AUTH-403`* | "You do not have permission to access this resource" |
@@ -164,8 +163,9 @@ Codes follow section 21 of the specification; the codes marked * extend it for c
 | Generic Exception | 500 | `SYS-500`* | "An unexpected error occurred" |
 
 Insufficient funds and holdings are only known once an order executes, which
-happens asynchronously. The API accepts the order (202), and the order is then
-stored as `REJECTED` with a `statusReason`, visible on `GET /api/v1/orders/{id}`.
+happens asynchronously. The API accepts the order (202); if execution fails the
+order is stored as `REJECTED` (visible on `GET /api/v1/orders/{id}`) and the
+message is captured in the dead-letter queue, flagged as retryable or not.
 
 ### Example: Exception Handling Flow
 
@@ -507,8 +507,8 @@ curl -X POST http://localhost:3000/api/v1/orders \
 ```
 
 The order executes asynchronously; `GET /api/v1/orders/{orderId}` then returns it
-with status `FILLED`, or `REJECTED` and a `statusReason` such as
-"Insufficient funds for buy order".
+with status `FILLED` or `REJECTED`. Rejected orders are also captured in the
+dead-letter queue (`/api/v1/dlq/messages`, ADMIN only) with the failure reason.
 
 **Validation Error (422):**
 ```json

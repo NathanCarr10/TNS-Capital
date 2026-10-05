@@ -19,7 +19,7 @@ class OrderResponseTest {
         Instant createdOn = Instant.parse("2026-09-15T12:00:00Z");
         OrderResponse response = new OrderResponse(
                 orderId, 1L, "AAPL", OrderSide.BUY, 100, 
-                new BigDecimal("150.50"), OrderStatus.NEW, null, createdOn);
+                new BigDecimal("150.50"), OrderStatus.NEW, createdOn);
         assertEquals(orderId, response.id());
         assertEquals(1L, response.accountId());
         assertEquals("AAPL", response.symbol());
@@ -35,7 +35,7 @@ class OrderResponseTest {
         Instant createdOn = Instant.now();
         OrderResponse response = new OrderResponse(
                 UUID.randomUUID(), 1L, "AAPL", OrderSide.BUY, 100, 
-                new BigDecimal("150.50"), OrderStatus.FILLED, null, createdOn);
+                new BigDecimal("150.50"), OrderStatus.FILLED, createdOn);
         assertEquals(OrderStatus.FILLED, response.status());
     }
 
@@ -44,7 +44,7 @@ class OrderResponseTest {
         Instant createdOn = Instant.now();
         OrderResponse response = new OrderResponse(
                 UUID.randomUUID(), 2L, "MSFT", OrderSide.SELL, 50, 
-                new BigDecimal("300.00"), OrderStatus.NEW, null, createdOn);
+                new BigDecimal("300.00"), OrderStatus.NEW, createdOn);
         assertEquals(OrderSide.SELL, response.side());
     }
 }

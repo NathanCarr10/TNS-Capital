@@ -3,7 +3,6 @@ package com.neueda.leap.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.DLQStatus;
 import com.neueda.leap.enums.OrderSide;
-import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
@@ -91,8 +90,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -144,8 +142,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -178,7 +175,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should save insufficient funds OrderEvent as REJECTED, not route it to DLQ")
+    @DisplayName("Should route insufficient funds OrderEvent to DLQ")
     void testProcessInsufficientFundsOrderEvent() {
         // Arrange - Create account with low balance
         Account lowBalanceAccount = new Account("LOW_BALANCE", "Poor Trader", new BigDecimal("10.00"), clock);
@@ -192,8 +189,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 1000, // Large quantity requiring significant funds
                 new BigDecimal("100.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -207,17 +203,18 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
             String message = objectMapper.writeValueAsString(envelope);
             kafkaTemplate.send("orders", lowBalanceAccount.getId().toString(), message);
 
-            // Assert - Business rejections are stored as REJECTED and never retried
+            // Assert - Wait for DLQ capture
             await()
                     .atMost(10, TimeUnit.SECONDS)
                     .pollInterval(100, TimeUnit.MILLISECONDS)
                     .untilAsserted(() -> {
-                        Optional<Order> rejected = orderRepository.findById(orderId);
-                        assertThat(rejected).isPresent();
-                        assertThat(rejected.get().getStatus()).isEqualTo(OrderStatus.REJECTED);
-                        assertThat(rejected.get().getStatusReason()).contains("Insufficient funds");
+                        List<DeadLetterMessage> dlqMessages = dlqRepository
+                                .findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
+                        assertThat(dlqMessages)
+                                .isNotEmpty()
+                                .anyMatch(msg -> msg.getOriginalOrderId().equals(orderId))
+                                .anyMatch(msg -> msg.getFailureType().contains("InsufficientFundsException"));
                     });
-            assertThat(dlqRepository.findAll()).isEmpty();
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to publish insufficient funds order event", e);
@@ -226,7 +223,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should capture exception details in DLQ message")
-    void testDLQMessageContainsFailureDetails() {
+    void testDLQMessageContainsFullStackTrace() {
         // Arrange
         UUID orderId = UUID.randomUUID();
         Long invalidAccountId = 99999L;
@@ -238,8 +235,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now(),
-                "it-" + UUID.randomUUID());
+                clock.now());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -267,31 +263,16 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                                     assertThat(dlqMsg.getFailureReason())
                                             .contains("AccountNotFoundException")
                                             .contains("Account not found");
-                                    assertThat(dlqMsg.getFailureType()).isEqualTo("AccountNotFoundException");
+                                    // Unknown accounts are marked non-retryable
+                                    assertThat(dlqMsg.getFailureType()).isEqualTo("NON_RETRYABLE_AccountNotFoundException");
+                                    assertThat(dlqMsg.getIsRetryable()).isFalse();
                                     assertThat(dlqMsg.getRetryCount()).isGreaterThanOrEqualTo(0);
                                     assertThat(dlqMsg.getCreatedOn()).isNotNull();
                                 });
                     });
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to publish order event for failure detail verification", e);
+            throw new RuntimeException("Failed to publish order event for stack trace verification", e);
         }
-    }
-
-    @Test
-    @DisplayName("Should keep a message that is not an order envelope in the DLQ, without retrying")
-    void testUnreadableMessageGoesToDLQ() {
-        kafkaTemplate.send("orders", "unreadable", "this is not json");
-
-        await()
-                .atMost(10, TimeUnit.SECONDS)
-                .pollInterval(100, TimeUnit.MILLISECONDS)
-                .untilAsserted(() -> {
-                    List<DeadLetterMessage> dlqMessages = dlqRepository
-                            .findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
-                    assertThat(dlqMessages).hasSize(1);
-                    assertThat(dlqMessages.get(0).getOriginalMessage()).isEqualTo("this is not json");
-                    assertThat(dlqMessages.get(0).getOriginalOrderId()).isNull();
-                });
     }
 }

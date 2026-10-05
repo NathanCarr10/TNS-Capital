@@ -3,8 +3,15 @@ package com.neueda.leap.controllers;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.kafka.OrderEventPublisher;
+import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
+import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.services.OrderService;
@@ -15,6 +22,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,30 +35,74 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OrderController {
     private final OrderRepository orderRepository;
+    private final AccountRepository accountRepository;
+    private final InstrumentRepository instrumentRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
+    private final OrderEventPublisher orderEventPublisher;
 
     /**
-     * Places an order asynchronously.
-     *
-     * The request is checked against the account, instrument and idempotency
-     * rules first, so those failures return the spec's error codes (ACC-404,
-     * ACC-403, INS-404, ORD-409) straight away. A valid order is published to
-     * Kafka and 202 ACCEPTED is returned once the broker has it. Funds and
-     * holdings are checked when the order executes; poll
-     * GET /api/v1/orders/{orderId} for the outcome (FILLED or REJECTED with a
-     * statusReason).
-     *
+     * Places an order asynchronously by publishing to Kafka.
+     * 
+     * Returns 202 ACCEPTED immediately; processing happens asynchronously by the
+     * OrderMessageListener. Clients should poll GET /api/v1/orders/{orderId} to
+     * track order status.
+     * 
+     * Failures (invalid account, insufficient funds, etc.) are captured in the DLQ
+     * for administrative review and replay.
+     * 
+     * NOTE: This endpoint validates that the Account and Instrument exist BEFORE
+     * publishing to Kafka. This fail-fast approach prevents non-recoverable errors
+     * (e.g., deleted account) from wasting Kafka retry attempts. Business logic
+     * exceptions (insufficient funds, etc.) are still handled in the async
+     * consumer.
+     * 
      * @param request the order placement request with validation
      * @return 202 ACCEPTED with order ID for client tracking
+     * @throws AccountNotFoundException    if account does not exist
+     * @throws InstrumentNotFoundException if instrument does not exist
      */
     @PostMapping
     public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
-        UUID orderId = orderService.submitOrder(request);
+        // FAIL-FAST VALIDATION: Check Account and Instrument existence before
+        // publishing to Kafka
+        // This prevents non-recoverable errors from triggering Kafka retries
+
+        // Validate Account exists
+        accountRepository.findById(request.accountId())
+                .orElseThrow(() -> {
+                    log.warn("Order placement rejected: Account not found: accountId={}", request.accountId());
+                    return new AccountNotFoundException("Account not found: " + request.accountId());
+                });
+
+        // Validate Instrument exists
+        instrumentRepository.findBySymbol(request.symbol())
+                .orElseThrow(() -> {
+                    log.warn("Order placement rejected: Instrument not found: symbol={}", request.symbol());
+                    return new InstrumentNotFoundException("Instrument not found: " + request.symbol());
+                });
+
+        // Generate order ID for this request
+        UUID orderId = UUID.randomUUID();
+
+        // Create order event from request
+        OrderEvent event = new OrderEvent(
+                orderId,
+                request.accountId(),
+                request.symbol(),
+                request.side(),
+                request.quantity(),
+                request.price(),
+                Instant.now());
+
+        // Publish to Kafka for async processing
+        // Message will be retried with exponential backoff and routed to DLQ on failure
+        orderEventPublisher.publishEvent(event, request.accountId());
 
         log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
                 orderId, request.accountId(), request.symbol());
 
+        // Return 202 ACCEPTED with order ID for client tracking
         Map<String, Object> response = new HashMap<>();
         response.put("orderId", orderId.toString());
         response.put("status", "ACCEPTED");
@@ -81,15 +133,18 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(order));
     }
 
-    /**
-     * Cancels a working (NEW) order and returns it with its updated status.
-     * Unknown orders return ORD-404; filled, rejected or already cancelled
-     * orders return ORD-409.
-     */
     @DeleteMapping("/{orderId}")
-    public ResponseEntity<OrderResponse> cancelOrder(@PathVariable UUID orderId) {
-        Order cancelled = orderService.cancelOrder(orderId);
-        return ResponseEntity.ok(mapToResponse(cancelled));
+    public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
+        // Validates order exists before cancellation; prevents silently ignoring
+        // requests for non-existent orders
+        orderRepository.findById(orderId)
+                .orElseThrow(
+                        () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
+
+        // Delegates cancellation to service layer; service validates business rules
+        // (status, timing)
+        orderService.cancelOrder(orderId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/history/{orderId}")
@@ -123,7 +178,6 @@ public class OrderController {
                 order.getQuantity(),
                 order.getPrice(),
                 order.getStatus(),
-                order.getStatusReason(),
                 order.getCreatedOn());
     }
 

@@ -15,6 +15,5 @@ public record OrderResponse(
         Integer quantity,
         BigDecimal price,
         OrderStatus status,
-        String statusReason,
         Instant createdOn) {
 }

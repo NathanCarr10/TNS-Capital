@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,12 +25,6 @@ import org.mockito.MockitoAnnotations;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
-import com.neueda.leap.exceptions.AccountNotActiveException;
-import com.neueda.leap.exceptions.AccountNotFoundException;
-import com.neueda.leap.exceptions.DuplicateOrderException;
-import com.neueda.leap.exceptions.InstrumentNotFoundException;
-import com.neueda.leap.exceptions.InstrumentNotTradableException;
-import com.neueda.leap.exceptions.OrderSubmissionException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
@@ -39,14 +33,15 @@ import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
+import org.springframework.transaction.PlatformTransactionManager;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
-import com.neueda.leap.kafka.events.OrderEvent;
 
 @DisplayName("OrderService Test Suite")
 class OrderServiceTest {
@@ -54,6 +49,9 @@ class OrderServiceTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Mock
+    private InstrumentRepository instrumentRepository;
 
     @Mock
     private OrderRepository orderRepository;
@@ -79,6 +77,9 @@ class OrderServiceTest {
     @Mock
     private TradeEventPublisher tradeEventPublisher;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private ClockTest testClock;
     private Account testAccount;
     private PlaceOrderRequest placeOrderRequest;
@@ -92,261 +93,167 @@ class OrderServiceTest {
         testAccount.setId(1L);
 
         // Create strategy map
-        Map<OrderSide, OrderExecutionStrategy> strategies = new EnumMap<>(OrderSide.class);
+        Map<OrderSide, OrderExecutionStrategy> strategies = new HashMap<>();
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 
-        orderService = new OrderService(accountRepository, orderRepository, orderHistoryRepository,
-                positionRepository, validator, strategies, testClock, orderEventPublisher, tradeEventPublisher);
+        orderService = new OrderService(accountRepository, instrumentRepository, orderRepository,
+                orderHistoryRepository, positionRepository, validator, strategies, testClock, orderEventPublisher,
+                tradeEventPublisher,
+                transactionManager);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
     }
 
-    private OrderEvent buyEvent(UUID orderId, String key) {
-        return new OrderEvent(orderId, 1L, "aapl", OrderSide.BUY, 100, new BigDecimal("150.00"),
-                testClock.now(), key);
-    }
-
-    @DisplayName("submitOrder Tests")
+    @DisplayName("placeOrder Tests")
     @Nested
-    class SubmitOrderTests {
-        @DisplayName("Should validate, then publish an event carrying the client's idempotency key")
+    class PlaceOrderTests {
+        @DisplayName("Should place buy order successfully")
         @Test
-        void testSubmitOrderPublishesEventWithKey() {
-            PlaceOrderRequest request = new PlaceOrderRequest(1L, "aapl", OrderSide.BUY, 100,
-                    new BigDecimal("150.00"), "client-key-1");
+        @SuppressWarnings("null")
+        void testPlaceOrderBuySuccess() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
 
-            UUID orderId = orderService.submitOrder(request);
+            Order result = orderService.placeOrder(placeOrderRequest);
 
-            verify(validator).validate(request);
-            ArgumentCaptor<OrderEvent> eventCaptor = ArgumentCaptor.forClass(OrderEvent.class);
-            verify(orderEventPublisher).publishEvent(eventCaptor.capture(), eq(1L));
-            OrderEvent event = eventCaptor.getValue();
-            assertEquals(orderId, event.orderId());
-            assertEquals("CLIENT-KEY-1", event.idempotencyKey());
-            assertEquals("AAPL", event.symbol());
-            verify(orderRepository, never()).save(any());
+            assertNotNull(result);
+            assertEquals(OrderStatus.FILLED, result.getStatus());
+            assertEquals(1L, result.getAccountId());
+            assertEquals("AAPL", result.getSymbol());
+            assertEquals(OrderSide.BUY, result.getSide());
+            assertEquals(100, result.getQuantity());
+            assertEquals(new BigDecimal("150.00"), result.getPrice());
+
+            verify(validator, times(1)).validate(placeOrderRequest);
+            verify(accountRepository, times(1)).findById(1L);
+            verify(buyStrategy, times(1)).execute(testAccount, placeOrderRequest, "AAPL");
+            verify(orderRepository, times(1)).save(any(Order.class));
         }
 
-        @DisplayName("Should give a repeated request the same order ID, so it cannot become a second order")
+        @DisplayName("Should place sell order successfully")
         @Test
-        void testSubmitOrderSameKeySameOrderId() {
-            PlaceOrderRequest request = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100,
-                    new BigDecimal("150.00"), "client-key-1");
-            PlaceOrderRequest otherAccount = new PlaceOrderRequest(2L, "AAPL", OrderSide.BUY, 100,
-                    new BigDecimal("150.00"), "client-key-1");
+        @SuppressWarnings("null")
+        void testPlaceOrderSellSuccess() {
+            PlaceOrderRequest sellRequest = new PlaceOrderRequest(1L, "MSFT", OrderSide.SELL, 50,
+                    new BigDecimal("300.00"), "ORDER-002");
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
 
-            UUID first = orderService.submitOrder(request);
-            UUID second = orderService.submitOrder(request);
+            Order result = orderService.placeOrder(sellRequest);
 
-            assertEquals(first, second);
-            assertNotEquals(first, orderService.submitOrder(otherAccount));
-        }
+            assertNotNull(result);
+            assertEquals(OrderStatus.FILLED, result.getStatus());
+            assertEquals(OrderSide.SELL, result.getSide());
 
-        @DisplayName("Should not publish when validation fails")
-        @Test
-        void testSubmitOrderValidationFailureDoesNotPublish() {
-            doThrow(new DuplicateOrderException("Order already submitted")).when(validator).validate(any());
-
-            assertThrows(DuplicateOrderException.class, () -> orderService.submitOrder(placeOrderRequest));
-
-            verify(orderEventPublisher, never()).publishEvent(any(), any());
-        }
-
-        @DisplayName("Should propagate a failed publish so the API does not report the order as accepted")
-        @Test
-        void testSubmitOrderPublishFailurePropagates() {
-            doThrow(new OrderSubmissionException("broker down", new RuntimeException()))
-                    .when(orderEventPublisher).publishEvent(any(), any());
-
-            assertThrows(OrderSubmissionException.class, () -> orderService.submitOrder(placeOrderRequest));
+            verify(validator, times(1)).validate(sellRequest);
+            verify(sellStrategy, times(1)).execute(testAccount, sellRequest, "MSFT");
+            verify(orderRepository, times(1)).save(any(Order.class));
         }
 
         @DisplayName("Should throw NullPointerException for null request")
         @Test
-        void testSubmitOrderNullRequest() {
-            assertThrows(NullPointerException.class, () -> orderService.submitOrder(null));
+        @SuppressWarnings("null")
+        void testPlaceOrderNullRequest() {
+            assertThrows(NullPointerException.class, () -> orderService.placeOrder(null),
+                    "Should throw NullPointerException for null request");
             verify(validator, never()).validate(any());
+            verify(orderRepository, never()).save(any(Order.class));
         }
-    }
 
-    @DisplayName("processOrderEvent Tests")
-    @Nested
-    class ProcessOrderEventTests {
-        @DisplayName("Should fill a buy order, store it under the client's key and publish a FILLED event")
+        @DisplayName("Should set order status to REJECTED on InsufficientFundsException")
         @Test
-        void testProcessBuyFilled() {
-            UUID orderId = UUID.randomUUID();
+        @SuppressWarnings("null")
+        void testPlaceOrderInsufficientFundsThrowsException() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            doThrow(new InsufficientFundsException("Insufficient funds")).when(buyStrategy).execute(any(), any(),
+                    any());
+
+            assertThrows(InsufficientFundsException.class, () -> orderService.placeOrder(placeOrderRequest),
+                    "Should propagate InsufficientFundsException");
+
+            ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+            verify(orderRepository).save(orderCaptor.capture());
+            assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+        }
+
+        @DisplayName("Should set order status to REJECTED on InsufficientHoldingsException")
+        @Test
+        @SuppressWarnings("null")
+        void testPlaceOrderInsufficientHoldingsThrowsException() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            doThrow(new InsufficientHoldingsException("Insufficient holdings")).when(sellStrategy).execute(any(),
+                    any(), any());
+
+            PlaceOrderRequest sellRequest = new PlaceOrderRequest(1L, "GOOG", OrderSide.SELL, 100,
+                    new BigDecimal("130.00"), "ORDER-003");
+
+            assertThrows(InsufficientHoldingsException.class, () -> orderService.placeOrder(sellRequest),
+                    "Should propagate InsufficientHoldingsException");
+
+            ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+            verify(orderRepository).save(orderCaptor.capture());
+            assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+        }
+
+        @DisplayName("Should set order status to REJECTED on generic Exception")
+        @Test
+        @SuppressWarnings("null")
+        void testPlaceOrderGenericExceptionThrowsException() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            doThrow(new RuntimeException("Unexpected error")).when(buyStrategy).execute(any(), any(), any());
+
+            assertThrows(IllegalStateException.class, () -> orderService.placeOrder(placeOrderRequest),
+                    "Should throw IllegalStateException for unexpected errors");
+
+            ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+            verify(orderRepository).save(orderCaptor.capture());
+            assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+        }
+
+        @DisplayName("Should wrap AccountNotFoundException in IllegalStateException")
+        @Test
+        @SuppressWarnings("null")
+        void testPlaceOrderAccountNotFound() {
+            when(accountRepository.findById(999L)).thenReturn(Optional.empty());
+            PlaceOrderRequest invalidRequest = new PlaceOrderRequest(999L, "AAPL", OrderSide.BUY, 100,
+                    new BigDecimal("150.00"), "ORDER-004");
+
+            assertThrows(IllegalStateException.class, () -> orderService.placeOrder(invalidRequest),
+                    "Should wrap exception in IllegalStateException");
+
+            ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+            verify(orderRepository).save(orderCaptor.capture());
+            assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+        }
+
+        @DisplayName("Should throw IllegalStateException when strategy not found")
+        @Test
+        void testPlaceOrderStrategyNotFound() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
 
-            Order result = orderService.processOrderEvent(buyEvent(orderId, "client-key-1"));
+            // Create service with empty strategies map
+            Map<OrderSide, OrderExecutionStrategy> emptyStrategies = new HashMap<>();
+            OrderService serviceWithoutStrategies = new OrderService(accountRepository, instrumentRepository,
+                    orderRepository,
+                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock,
+                    orderEventPublisher, tradeEventPublisher, transactionManager);
 
-            assertEquals(OrderStatus.FILLED, result.getStatus());
-            assertEquals(orderId, result.getId());
-            assertEquals("CLIENT-KEY-1", result.getIdempotencyKey());
-            assertEquals("AAPL", result.getSymbol());
-            verify(buyStrategy).execute(eq(testAccount), any(PlaceOrderRequest.class), eq("AAPL"));
-            verify(orderRepository).save(result);
-            verify(tradeEventPublisher).publish(result, OrderStatus.NEW, null);
+            assertThrows(IllegalStateException.class,
+                    () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),
+                    "Should throw IllegalStateException when strategy not found");
         }
 
-        @DisplayName("Should fill a sell order with the sell strategy")
+        @DisplayName("Should save order even on exception")
         @Test
-        void testProcessSellFilled() {
+        @SuppressWarnings("null")
+        void testPlaceOrderSavesOrderOnException() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            OrderEvent sell = new OrderEvent(UUID.randomUUID(), 1L, "MSFT", OrderSide.SELL, 50,
-                    new BigDecimal("300.00"), testClock.now(), "sell-key");
+            doThrow(new InsufficientFundsException("Insufficient funds")).when(buyStrategy).execute(any(), any(),
+                    any());
 
-            Order result = orderService.processOrderEvent(sell);
+            assertThrows(InsufficientFundsException.class, () -> orderService.placeOrder(placeOrderRequest));
 
-            assertEquals(OrderStatus.FILLED, result.getStatus());
-            verify(sellStrategy).execute(eq(testAccount), any(PlaceOrderRequest.class), eq("MSFT"));
-            verify(buyStrategy, never()).execute(any(), any(), any());
-        }
-
-        @DisplayName("Should save a REJECTED order with the reason, without rethrowing, on insufficient funds")
-        @Test
-        void testProcessInsufficientFundsRejected() {
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            doThrow(new InsufficientFundsException("Insufficient funds for buy order"))
-                    .when(buyStrategy).execute(any(), any(), any());
-
-            Order result = assertDoesNotThrow(() -> orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k1")));
-
-            assertEquals(OrderStatus.REJECTED, result.getStatus());
-            assertEquals("Insufficient funds for buy order", result.getStatusReason());
-            verify(orderRepository).save(result);
-            verify(tradeEventPublisher).publish(result, OrderStatus.NEW, "Insufficient funds for buy order");
-        }
-
-        @DisplayName("Should save a REJECTED order on insufficient holdings")
-        @Test
-        void testProcessInsufficientHoldingsRejected() {
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            doThrow(new InsufficientHoldingsException("Insufficient holdings for symbol: MSFT"))
-                    .when(sellStrategy).execute(any(), any(), any());
-            OrderEvent sell = new OrderEvent(UUID.randomUUID(), 1L, "MSFT", OrderSide.SELL, 50,
-                    new BigDecimal("300.00"), testClock.now(), "sell-key");
-
-            Order result = orderService.processOrderEvent(sell);
-
-            assertEquals(OrderStatus.REJECTED, result.getStatus());
-            verify(orderRepository).save(result);
-        }
-
-        @DisplayName("Should save a REJECTED order when the account is not active")
-        @Test
-        void testProcessAccountNotActiveRejected() {
-            doThrow(new AccountNotActiveException("Account not active: 1")).when(validator).validate(any());
-
-            Order result = orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k2"));
-
-            assertEquals(OrderStatus.REJECTED, result.getStatus());
-            verify(buyStrategy, never()).execute(any(), any(), any());
-            verify(orderRepository).save(result);
-        }
-
-        @DisplayName("Should save a REJECTED order when the instrument is not tradable")
-        @Test
-        void testProcessInstrumentNotTradableRejected() {
-            doThrow(new InstrumentNotTradableException("Instrument not tradable: AAPL"))
-                    .when(validator).validate(any());
-
-            Order result = orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k3"));
-
-            assertEquals(OrderStatus.REJECTED, result.getStatus());
-            verify(orderRepository).save(result);
-        }
-
-        @DisplayName("Should rethrow for an unknown account, since the order row cannot reference it")
-        @Test
-        void testProcessUnknownAccountRethrows() {
-            doThrow(new AccountNotFoundException("Account not found: 1")).when(validator).validate(any());
-
-            OrderEvent event = buyEvent(UUID.randomUUID(), "k4");
-
-            assertThrows(AccountNotFoundException.class, () -> orderService.processOrderEvent(event));
-
-            verify(orderRepository, never()).save(any());
-            verify(tradeEventPublisher, never()).publish(any(), any(), any());
-        }
-
-        @DisplayName("Should rethrow for an unknown instrument, since the order row cannot reference it")
-        @Test
-        void testProcessUnknownInstrumentRethrows() {
-            doThrow(new InstrumentNotFoundException("Instrument not found: AAPL")).when(validator).validate(any());
-
-            OrderEvent event = buyEvent(UUID.randomUUID(), "k5");
-
-            assertThrows(InstrumentNotFoundException.class, () -> orderService.processOrderEvent(event));
-
-            verify(orderRepository, never()).save(any());
-        }
-
-        @DisplayName("Should rethrow unexpected errors so the listener retries them")
-        @Test
-        void testProcessUnexpectedErrorRethrows() {
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            doThrow(new IllegalStateException("Position update failed"))
-                    .when(buyStrategy).execute(any(), any(), any());
-
-            OrderEvent event = buyEvent(UUID.randomUUID(), "k6");
-
-            assertThrows(IllegalStateException.class, () -> orderService.processOrderEvent(event));
-
-            verify(orderRepository, never()).save(any());
-        }
-
-        @DisplayName("Should return the stored order for a redelivered event without executing again")
-        @Test
-        void testProcessRedeliveredEvent() {
-            UUID orderId = UUID.randomUUID();
-            Order stored = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "K7", testClock);
-            when(orderRepository.findById(orderId)).thenReturn(Optional.of(stored));
-
-            Order result = orderService.processOrderEvent(buyEvent(orderId, "k7"));
-
-            assertSame(stored, result);
-            verify(validator, never()).validate(any());
-            verify(orderRepository, never()).save(any());
-        }
-
-        @DisplayName("Should not execute a second order with an idempotency key that is already used")
-        @Test
-        void testProcessDuplicateKeyNotExecuted() {
-            Order first = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "K8", testClock);
-            when(orderRepository.findByIdempotencyKey("K8")).thenReturn(Optional.of(first));
-
-            Order result = orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k8"));
-
-            assertSame(first, result);
-            verify(buyStrategy, never()).execute(any(), any(), any());
-            verify(orderRepository, never()).save(any());
-        }
-
-        @DisplayName("Should fall back to the order ID as the key for events captured before keys were added")
-        @Test
-        void testProcessEventWithoutKeyUsesOrderId() {
-            UUID orderId = UUID.randomUUID();
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-
-            Order result = orderService.processOrderEvent(buyEvent(orderId, null));
-
-            assertEquals(orderId.toString().toUpperCase(), result.getIdempotencyKey());
-        }
-
-        @DisplayName("Should throw IllegalStateException when no strategy is registered for the side")
-        @Test
-        void testProcessStrategyNotFound() {
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    orderHistoryRepository, positionRepository, validator, new EnumMap<>(OrderSide.class), testClock,
-                    orderEventPublisher, tradeEventPublisher);
-
-            OrderEvent event = buyEvent(UUID.randomUUID(), "k9");
-
-            assertThrows(IllegalStateException.class, () -> serviceWithoutStrategies.processOrderEvent(event));
+            verify(orderRepository, times(1)).save(any(Order.class));
         }
     }
 

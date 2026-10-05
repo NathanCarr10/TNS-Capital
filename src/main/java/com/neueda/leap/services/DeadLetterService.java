@@ -11,7 +11,6 @@ import com.neueda.leap.time.Clock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -46,6 +45,23 @@ public class DeadLetterService {
             MessageEnvelope<OrderEvent> envelope,
             Exception exception,
             int retryCount) {
+        return captureFailedMessage(envelope, exception, retryCount, false);
+    }
+
+    /**
+     * Captures a failed message envelope and stores it in the DLQ table.
+     * 
+     * @param envelope   the failed MessageEnvelope
+     * @param exception  the exception that caused the failure
+     * @param retryCount the number of retries already attempted
+     * @param isNonRetryable true if this is a non-retryable error (not-found), false if retryable
+     * @return the stored DeadLetterMessage
+     */
+    public DeadLetterMessage captureFailedMessage(
+            MessageEnvelope<OrderEvent> envelope,
+            Exception exception,
+            int retryCount,
+            boolean isNonRetryable) {
 
         try {
             OrderEvent event = envelope.getPayload();
@@ -55,6 +71,11 @@ public class DeadLetterService {
             Throwable rootCause = getRootCause(exception);
             String failureReason = buildFailureReason(exception);
             String failureType = rootCause.getClass().getSimpleName();
+
+            // Prepend "NON_RETRYABLE_" to failure type if applicable
+            if (isNonRetryable) {
+                failureType = "NON_RETRYABLE_" + failureType;
+            }
 
             DeadLetterMessage dlqMessage = new DeadLetterMessage(
                     UUID.randomUUID(),
@@ -66,11 +87,12 @@ public class DeadLetterService {
 
             dlqMessage.setRetryCount(retryCount);
             dlqMessage.setStatus(DLQStatus.PENDING);
+            dlqMessage.setIsRetryable(!isNonRetryable); // false if non-retryable, true if retryable
 
             DeadLetterMessage saved = dlqRepository.save(dlqMessage);
 
-            log.info("Captured failed message in DLQ: dlqId={}, orderId={}, failureType={}, retryCount={}",
-                    saved.getId(), event.orderId(), failureType, retryCount);
+            log.info("Captured failed message in DLQ: dlqId={}, orderId={}, failureType={}, retryCount={}, isNonRetryable={}",
+                    saved.getId(), event.orderId(), failureType, retryCount, isNonRetryable);
 
             return saved;
         } catch (JsonProcessingException ex) {
@@ -80,42 +102,12 @@ public class DeadLetterService {
     }
 
     /**
-     * Captures a message that could not be read as an order envelope. The raw
-     * text is kept as-is; there is no order ID, and replaying it will fail until
-     * the message is dismissed.
-     *
-     * @param rawMessage the record value as received
-     * @param exception  the exception that caused the failure
-     * @return the stored DeadLetterMessage
-     */
-    public DeadLetterMessage captureUnreadableMessage(String rawMessage, Exception exception) {
-        String original = (rawMessage == null || rawMessage.isBlank()) ? "<empty message>" : rawMessage;
-        DeadLetterMessage dlqMessage = new DeadLetterMessage(
-                UUID.randomUUID(),
-                null,
-                original,
-                buildFailureReason(exception),
-                getRootCause(exception).getClass().getSimpleName(),
-                clock.now());
-        DeadLetterMessage saved = dlqRepository.save(dlqMessage);
-        log.info("Captured unreadable message in DLQ: dlqId={}, failureType={}", saved.getId(),
-                saved.getFailureType());
-        return saved;
-    }
-
-    /**
      * Replays a DLQ message by processing it again.
-     *
-     * Runs without a surrounding transaction: processOrderEvent commits or rolls
-     * back on its own, and the DLQ status update is saved separately. Sharing one
-     * transaction meant a failed replay marked it rollback-only, so the retry
-     * count update was lost and the caller got UnexpectedRollbackException.
-     *
+     * 
      * @param dlqMessageId the ID of the DLQ message to replay
      * @param orderService the service to process the order event
      * @return true if replay was successful, false otherwise
      */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public boolean replayMessage(UUID dlqMessageId, OrderService orderService) {
         try {
             DeadLetterMessage dlqMessage = dlqRepository.findById(dlqMessageId)
@@ -136,7 +128,7 @@ public class DeadLetterService {
 
                 // Re-process the order event
                 OrderEvent event = envelope.getPayload();
-                orderService.processOrderEvent(event);
+                orderService.replayOrderEvent(event);
 
                 // Mark DLQ message as resolved
                 dlqMessage.setStatus(DLQStatus.RESOLVED);

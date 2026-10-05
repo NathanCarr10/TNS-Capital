@@ -54,6 +54,9 @@ public class DeadLetterMessage {
     @Column(name = "admin_notes", columnDefinition = "TEXT")
     private String adminNotes;
 
+    @Column(name = "is_retryable", nullable = false)
+    private Boolean isRetryable = true;
+
     protected DeadLetterMessage() {
         // JPA no-arg constructor
     }
@@ -131,6 +134,10 @@ public class DeadLetterMessage {
         return adminNotes;
     }
 
+    public Boolean getIsRetryable() {
+        return isRetryable;
+    }
+
     // Setters
     public void setStatus(DLQStatus status) {
         if (status == null) {
@@ -158,6 +165,13 @@ public class DeadLetterMessage {
         this.adminNotes = adminNotes;
     }
 
+    public void setIsRetryable(Boolean isRetryable) {
+        if (isRetryable == null) {
+            throw new IllegalArgumentException("isRetryable cannot be null");
+        }
+        this.isRetryable = isRetryable;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -181,6 +195,7 @@ public class DeadLetterMessage {
                 ", failureType='" + failureType + '\'' +
                 ", status=" + status +
                 ", retryCount=" + retryCount +
+                ", isRetryable=" + isRetryable +
                 ", createdOn=" + createdOn +
                 '}';
     }

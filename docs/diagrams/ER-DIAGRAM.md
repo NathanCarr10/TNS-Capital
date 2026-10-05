@@ -38,7 +38,7 @@ erDiagram
         NUMERIC(18-2) price "CHECK > 0"
         VARCHAR(20) status "NEW | FILLED | REJECTED | CANCELLED"
         VARCHAR(100) idempotency_key UK
-        VARCHAR(255) status_reason "why an order was rejected"
+        VARCHAR(255) status_reason "reason text (seed data)"
         TIMESTAMP created_on
     }
 
@@ -84,6 +84,7 @@ erDiagram
         TIMESTAMP last_retry_on
         TIMESTAMP resolved_on
         TEXT admin_notes
+        BOOLEAN is_retryable "false = cannot succeed on replay"
     }
 ```
 
@@ -93,8 +94,8 @@ erDiagram
   live only in `instruments`, account details only in `accounts`, and
   `orders`/`positions` refer to them by key. `positions` uses the natural
   composite key `(account_id, symbol)`.
-- **Audit trail.** Every order is kept in `orders`, including `REJECTED` ones
-  with a `status_reason`. Accounts are closed (`status = CLOSED`), not deleted,
+- **Audit trail.** Every order is kept in `orders`, including `REJECTED` ones;
+  the reason a live order failed is recorded in `dlq_messages`. Accounts are closed (`status = CLOSED`), not deleted,
   so their orders stay valid. `order_history` keeps an archived copy of each
   cancelled order without foreign keys.
 - **Historical data.** `executions` records the fill for each filled order;

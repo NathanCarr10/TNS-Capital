@@ -122,7 +122,6 @@ public class AccountController {
                                 order.getQuantity(),
                                 order.getPrice(),
                                 order.getStatus(),
-                                order.getStatusReason(),
                                 order.getCreatedOn());
         }
 
