@@ -17,7 +17,7 @@ if (!SECRET) {
 // demonstrate "valid token in, protected data out" and "no token, or the
 // wrong one, in -> rejected".
 const USERS = {
-  alice: { password: 'mission123', roles: ['MISSION_OPERATOR'] },
+  alice: { password: 'mission123', roles: ['MISSION_OPERATOR', 'ADMIN'] },
   bob: { password: 'wrongpermissions', roles: ['GUEST'] },
 };
 

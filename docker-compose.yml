@@ -82,17 +82,17 @@ services:
       kafka:
         condition: service_healthy
 
-  etl:
-    build: ./etl
-    environment:
-      ETL_DB_HOST: postgres
-      DB_USER: ${DB_USER:-tns-capital-db-user}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
+  # etl:
+  #   build: ./etl
+  #   environment:
+  #     ETL_DB_HOST: postgres
+  #     DB_USER: ${DB_USER:-tns-capital-db-user}
+  #     DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  #     ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
   kafka-ui:
     image: kafbat/kafka-ui:v1.5.0

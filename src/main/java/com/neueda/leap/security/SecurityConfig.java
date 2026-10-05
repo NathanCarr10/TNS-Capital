@@ -5,9 +5,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -25,8 +28,11 @@ import java.time.LocalDateTime;
  * - Security headers to prevent common attacks
  * - CSRF disabled for stateless API (appropriate for REST)
  * - X-Frame-Options set to prevent clickjacking
+ * - The token's "roles" claim is mapped to Spring roles (ROLE_ADMIN etc.) so
+ *   method-level @PreAuthorize checks can be added once roles are agreed
  */
 @Configuration
+@EnableMethodSecurity
 public class SecurityConfig {
 
         @Value("${jwt.shared-secret}")
@@ -40,6 +46,21 @@ public class SecurityConfig {
         public JwtDecoder jwtDecoder() {
                 SecretKeySpec secretKey = new SecretKeySpec(sharedSecret.getBytes(), "HmacSHA256");
                 return NimbusJwtDecoder.withSecretKey(secretKey).build();
+        }
+
+        /**
+         * Reads the auth service's "roles" claim instead of Spring's default "scope"
+         * claim, so a token with roles ["ADMIN"] gets the authority ROLE_ADMIN.
+         */
+        @Bean
+        public JwtAuthenticationConverter jwtAuthenticationConverter() {
+                JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+                authorities.setAuthoritiesClaimName("roles");
+                authorities.setAuthorityPrefix("ROLE_");
+
+                JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+                converter.setJwtGrantedAuthoritiesConverter(authorities);
+                return converter;
         }
 
         /**
@@ -85,7 +106,9 @@ public class SecurityConfig {
                                 // Configure OAuth2 resource server with JWT
                                 .oauth2ResourceServer(oauth2 -> oauth2
                                                 .authenticationEntryPoint(unauthorised)
-                                                .jwt(jwt -> jwt.decoder(jwtDecoder())));
+                                                .jwt(jwt -> jwt
+                                                                .decoder(jwtDecoder())
+                                                                .jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
                 return http.build();
         }

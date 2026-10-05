@@ -1,7 +1,5 @@
 package com.neueda.leap.integration;
 
-import com.neueda.leap.kafka.OrderEventPublisher;
-import com.neueda.leap.kafka.TradeEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -10,21 +8,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 /**
  * Abstract base class for all integration tests.
- * Provides containerized PostgreSQL database for testing with Spring Boot
- * application context. The container loads the schema and seed data from db/
- * the same way the db/ image does, since Hibernate only validates the schema.
+ * Provides a containerized PostgreSQL database and Kafka broker for testing
+ * with the Spring Boot application context. The database container loads the
+ * schema and seed data from db/ the same way the db/ image does, since
+ * Hibernate only validates the schema.
  * Enables security testing with a mock user context.
  *
- * The container is shared by every integration test class and started once.
- * Spring caches one application context across the classes, so a container
- * per class would leave later classes pointing at a stopped database.
- * Testcontainers removes the container when the test JVM exits.
+ * The containers are shared by every integration test class and started once.
+ * Spring caches one application context across the classes, so containers
+ * per class would leave later classes pointing at stopped containers.
+ * Testcontainers removes the containers when the test JVM exits.
  *
  * Each test starts from empty tables: the seed data from db/data is cleared
  * before every test so tests only see the rows they create.
@@ -51,8 +51,13 @@ public abstract class AbstractIntegrationTest {
             .withCopyFileToContainer(MountableFile.forHostPath("db/data"),
                     "/docker-entrypoint-initdb.d/data");
 
+    @SuppressWarnings("resource")
+    static final KafkaContainer kafka = new KafkaContainer(
+            DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+
     static {
         postgres.start();
+        kafka.start();
     }
 
     @DynamicPropertySource
@@ -60,16 +65,10 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         // No default secret is committed; tests use @WithMockUser, so any value works
         registry.add("jwt.shared-secret", () -> "integration-test-secret-at-least-32-bytes");
     }
-
-    // There is no Kafka broker in these tests; without mocks each send blocks for 60s and then fails
-    @MockitoBean
-    private OrderEventPublisher orderEventPublisher;
-
-    @MockitoBean
-    private TradeEventPublisher tradeEventPublisher;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -77,6 +76,6 @@ public abstract class AbstractIntegrationTest {
     // CASCADE also clears orders, positions and executions, which reference these tables
     @BeforeEach
     void clearTables() {
-        jdbcTemplate.execute("TRUNCATE accounts, instruments RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
     }
 }
