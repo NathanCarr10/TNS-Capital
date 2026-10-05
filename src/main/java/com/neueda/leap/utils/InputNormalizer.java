@@ -2,9 +2,9 @@ package com.neueda.leap.utils;
 
 import java.util.Locale;
 
-public final class SymbolNormalizer {
+public final class InputNormalizer {
 
-    private SymbolNormalizer() {
+    private InputNormalizer() {
         // Utility class; not instantiable
     }
 

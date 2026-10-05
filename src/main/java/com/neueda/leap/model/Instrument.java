@@ -1,17 +1,34 @@
 package com.neueda.leap.model;
 
+import com.neueda.leap.utils.InputNormalizer;
+import jakarta.persistence.*;
+
 /**
  * Instrument domain entity.
  * 
  * Manages tradable instrument data with validations.
  * Follows Domain-Driven Design principles.
  */
+@Entity
+@Table(name = "instruments", uniqueConstraints = @UniqueConstraint(columnNames = "symbol"))
 public class Instrument {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
+    @Column(unique = true, nullable = false)
     private String symbol;
+    
+    @Column(nullable = false)
     private String name;
+    
+    @Column(nullable = false)
     private String assetClass;
+    
+    @Column(nullable = false)
     private String currency;
+    
+    @Column(nullable = false)
     private boolean tradable;
 
     public Instrument() {
@@ -19,10 +36,10 @@ public class Instrument {
 
     public Instrument(String symbol, String name, String assetClass, String currency, boolean tradable) {
         validateConstructorArgs(symbol, name, assetClass, currency);
-        this.symbol = symbol;
+        this.symbol = InputNormalizer.normalize(symbol);
         this.name = name;
-        this.assetClass = assetClass;
-        this.currency = currency;
+        this.assetClass = InputNormalizer.normalize(assetClass);
+        this.currency = InputNormalizer.normalize(currency);
         this.tradable = tradable;
     }
 
@@ -39,16 +56,16 @@ public class Instrument {
     }
 
     private void validateConstructorArgs(String symbol, String name, String assetClass, String currency) {
-        if (symbol == null || symbol.trim().isEmpty()) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
             throw new IllegalArgumentException("Symbol cannot be null or empty");
         }
         if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Name cannot be null or empty");
         }
-        if (assetClass == null || assetClass.trim().isEmpty()) {
+        if (assetClass == null || InputNormalizer.normalize(assetClass).isEmpty()) {
             throw new IllegalArgumentException("Asset class cannot be null or empty");
         }
-        if (currency == null || currency.trim().isEmpty()) {
+        if (currency == null || InputNormalizer.normalize(currency).isEmpty()) {
             throw new IllegalArgumentException("Currency cannot be null or empty");
         }
     }
@@ -103,5 +120,41 @@ public class Instrument {
                 ", currency='" + currency + '\'' +
                 ", tradable=" + tradable +
                 '}';
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setSymbol(String symbol) {
+        if (symbol == null || InputNormalizer.normalize(symbol).isEmpty()) {
+            throw new IllegalArgumentException("Symbol cannot be null or empty");
+        }
+        this.symbol = InputNormalizer.normalize(symbol);
+    }
+
+    public void setName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Name cannot be null or empty");
+        }
+        this.name = name;
+    }
+
+    public void setAssetClass(String assetClass) {
+        if (assetClass == null || InputNormalizer.normalize(assetClass).isEmpty()) {
+            throw new IllegalArgumentException("Asset class cannot be null or empty");
+        }
+        this.assetClass = InputNormalizer.normalize(assetClass);
+    }
+
+    public void setCurrency(String currency) {
+        if (currency == null || InputNormalizer.normalize(currency).isEmpty()) {
+            throw new IllegalArgumentException("Currency cannot be null or empty");
+        }
+        this.currency = InputNormalizer.normalize(currency);
+    }
+
+    public void setTradable(boolean tradable) {
+        this.tradable = tradable;
     }
 }

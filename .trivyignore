@@ -1,0 +1,4 @@
+# Accepted Trivy findings, one CVE/GHSA ID per line.
+# Every entry needs a reason and an owner, and should be revisited each sprint.
+# Example:
+# CVE-2025-00000  # not reachable: we never call the affected API (owner: <name>, review: <date>)

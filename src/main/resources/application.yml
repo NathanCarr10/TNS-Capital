@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: tns-capital-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tns_capital}
+    username: ${SPRING_DATASOURCE_USERNAME:tns-capital-db-user}
+    password: ${SPRING_DATASOURCE_PASSWORD:n3u3d4!}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 10
+          fetch_size: 50
+    show-sql: false
+    open-in-view: false
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      enable-idempotence: true
+      properties:
+        linger.ms: 10
+        batch.size: 32768
+    consumer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      group-id: tns-capital-orders
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+trading:
+  kafka:
+    topics:
+      orders: orders
+      trades: trade-events
+      market-data: market-data
+
+jwt:
+  shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
+
+mybatis:
+  type-handlers-package: com.neueda.leap.config
+  type-aliases-package: com.neueda.leap.model
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: 3000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  health:
+    db:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    org.springdoc: DEBUG
+    org.springframework.web: DEBUG
+    org.flywaydb: DEBUG
+    org.springframework.kafka: DEBUG

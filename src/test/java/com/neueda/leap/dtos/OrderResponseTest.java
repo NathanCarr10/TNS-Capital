@@ -3,7 +3,8 @@ package com.neueda.leap.dtos;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -14,8 +15,8 @@ class OrderResponseTest {
 
     @Test
     void testOrderResponseCreation() {
-        Long orderId = 1L;
-        LocalDateTime createdOn = LocalDateTime.of(2026, 9, 15, 12, 0, 0);
+        UUID orderId = UUID.randomUUID();
+        Instant createdOn = Instant.parse("2026-09-15T12:00:00Z");
         OrderResponse response = new OrderResponse(
                 orderId, 1L, "AAPL", OrderSide.BUY, 100, 
                 new BigDecimal("150.50"), OrderStatus.NEW, createdOn);
@@ -31,18 +32,18 @@ class OrderResponseTest {
 
     @Test
     void testOrderResponseWithFilledStatus() {
-        LocalDateTime createdOn = LocalDateTime.now();
+        Instant createdOn = Instant.now();
         OrderResponse response = new OrderResponse(
-                2L, 1L, "AAPL", OrderSide.BUY, 100, 
+                UUID.randomUUID(), 1L, "AAPL", OrderSide.BUY, 100, 
                 new BigDecimal("150.50"), OrderStatus.FILLED, createdOn);
         assertEquals(OrderStatus.FILLED, response.status());
     }
 
     @Test
     void testOrderResponseWithSellSide() {
-        LocalDateTime createdOn = LocalDateTime.now();
+        Instant createdOn = Instant.now();
         OrderResponse response = new OrderResponse(
-                3L, 2L, "MSFT", OrderSide.SELL, 50, 
+                UUID.randomUUID(), 2L, "MSFT", OrderSide.SELL, 50, 
                 new BigDecimal("300.00"), OrderStatus.NEW, createdOn);
         assertEquals(OrderSide.SELL, response.side());
     }
