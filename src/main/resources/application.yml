@@ -49,12 +49,6 @@ jwt:
   # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
   shared-secret: ${JWT_SECRET}
 
-mybatis:
-  type-handlers-package: com.neueda.leap.config
-  type-aliases-package: com.neueda.leap.model
-  configuration:
-    map-underscore-to-camel-case: true
-
 server:
   port: 3000
 
