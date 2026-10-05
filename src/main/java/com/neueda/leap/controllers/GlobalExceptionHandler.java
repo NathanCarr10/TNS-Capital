@@ -10,6 +10,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -22,8 +25,8 @@ import java.time.LocalDateTime;
 /**
  * Global exception handler that provides secure, consistent error responses.
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
- *   ACC-409, ORD-404, ORD-503, POS-404, AUTH-403, NOT-404 and SYS-500 extend the catalog
- *   for cases it does not list
+ *   ACC-409, INS-409, ORD-404, ORD-503, POS-404, AUTH-403, NOT-404, REQ-405,
+ *   REQ-415 and SYS-500 extend the catalog for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
  * - Follows security best practices to prevent information leakage
@@ -42,6 +45,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccountNotActive(AccountNotActiveException e) {
         logger.warn("Account not active: {}", e.getMessage());
         return error(HttpStatus.FORBIDDEN, "ACC-403", "The account is not in an active state for this operation");
+    }
+
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException e) {
+        logger.warn("Duplicate account: {}", e.getMessage());
+        return error(HttpStatus.CONFLICT, "ACC-409", "An account with this account number already exists");
     }
 
     @ExceptionHandler(AccountDeletionConflictException.class)
@@ -88,6 +97,10 @@ public class GlobalExceptionHandler {
         if (detail.contains("idempotency_key")) {
             logger.warn("Duplicate order detected at commit: {}", cause.getMessage());
             return error(HttpStatus.CONFLICT, "ORD-409", "An order with this idempotency key has already been submitted");
+        }
+        if (detail.contains("account_number")) {
+            logger.warn("Duplicate account detected at commit: {}", cause.getMessage());
+            return error(HttpStatus.CONFLICT, "ACC-409", "An account with this account number already exists");
         }
         return handleGenericException(e);
     }
@@ -141,6 +154,27 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         logger.warn("Invalid value for {}: {}", e.getName(), e.getValue());
         return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid value for " + e.getName());
+    }
+
+    // A required query parameter is missing
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException e) {
+        logger.warn("Missing request parameter: {}", e.getParameterName());
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Missing required parameter " + e.getParameterName());
+    }
+
+    // For example PUT on an endpoint that only supports GET
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        logger.warn("Method not supported: {}", e.getMessage());
+        return error(HttpStatus.METHOD_NOT_ALLOWED, "REQ-405", "HTTP method " + e.getMethod() + " is not supported here");
+    }
+
+    // For example a form or XML body sent to a JSON endpoint
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        logger.warn("Media type not supported: {}", e.getContentType());
+        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "REQ-415", "Request body must be application/json");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

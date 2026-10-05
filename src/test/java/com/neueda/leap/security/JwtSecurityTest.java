@@ -4,13 +4,10 @@ import com.neueda.leap.controllers.AccountController;
 import com.neueda.leap.controllers.DeadLetterQueueController;
 import com.neueda.leap.enums.DLQStatus;
 import com.neueda.leap.model.Account;
-import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.DeadLetterMessageRepository;
-import com.neueda.leap.repositories.OrderRepository;
-import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.services.AccountService;
 import com.neueda.leap.services.DeadLetterService;
 import com.neueda.leap.services.OrderService;
-import com.neueda.leap.time.Clock;
 import com.neueda.leap.time.ClockTest;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -33,7 +30,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -59,13 +55,7 @@ class JwtSecurityTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private AccountRepository accountRepository;
-    @MockitoBean
-    private PositionRepository positionRepository;
-    @MockitoBean
-    private OrderRepository orderRepository;
-    @MockitoBean
-    private Clock clock;
+    private AccountService accountService;
     @MockitoBean
     private DeadLetterMessageRepository dlqRepository;
     @MockitoBean
@@ -78,7 +68,7 @@ class JwtSecurityTest {
         Account account = new Account("ACC-1001", "John Doe", new BigDecimal("5000.00"),
                 new ClockTest(Instant.parse("2026-10-01T09:00:00Z")));
         account.setId(1L);
-        when(accountRepository.findById(1L)).thenReturn(Optional.of(account));
+        when(accountService.getAccountById(1L)).thenReturn(account);
         when(dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING)).thenReturn(List.of());
     }
 

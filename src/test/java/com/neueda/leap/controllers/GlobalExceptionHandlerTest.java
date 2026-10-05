@@ -37,7 +37,13 @@ class GlobalExceptionHandlerTest {
                 Arguments.of("ORD-409", 409, (Function<String, ResponseEntity<ErrorResponse>>)
                         m -> handler.handleOrderCancellationConflict(new OrderCancellationConflictException(m))),
                 Arguments.of("ORD-404", 404, (Function<String, ResponseEntity<ErrorResponse>>)
-                        m -> handler.handleOrderNotFound(new OrderNotFoundException(m))));
+                        m -> handler.handleOrderNotFound(new OrderNotFoundException(m))),
+                Arguments.of("ACC-409", 409, (Function<String, ResponseEntity<ErrorResponse>>)
+                        m -> handler.handleAccountAlreadyExists(new AccountAlreadyExistsException(m))),
+                Arguments.of("INS-404", 404, (Function<String, ResponseEntity<ErrorResponse>>)
+                        m -> handler.handleInstrumentNotFound(new InstrumentNotTradableException(m))),
+                Arguments.of("ORD-503", 503, (Function<String, ResponseEntity<ErrorResponse>>)
+                        m -> handler.handleOrderSubmission(new OrderSubmissionException(m, new RuntimeException()))));
     }
 
     @ParameterizedTest(name = "{0} -> HTTP {1}")
@@ -83,5 +89,37 @@ class GlobalExceptionHandlerTest {
         assertEquals(500, response.getStatusCode().value());
         assertEquals("SYS-500", response.getBody().errorCode());
         assertFalse(response.getBody().message().contains("secret"));
+    }
+
+    @Test
+    @DisplayName("Account number constraint violations return ACC-409")
+    void testAccountNumberConstraintViolation() {
+        var e = new DataIntegrityViolationException("could not execute statement",
+                new java.sql.SQLException("duplicate key value violates unique constraint \"accounts_account_number_key\""));
+
+        ResponseEntity<ErrorResponse> response = handler.handleDataIntegrityViolation(e);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals("ACC-409", response.getBody().errorCode());
+    }
+
+    @Test
+    @DisplayName("Unsupported HTTP methods return 405 instead of 500")
+    void testMethodNotSupported() {
+        ResponseEntity<ErrorResponse> response = handler.handleMethodNotSupported(
+                new org.springframework.web.HttpRequestMethodNotSupportedException("PUT"));
+
+        assertEquals(405, response.getStatusCode().value());
+        assertEquals("REQ-405", response.getBody().errorCode());
+    }
+
+    @Test
+    @DisplayName("Non-JSON request bodies return 415 instead of 500")
+    void testMediaTypeNotSupported() {
+        ResponseEntity<ErrorResponse> response = handler.handleMediaTypeNotSupported(
+                new org.springframework.web.HttpMediaTypeNotSupportedException("text/plain not supported"));
+
+        assertEquals(415, response.getStatusCode().value());
+        assertEquals("REQ-415", response.getBody().errorCode());
     }
 }

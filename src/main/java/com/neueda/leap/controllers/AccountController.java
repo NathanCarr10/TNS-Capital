@@ -6,16 +6,10 @@ import com.neueda.leap.dtos.UpdateAccountRequest;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.PositionResponse;
 
-import com.neueda.leap.exceptions.AccountDeletionConflictException;
-import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
-import com.neueda.leap.enums.OrderStatus;
-import com.neueda.leap.repositories.AccountRepository;
-import com.neueda.leap.repositories.OrderRepository;
-import com.neueda.leap.repositories.PositionRepository;
-import com.neueda.leap.time.Clock;
+import com.neueda.leap.services.AccountService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,25 +24,15 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/accounts")
 public class AccountController {
-        private final AccountRepository accountRepository;
-        private final PositionRepository positionRepository;
-        private final OrderRepository orderRepository;
-        private final Clock clock;
+        private final AccountService accountService;
 
-        public AccountController(AccountRepository accountRepository,
-                        PositionRepository positionRepository,
-                        OrderRepository orderRepository,
-                        Clock clock) {
-                this.accountRepository = accountRepository;
-                this.positionRepository = positionRepository;
-                this.orderRepository = orderRepository;
-                this.clock = clock;
+        public AccountController(AccountService accountService) {
+                this.accountService = accountService;
         }
 
         @GetMapping
         public ResponseEntity<List<AccountResponse>> getAllAccounts() {
-                List<Account> accounts = accountRepository.findAll();
-                List<AccountResponse> responses = accounts.stream()
+                List<AccountResponse> responses = accountService.getAllAccounts().stream()
                                 .map(this::mapToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);
@@ -56,96 +40,49 @@ public class AccountController {
 
         @PostMapping
         public ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
-                // Creates new account with provided details; Clock ensures consistent timestamp
-                Account account = new Account(request.accountNumber(), request.holderName(), request.cashBalance(),
-                                clock);
-                Account savedAccount = accountRepository.save(account);
+                Account savedAccount = accountService.createAccount(request.accountNumber(), request.holderName(),
+                                request.cashBalance());
                 return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(savedAccount));
         }
 
-        @SuppressWarnings("null")
         @PatchMapping("/{accountId}")
         public ResponseEntity<AccountResponse> updateAccount(@PathVariable @NotNull Long accountId,
                         @Valid @RequestBody UpdateAccountRequest request) {
-                // Retrieves existing account; throws exception if not found to maintain REST
-                // consistency
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-
-                // Updates only provided fields; supports partial updates via PATCH
-                if (request.holderName() != null && !request.holderName().trim().isEmpty()) {
-                        account.setHolderName(request.holderName());
-                }
-
-                Account updatedAccount = accountRepository.save(account);
+                Account updatedAccount = accountService.updateHolderName(accountId, request.holderName());
                 return ResponseEntity.ok(mapToResponse(updatedAccount));
         }
 
-        @SuppressWarnings("null")
+        /**
+         * Closes the account (status CLOSED). The record is kept for the audit
+         * trail; closed accounts can no longer trade.
+         */
         @DeleteMapping("/{accountId}")
         public ResponseEntity<Void> deleteAccount(@PathVariable @NotNull Long accountId) {
-                // Validates account exists before deletion; prevents silently ignoring requests
-                // for non-existent accounts
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-
-                // Checks for active (NEW status) orders; prevents deletion of accounts with
-                // pending orders
-                List<Order> activeOrders = orderRepository.findByAccountId(accountId).stream()
-                                .filter(order -> order.getStatus() == OrderStatus.NEW)
-                                .collect(Collectors.toList());
-
-                if (!activeOrders.isEmpty()) {
-                        throw new AccountDeletionConflictException(
-                                        "Cannot delete account with " + activeOrders.size() + " active order(s)");
-                }
-
-                // Deletes account and returns no content
-                accountRepository.delete(account);
+                accountService.closeAccount(accountId);
                 return ResponseEntity.noContent().build();
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}")
         public ResponseEntity<AccountResponse> getAccount(@PathVariable @NotNull Long accountId) {
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                return ResponseEntity.ok(mapToResponse(account));
+                return ResponseEntity.ok(mapToResponse(accountService.getAccountById(accountId)));
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}/balance")
         public ResponseEntity<BalanceResponse> getAccountBalance(@PathVariable @NotNull Long accountId) {
-                // Validates account exists before returning balance; prevents exposing
-                // non-existent accounts
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                return ResponseEntity.ok(new BalanceResponse(account.getCashBalance()));
+                return ResponseEntity.ok(new BalanceResponse(accountService.getCashBalance(accountId)));
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}/positions")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
-                // Validates account exists; queries positions separately to enable flexible
-                // retrieval
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                List<Position> positions = positionRepository.findByAccountId(accountId);
-                List<PositionResponse> responses = positions.stream()
+                List<PositionResponse> responses = accountService.getPositions(accountId).stream()
                                 .map(this::mapPositionToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}/orders")
         public ResponseEntity<List<OrderResponse>> getAccountOrders(@PathVariable @NotNull Long accountId) {
-                // Validates account exists; queries orders separately to enable filtering and
-                // pagination later
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                List<Order> orders = orderRepository.findByAccountId(accountId);
-                List<OrderResponse> responses = orders.stream()
+                List<OrderResponse> responses = accountService.getOrders(accountId).stream()
                                 .map(this::mapOrderToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);

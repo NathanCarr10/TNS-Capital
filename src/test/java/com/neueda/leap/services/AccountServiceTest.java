@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -19,10 +20,16 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.neueda.leap.enums.AccountStatus;
+import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.exceptions.AccountAlreadyExistsException;
+import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.time.ClockTest;
 
 @DisplayName("AccountService Test Suite")
@@ -32,14 +39,20 @@ class AccountServiceTest {
     @Mock
     private AccountRepository accountRepository;
 
+    @Mock
+    private PositionRepository positionRepository;
+
+    @Mock
+    private OrderRepository orderRepository;
+
     private Account testAccount;
     private ClockTest testClock;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        accountService = new AccountService(accountRepository);
         testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+        accountService = new AccountService(accountRepository, positionRepository, orderRepository, testClock);
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("50000.00"), testClock);
         testAccount.setId(1L);
     }
@@ -319,6 +332,56 @@ class AccountServiceTest {
 
             verify(accountRepository, times(1)).save(testAccount);
             verify(accountRepository, never()).findById(anyLong());
+        }
+    }
+
+    @DisplayName("createAccount / closeAccount Tests")
+    @Nested
+    class CreateAndCloseTests {
+        @DisplayName("Should open a new ACTIVE account")
+        @Test
+        void testCreateAccount() {
+            when(accountRepository.findByAccountNumber("ACC-9")).thenReturn(Optional.empty());
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            Account created = accountService.createAccount("ACC-9", "New Holder", new BigDecimal("100.00"));
+
+            assertEquals("ACC-9", created.getAccountNumber());
+            assertEquals(AccountStatus.ACTIVE, created.getStatus());
+        }
+
+        @DisplayName("Should refuse a duplicate account number")
+        @Test
+        void testCreateAccountDuplicateNumber() {
+            when(accountRepository.findByAccountNumber("ACC-9")).thenReturn(Optional.of(testAccount));
+
+            assertThrows(AccountAlreadyExistsException.class,
+                    () -> accountService.createAccount("ACC-9", "New Holder", new BigDecimal("100.00")));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should close an account by setting CLOSED instead of deleting it")
+        @Test
+        void testCloseAccountKeepsRecord() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderRepository.findByAccountId(1L)).thenReturn(List.of());
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            Account closed = accountService.closeAccount(1L);
+
+            assertEquals(AccountStatus.CLOSED, closed.getStatus());
+            verify(accountRepository, never()).delete(any());
+        }
+
+        @DisplayName("Should refuse to close an account with working orders")
+        @Test
+        void testCloseAccountWithWorkingOrders() {
+            Order working = new Order(1L, "AAPL", OrderSide.BUY, 1, new BigDecimal("10.00"), "K1", testClock);
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderRepository.findByAccountId(1L)).thenReturn(List.of(working));
+
+            assertThrows(AccountDeletionConflictException.class, () -> accountService.closeAccount(1L));
+            assertEquals(AccountStatus.ACTIVE, testAccount.getStatus());
         }
     }
 }
