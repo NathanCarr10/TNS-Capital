@@ -117,35 +117,35 @@ class PositionTest {
         @Test
         @DisplayName("A partial sell reduces quantity and keeps the average cost")
         void partialSellKeepsAverageCost() {
-            Position position = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
+            Position holding = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
 
-            position.apply(-40, new BigDecimal("200.00"));
+            holding.apply(-40, new BigDecimal("200.00"));
 
-            assertEquals(60, position.getQuantity());
-            assertEquals(new BigDecimal("150.00"), position.getAverageCost());
+            assertEquals(60, holding.getQuantity());
+            assertEquals(new BigDecimal("150.00"), holding.getAverageCost());
         }
 
         @Test
-        @DisplayName("Selling the whole position leaves it flat instead of dividing by zero")
+        @DisplayName("Selling the whole holding leaves it flat instead of dividing by zero")
         void fullSellLeavesFlatPosition() {
-            Position position = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
+            Position holding = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
 
-            assertDoesNotThrow(() -> position.apply(-100, new BigDecimal("200.00")));
+            assertDoesNotThrow(() -> holding.apply(-100, new BigDecimal("200.00")));
 
-            assertEquals(0, position.getQuantity());
-            assertEquals(0, position.getAverageCost().compareTo(BigDecimal.ZERO));
+            assertEquals(0, holding.getQuantity());
+            assertEquals(0, holding.getAverageCost().compareTo(BigDecimal.ZERO));
         }
 
         @Test
-        @DisplayName("Buying back into a flat position starts a new cost basis")
+        @DisplayName("Buying back into a flat holding starts a new cost basis")
         void buyAfterFlatStartsNewCostBasis() {
-            Position position = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
-            position.apply(-100, new BigDecimal("200.00"));
+            Position holding = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
+            holding.apply(-100, new BigDecimal("200.00"));
 
-            position.apply(10, new BigDecimal("180.00"));
+            holding.apply(10, new BigDecimal("180.00"));
 
-            assertEquals(10, position.getQuantity());
-            assertEquals(new BigDecimal("180.00"), position.getAverageCost());
+            assertEquals(10, holding.getQuantity());
+            assertEquals(new BigDecimal("180.00"), holding.getAverageCost());
         }
     }
 }

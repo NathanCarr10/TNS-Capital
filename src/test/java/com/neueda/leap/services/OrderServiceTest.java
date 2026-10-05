@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -92,7 +92,7 @@ class OrderServiceTest {
         testAccount.setId(1L);
 
         // Create strategy map
-        Map<OrderSide, OrderExecutionStrategy> strategies = new HashMap<>();
+        Map<OrderSide, OrderExecutionStrategy> strategies = new EnumMap<>(OrderSide.class);
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 
@@ -264,8 +264,9 @@ class OrderServiceTest {
         void testProcessUnknownAccountRethrows() {
             doThrow(new AccountNotFoundException("Account not found: 1")).when(validator).validate(any());
 
-            assertThrows(AccountNotFoundException.class,
-                    () -> orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k4")));
+            OrderEvent event = buyEvent(UUID.randomUUID(), "k4");
+
+            assertThrows(AccountNotFoundException.class, () -> orderService.processOrderEvent(event));
 
             verify(orderRepository, never()).save(any());
             verify(tradeEventPublisher, never()).publish(any(), any(), any());
@@ -276,8 +277,9 @@ class OrderServiceTest {
         void testProcessUnknownInstrumentRethrows() {
             doThrow(new InstrumentNotFoundException("Instrument not found: AAPL")).when(validator).validate(any());
 
-            assertThrows(InstrumentNotFoundException.class,
-                    () -> orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k5")));
+            OrderEvent event = buyEvent(UUID.randomUUID(), "k5");
+
+            assertThrows(InstrumentNotFoundException.class, () -> orderService.processOrderEvent(event));
 
             verify(orderRepository, never()).save(any());
         }
@@ -289,8 +291,9 @@ class OrderServiceTest {
             doThrow(new IllegalStateException("Position update failed"))
                     .when(buyStrategy).execute(any(), any(), any());
 
-            assertThrows(IllegalStateException.class,
-                    () -> orderService.processOrderEvent(buyEvent(UUID.randomUUID(), "k6")));
+            OrderEvent event = buyEvent(UUID.randomUUID(), "k6");
+
+            assertThrows(IllegalStateException.class, () -> orderService.processOrderEvent(event));
 
             verify(orderRepository, never()).save(any());
         }
@@ -338,11 +341,12 @@ class OrderServiceTest {
         void testProcessStrategyNotFound() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    orderHistoryRepository, positionRepository, validator, new HashMap<>(), testClock,
+                    orderHistoryRepository, positionRepository, validator, new EnumMap<>(OrderSide.class), testClock,
                     orderEventPublisher, tradeEventPublisher);
 
-            assertThrows(IllegalStateException.class,
-                    () -> serviceWithoutStrategies.processOrderEvent(buyEvent(UUID.randomUUID(), "k9")));
+            OrderEvent event = buyEvent(UUID.randomUUID(), "k9");
+
+            assertThrows(IllegalStateException.class, () -> serviceWithoutStrategies.processOrderEvent(event));
         }
     }
 

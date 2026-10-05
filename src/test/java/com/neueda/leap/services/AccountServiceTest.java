@@ -355,8 +355,10 @@ class AccountServiceTest {
         void testCreateAccountDuplicateNumber() {
             when(accountRepository.findByAccountNumber("ACC-9")).thenReturn(Optional.of(testAccount));
 
+            BigDecimal openingBalance = new BigDecimal("100.00");
+
             assertThrows(AccountAlreadyExistsException.class,
-                    () -> accountService.createAccount("ACC-9", "New Holder", new BigDecimal("100.00")));
+                    () -> accountService.createAccount("ACC-9", "New Holder", openingBalance));
             verify(accountRepository, never()).save(any());
         }
 

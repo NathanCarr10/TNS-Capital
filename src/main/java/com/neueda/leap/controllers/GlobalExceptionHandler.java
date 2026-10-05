@@ -35,6 +35,10 @@ import java.time.LocalDateTime;
 public class GlobalExceptionHandler {
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private static final String ACCOUNT_CONFLICT = "ACC-409";
+    private static final String ORDER_CONFLICT = "ORD-409";
+    private static final String INVALID_INPUT = "VAL-422";
+
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundException e) {
         logger.warn("Account not found: {}", e.getMessage());
@@ -50,12 +54,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException e) {
         logger.warn("Duplicate account: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, "ACC-409", "An account with this account number already exists");
+        return error(HttpStatus.CONFLICT, ACCOUNT_CONFLICT, "An account with this account number already exists");
     }
 
     @ExceptionHandler(AccountDeletionConflictException.class)
     public ResponseEntity<ErrorResponse> handleAccountDeletionConflict(AccountDeletionConflictException e) {
-        return error(HttpStatus.CONFLICT, "ACC-409", e.getMessage());
+        return error(HttpStatus.CONFLICT, ACCOUNT_CONFLICT, e.getMessage());
     }
 
     @ExceptionHandler(DuplicateInstrumentException.class)
@@ -79,13 +83,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InsufficientHoldingsException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientHoldings(InsufficientHoldingsException e) {
         logger.warn("Insufficient holdings: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, "ORD-409", "The account does not have sufficient holdings for this operation");
+        return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "The account does not have sufficient holdings for this operation");
     }
 
     @ExceptionHandler(DuplicateOrderException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateOrder(DuplicateOrderException e) {
         logger.warn("Duplicate order detected: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, "ORD-409", "An order with this idempotency key has already been submitted");
+        return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "An order with this idempotency key has already been submitted");
     }
 
     // Two requests with the same idempotency key can both pass the duplicate check;
@@ -96,11 +100,11 @@ public class GlobalExceptionHandler {
         String detail = String.valueOf(cause.getMessage()).toLowerCase();
         if (detail.contains("idempotency_key")) {
             logger.warn("Duplicate order detected at commit: {}", cause.getMessage());
-            return error(HttpStatus.CONFLICT, "ORD-409", "An order with this idempotency key has already been submitted");
+            return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "An order with this idempotency key has already been submitted");
         }
         if (detail.contains("account_number")) {
             logger.warn("Duplicate account detected at commit: {}", cause.getMessage());
-            return error(HttpStatus.CONFLICT, "ACC-409", "An account with this account number already exists");
+            return error(HttpStatus.CONFLICT, ACCOUNT_CONFLICT, "An account with this account number already exists");
         }
         return handleGenericException(e);
     }
@@ -108,7 +112,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OrderCancellationConflictException.class)
     public ResponseEntity<ErrorResponse> handleOrderCancellationConflict(OrderCancellationConflictException e) {
         logger.warn("Order cancellation conflict: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, "ORD-409", "Only NEW orders can be cancelled");
+        return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "Only NEW orders can be cancelled");
     }
 
     // The order was valid but Kafka did not acknowledge it, so it was not accepted
@@ -139,28 +143,28 @@ public class GlobalExceptionHandler {
                 .orElse("Validation failed");
 
         logger.warn("Validation error: {}", message);
-        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", message);
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, message);
     }
 
     // Malformed JSON or an unknown enum value such as "side": "HOLD"
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
         logger.warn("Unreadable request body: {}", e.getMessage());
-        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Request body is missing or malformed");
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, "Request body is missing or malformed");
     }
 
     // A path variable of the wrong type, such as an order ID that is not a UUID
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         logger.warn("Invalid value for {}: {}", e.getName(), e.getValue());
-        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Invalid value for " + e.getName());
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, "Invalid value for " + e.getName());
     }
 
     // A required query parameter is missing
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException e) {
         logger.warn("Missing request parameter: {}", e.getParameterName());
-        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "Missing required parameter " + e.getParameterName());
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, "Missing required parameter " + e.getParameterName());
     }
 
     // For example PUT on an endpoint that only supports GET
@@ -180,7 +184,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         logger.warn("Invalid argument: {}", e.getMessage());
-        return error(HttpStatus.UNPROCESSABLE_ENTITY, "VAL-422", "The request contains invalid arguments");
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, "The request contains invalid arguments");
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
