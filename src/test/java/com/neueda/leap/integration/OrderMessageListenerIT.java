@@ -277,4 +277,21 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
             throw new RuntimeException("Failed to publish order event for failure detail verification", e);
         }
     }
+
+    @Test
+    @DisplayName("Should keep a message that is not an order envelope in the DLQ, without retrying")
+    void testUnreadableMessageGoesToDLQ() {
+        kafkaTemplate.send("orders", "unreadable", "this is not json");
+
+        await()
+                .atMost(10, TimeUnit.SECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> {
+                    List<DeadLetterMessage> dlqMessages = dlqRepository
+                            .findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
+                    assertThat(dlqMessages).hasSize(1);
+                    assertThat(dlqMessages.get(0).getOriginalMessage()).isEqualTo("this is not json");
+                    assertThat(dlqMessages.get(0).getOriginalOrderId()).isNull();
+                });
+    }
 }

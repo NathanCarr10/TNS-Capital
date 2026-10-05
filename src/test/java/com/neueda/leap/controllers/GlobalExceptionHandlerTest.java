@@ -122,4 +122,14 @@ class GlobalExceptionHandlerTest {
         assertEquals(415, response.getStatusCode().value());
         assertEquals("REQ-415", response.getBody().errorCode());
     }
+
+    @Test
+    @DisplayName("A missing query parameter returns VAL-422")
+    void testMissingParameter() {
+        ResponseEntity<ErrorResponse> response = handler.handleMissingParameter(
+                new org.springframework.web.bind.MissingServletRequestParameterException("status", "String"));
+
+        assertEquals(422, response.getStatusCode().value());
+        assertEquals("VAL-422", response.getBody().errorCode());
+    }
 }
