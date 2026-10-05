@@ -183,8 +183,9 @@
                         </goals>
                     </execution>
                     <execution>
+                        <!-- After the integration tests, so the report covers both suites -->
                         <id>report</id>
-                        <phase>test</phase>
+                        <phase>post-integration-test</phase>
                         <goals>
                             <goal>report</goal>
                         </goals>
