@@ -84,7 +84,14 @@ public class Position {
                             this.quantity, quantity, newQuantity));
         }
 
-        if (this.quantity == 0) {
+        if (quantity < 0) {
+            // Selling realises part of the holding at the existing cost basis; only
+            // buys change the average cost
+            this.quantity = newQuantity;
+            if (newQuantity == 0) {
+                this.averageCost = BigDecimal.ZERO;
+            }
+        } else if (this.quantity == 0) {
             this.averageCost = new BigDecimal(price.toPlainString());
             this.quantity = quantity;
         } else {
