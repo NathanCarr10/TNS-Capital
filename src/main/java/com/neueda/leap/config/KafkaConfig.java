@@ -26,6 +26,7 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -205,9 +206,12 @@ public class KafkaConfig {
      */
     @Bean
     public CommonErrorHandler kafkaErrorHandler() {
-        // Recovery callback: invoked immediately on exception (no retries)
+        // Recovery callback: invoked immediately on exception (no retries).
+        // The BackOff must be explicit: DefaultErrorHandler defaults to
+        // FixedBackOff(0, 9), i.e. 10 delivery attempts per failed record.
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception));
+                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception),
+                new FixedBackOff(0L, 0L));
 
         log.info(
                 "Kafka error handler configured: NO RETRIES - all exceptions routed immediately to DLQ");

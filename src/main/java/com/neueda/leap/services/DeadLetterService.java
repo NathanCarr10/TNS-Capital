@@ -128,7 +128,7 @@ public class DeadLetterService {
 
                 // Re-process the order event
                 OrderEvent event = envelope.getPayload();
-                orderService.processOrderEvent(event);
+                orderService.replayOrderEvent(event);
 
                 // Mark DLQ message as resolved
                 dlqMessage.setStatus(DLQStatus.RESOLVED);

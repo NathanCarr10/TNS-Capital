@@ -39,6 +39,7 @@ import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
+import org.springframework.transaction.PlatformTransactionManager;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
 
@@ -76,6 +77,9 @@ class OrderServiceTest {
     @Mock
     private TradeEventPublisher tradeEventPublisher;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private ClockTest testClock;
     private Account testAccount;
     private PlaceOrderRequest placeOrderRequest;
@@ -95,7 +99,8 @@ class OrderServiceTest {
 
         orderService = new OrderService(accountRepository, instrumentRepository, orderRepository,
                 orderHistoryRepository, positionRepository, validator, strategies, testClock, orderEventPublisher,
-                tradeEventPublisher);
+                tradeEventPublisher,
+                transactionManager);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -231,7 +236,7 @@ class OrderServiceTest {
             OrderService serviceWithoutStrategies = new OrderService(accountRepository, instrumentRepository,
                     orderRepository,
                     orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock,
-                    orderEventPublisher, tradeEventPublisher);
+                    orderEventPublisher, tradeEventPublisher, transactionManager);
 
             assertThrows(IllegalStateException.class,
                     () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),
