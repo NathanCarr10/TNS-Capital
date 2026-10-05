@@ -14,7 +14,6 @@ import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
-import com.neueda.leap.exceptions.NonRetryableOrderException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.repositories.AccountRepository;
@@ -26,7 +25,6 @@ import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
 import org.springframework.stereotype.Service;
-import org.springframework.dao.DataIntegrityViolationException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -135,30 +133,30 @@ public class OrderService {
      * Validates and executes the order, creating a new Order entity if it doesn't
      * already exist (based on order ID).
      * 
+     * CRITICAL GUARANTEE: The order is ALWAYS persisted to the database:
+     * - Created as NEW immediately after validation
+     * - Updated to FILLED if strategy execution succeeds
+     * - Updated to REJECTED if strategy execution fails or validation fails
+     * 
+     * This ensures orders are never lost, even if exceptions occur.
+     * 
      * DEFENSIVE VALIDATION: Even though REST layer validates Account/Instrument
      * existence, this method also validates defensively to catch race conditions
      * (e.g., account deleted between REST validation and async processing).
      * 
-     * EXCEPTION DIFFERENTIATION:
-     * - Not-found exceptions (Account/Instrument missing): Wrapped in
-     * NonRetryableOrderException. Error handler will skip retries and route to DLQ.
-     * - Business logic exceptions (Insufficient funds/holdings, Account not
-     * active):
-     * Re-thrown directly. Error handler will retry 3 times before DLQ.
+     * NO RETRY LOGIC: All exceptions are terminal - the order is persisted with
+     * REJECTED status and the message is routed to DLQ. No retries are attempted.
      * 
      * @param event the order event to process
      * @return the processed order
-     * @throws NonRetryableOrderException if account/instrument not found
-     *                                    (non-retryable)
-     * @throws InsufficientFundsException if order fails business logic validation
-     *                                    (retryable)
-     * @throws Exception                  for other unexpected errors
+     * @throws Exception for any errors (no retries will be attempted)
      */
     @Transactional
     public Order processOrderEvent(OrderEvent event) {
         Objects.requireNonNull(event, "Order event cannot be null");
 
         String symbol = InputNormalizer.normalize(event.symbol());
+        Order order = null;
 
         try {
             // Check for existing order by ID (idempotency check)
@@ -192,8 +190,8 @@ public class OrderService {
             instrumentRepository.findBySymbol(symbol)
                     .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
-            // Create order entity
-            Order order = new Order(
+            // Create order entity as NEW (constructor automatically sets status = NEW)
+            order = new Order(
                     event.accountId(),
                     symbol,
                     event.side(),
@@ -202,6 +200,12 @@ public class OrderService {
                     event.orderId().toString(),
                     clock);
             order.setId(event.orderId());
+
+            // CRITICAL: Save order as NEW in separate transaction
+            // This ensures it's persisted IMMEDIATELY and survives even if strategy
+            // execution fails
+            saveOrderInSeparateTransaction(order);
+            log.info("Saved order as NEW: orderId={}, accountId={}", event.orderId(), event.accountId());
 
             // Retrieve and execute strategy
             OrderExecutionStrategy strategy = strategies.get(event.side());
@@ -213,8 +217,9 @@ public class OrderService {
             OrderStatus previousStatus = order.getStatus();
             order.setStatus(OrderStatus.FILLED);
 
-            // Save the successfully processed order
+            // Update order to FILLED status
             orderRepository.save(order);
+            log.info("Updated order status to FILLED: orderId={}", event.orderId());
 
             // Publish trade event if order was filled
             if (order.getStatus() == OrderStatus.FILLED) {
@@ -227,69 +232,38 @@ public class OrderService {
             log.warn("Order rejected due to insufficient resources: orderId={}, error={}", event.orderId(),
                     ex.getMessage());
 
-            // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol, ex.getMessage(), false); // false = retryable (business logic error)
+            // Update order status to REJECTED (order already exists as NEW)
+            if (order != null) {
+                order.setStatus(OrderStatus.REJECTED);
+                orderRepository.save(order);
+                log.info("Updated order status to REJECTED: orderId={}", event.orderId());
+            } else {
+                // Order creation failed - create and save REJECTED order
+                Order rejectedOrder = new Order(
+                        event.accountId(),
+                        symbol,
+                        event.side(),
+                        event.quantity(),
+                        event.price(),
+                        event.orderId().toString(),
+                        clock);
+                rejectedOrder.setId(event.orderId());
+                rejectedOrder.setStatus(OrderStatus.REJECTED);
+                orderRepository.save(rejectedOrder);
+                log.info("Saved rejected order: orderId={}, reason={}", event.orderId(), ex.getMessage());
+            }
 
-            // Re-throw to allow Kafka error handler to retry
+            // Rethrow exception to trigger error handler (which will route to DLQ without
+            // retries)
             throw ex;
 
         } catch (AccountNotFoundException | InstrumentNotFoundException ex) {
             log.warn("Order rejected due to missing resource (non-retryable): orderId={}, error={}, type={}",
                     event.orderId(), ex.getMessage(), ex.getClass().getSimpleName());
 
-            // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol, ex.getMessage(), true); // true = non-retryable (not-found error)
-
-            // Wrap in NonRetryableOrderException to signal error handler to skip retries
-            throw new NonRetryableOrderException(
-                    "Order rejected due to missing resource: " + ex.getMessage(),
-                    ex);
-
-        } catch (Exception ex) {
-            log.error("Unexpected error processing order event: orderId={}, error={}", event.orderId(), ex.getMessage(),
-                    ex);
-
-            // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol, ex.getMessage(), true); // true = non-retryable (unexpected error)
-
-            // Wrap in NonRetryableOrderException for non-business-logic errors
-            throw new NonRetryableOrderException(
-                    "Unexpected error during order event processing: " + ex.getMessage(),
-                    ex);
-        }
-    }
-
-    /**
-     * Saves a REJECTED order in a separate transaction and publishes a trade
-     * lifecycle event.
-     * 
-     * Uses Propagation.REQUIRES_NEW to ensure the order is persisted even if
-     * the parent transaction rolls back due to an exception.
-     * 
-     * DEFENSIVE HANDLING: If order already exists (duplicate idempotencyKey),
-     * updates
-     * the status to REJECTED instead of failing.
-     * 
-     * TRADE EVENT PUBLISHING: After successful save, publishes a trade event to
-     * notify downstream systems (Settlement, Risk Dashboard) of the rejection.
-     * 
-     * @param event           the order event
-     * @param symbol          the normalized order symbol
-     * @param rejectionReason the reason the order was rejected (exception message)
-     * @param isNonRetryable  true if this is a non-retryable error (not-found),
-     *                        false if retryable
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    private void saveRejectedOrder(OrderEvent event, String symbol, String rejectionReason, boolean isNonRetryable) {
-        log.info("Attempting to save REJECTED order: orderId={}, accountId={}, reason={}, isNonRetryable={}",
-                event.orderId(), event.accountId(), rejectionReason, isNonRetryable);
-
-        Order savedOrder = null;
-        boolean saveSucceeded = false;
-
-        try {
-            // Create new order with REJECTED status
-            Order order = new Order(
+            // Create and save REJECTED order (couldn't create earlier due to validation
+            // failure)
+            Order rejectedOrder = new Order(
                     event.accountId(),
                     symbol,
                     event.side(),
@@ -297,55 +271,58 @@ public class OrderService {
                     event.price(),
                     event.orderId().toString(),
                     clock);
-            order.setId(event.orderId());
-            order.setStatus(OrderStatus.REJECTED);
+            rejectedOrder.setId(event.orderId());
+            rejectedOrder.setStatus(OrderStatus.REJECTED);
+            saveOrderInSeparateTransaction(rejectedOrder);
+            log.info("Saved rejected order due to missing resource: orderId={}, reason={}", event.orderId(),
+                    ex.getMessage());
 
-            log.debug("Created Order entity: orderId={}, status={}", order.getId(), order.getStatus());
+            // Rethrow exception to trigger error handler (which will route to DLQ without
+            // retries)
+            throw ex;
 
-            // Attempt to save the order
-            savedOrder = orderRepository.save(order);
-            saveSucceeded = true;
-            log.info("Successfully inserted REJECTED order into database: orderId={}", event.orderId());
+        } catch (Exception ex) {
+            log.error("Unexpected error processing order event: orderId={}, error={}", event.orderId(), ex.getMessage(),
+                    ex);
 
-        } catch (DataIntegrityViolationException e) {
-            // Order already exists (duplicate idempotencyKey): update status instead
-            log.warn(
-                    "Order already exists (duplicate key), attempting to update status to REJECTED: orderId={}, error={}",
-                    event.orderId(), e.getMessage());
-
-            try {
-                savedOrder = orderRepository.findById(event.orderId()).orElse(null);
-                if (savedOrder != null) {
-                    savedOrder.setStatus(OrderStatus.REJECTED);
-                    savedOrder = orderRepository.save(savedOrder);
-                    saveSucceeded = true;
-                    log.info("Successfully updated existing order status to REJECTED: orderId={}", event.orderId());
-                } else {
-                    log.error("Order not found after duplicate key error: orderId={}", event.orderId());
-                }
-            } catch (Exception updateEx) {
-                log.error("Failed to update order status after duplicate key error: orderId={}, error={}",
-                        event.orderId(), updateEx.getMessage(), updateEx);
+            // Update or create rejected order
+            if (order != null) {
+                order.setStatus(OrderStatus.REJECTED);
+                orderRepository.save(order);
+                log.info("Updated order status to REJECTED due to unexpected error: orderId={}", event.orderId());
+            } else {
+                Order rejectedOrder = new Order(
+                        event.accountId(),
+                        symbol,
+                        event.side(),
+                        event.quantity(),
+                        event.price(),
+                        event.orderId().toString(),
+                        clock);
+                rejectedOrder.setId(event.orderId());
+                rejectedOrder.setStatus(OrderStatus.REJECTED);
+                saveOrderInSeparateTransaction(rejectedOrder);
+                log.info("Saved rejected order due to unexpected error: orderId={}, reason={}", event.orderId(),
+                        ex.getMessage());
             }
-        } catch (Exception saveEx) {
-            log.error("Failed to save rejected order (unexpected error): orderId={}, accountId={}, error={}",
-                    event.orderId(), event.accountId(), saveEx.getMessage(), saveEx);
-            throw new IllegalStateException("Failed to save rejected order: " + saveEx.getMessage(), saveEx);
-        }
 
-        // Only publish trade event if save succeeded
-        if (saveSucceeded && savedOrder != null) {
-            try {
-                tradeEventPublisher.publish(savedOrder, OrderStatus.NEW, rejectionReason);
-                log.info("Published REJECTED trade event: orderId={}, reason={}", event.orderId(), rejectionReason);
-            } catch (Exception publishEx) {
-                log.error("Failed to publish trade event for rejected order: orderId={}, error={}",
-                        event.orderId(), publishEx.getMessage(), publishEx);
-                // Don't rethrow - order is already saved, event publishing failure is not fatal
-            }
-        } else {
-            log.error("Skipped trade event publishing - order save did not succeed: orderId={}", event.orderId());
+            // Rethrow exception to trigger error handler (which will route to DLQ without
+            // retries)
+            throw ex;
         }
+    }
+
+    /**
+     * Saves an order in a separate transaction (REQUIRES_NEW).
+     * 
+     * This ensures the order is persisted immediately and survives even if
+     * the parent transaction rolls back due to an exception.
+     * 
+     * @param order the order to save
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    private void saveOrderInSeparateTransaction(Order order) {
+        orderRepository.save(order);
     }
 
     public Optional<Order> findByIdempotencyKey(String key) {

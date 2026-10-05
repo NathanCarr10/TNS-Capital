@@ -26,7 +26,6 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -190,41 +189,28 @@ public class KafkaConfig {
     }
 
     /**
-     * Error handler with exponential backoff retry and DLQ routing.
+     * Error handler with NO RETRY logic - immediate DLQ routing.
      * 
-     * SMART RETRY LOGIC:
-     * - Retryable exceptions (business logic failures): Use exponential backoff
-     * (1s, 2s, 4s)
-     * - Max failures: 3 (after 3 retries, message is routed to DLQ via recovery
-     * callback)
+     * All exceptions (retryable and non-retryable) are routed directly to DLQ
+     * without retry attempts.
      * 
-     * NOTE: NonRetryableOrderException is caught and handled in
-     * OrderMessageListener
-     * directly (see onOrderEvent), so this error handler only processes retryable
-     * exceptions.
-     * 
-     * When max failures are exhausted, the recovery callback is invoked which:
+     * When an exception occurs, the recovery callback is invoked which:
      * 1. Deserializes the message envelope from the ConsumerRecord
      * 2. Extracts the OrderEvent and failure details
      * 3. Calls DeadLetterService.captureFailedMessage() to persist in dlq_messages
      * table
      * 4. Message is marked with status=PENDING for administrative review and replay
      * 
-     * @return CommonErrorHandler with exponential backoff strategy and DLQ recovery
+     * @return CommonErrorHandler with NO retry strategy and DLQ recovery
      */
     @Bean
     public CommonErrorHandler kafkaErrorHandler() {
-        ExponentialBackOff backOff = new ExponentialBackOff(1000, 2.0);
-        backOff.setMaxInterval(10000); // Max 10 seconds between retries
-        backOff.setMaxElapsedTime(30000); // Give up after ~30 seconds of retrying
-
-        // Recovery callback: invoked when backoff strategy exhausted
+        // Recovery callback: invoked immediately on exception (no retries)
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception),
-                backOff);
+                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception));
 
         log.info(
-                "Kafka error handler configured: exponential backoff (1s initial, 2x multiplier, 10s max interval, 30s max elapsed), DLQ recovery enabled");
+                "Kafka error handler configured: NO RETRIES - all exceptions routed immediately to DLQ");
         return errorHandler;
     }
 
