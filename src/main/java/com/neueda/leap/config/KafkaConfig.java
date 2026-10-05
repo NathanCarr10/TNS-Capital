@@ -253,29 +253,39 @@ public class KafkaConfig {
             // This ensures status is REJECTED even if saveRejectedOrder() failed earlier
             orderRepository.findById(event.orderId())
                     .ifPresent(order -> {
-                        OrderStatus previousStatus = order.getStatus();
-                        order.setStatus(OrderStatus.REJECTED);
-                        orderRepository.save(order);
-                        log.info(
-                                "Updated order status to REJECTED in recovery handler: orderId={}, reason=EXHAUSTED_RETRIES",
-                                event.orderId());
+                        // Only update status and publish event if order is not already REJECTED
+                        // This prevents duplicate trade events when processOrderEvent() already
+                        // published the REJECTED event
+                        if (order.getStatus() != OrderStatus.REJECTED) {
+                            OrderStatus previousStatus = order.getStatus();
+                            order.setStatus(OrderStatus.REJECTED);
+                            orderRepository.save(order);
+                            log.info(
+                                    "Updated order status to REJECTED in recovery handler (was not REJECTED): orderId={}, previousStatus={}",
+                                    event.orderId(), previousStatus);
 
-                        // Publish trade event to notify downstream systems
-                        tradeEventPublisher.publish(order, previousStatus, "EXHAUSTED_RETRIES");
-                        log.info("Published REJECTED trade event in recovery handler: orderId={}, previousStatus={}",
-                                event.orderId(), previousStatus);
+                            // Publish trade event only if status changed to REJECTED here
+                            tradeEventPublisher.publish(order, previousStatus, "EXHAUSTED_RETRIES");
+                            log.info("Published REJECTED trade event in recovery handler: orderId={}, previousStatus={}",
+                                    event.orderId(), previousStatus);
+                        } else {
+                            log.debug(
+                                    "Order already REJECTED (trade event was published during processing): orderId={}",
+                                    event.orderId());
+                        }
                     });
 
             // Capture the failed message to DLQ database table
-            // Pass the retryability flag so admin UI knows which messages can be safely
-            // replayed
+            // Pass the retryability flag so admin UI knows which messages can be safely replayed
             deadLetterService.captureFailedMessage(envelope, exception, 0, isNonRetryable);
+            log.info("Captured failed message to DLQ: orderId={}, isNonRetryable={}",
+                    event.orderId(), isNonRetryable);
 
             // Also publish to orders.dlq Kafka topic for audit trail
             kafkaTemplate.send("orders.dlq", event.accountId().toString(),
                     (String) consumerRecord.value());
-            log.info("Published failed message to orders.dlq topic: orderId={}, isNonRetryable={}",
-                    event.orderId(), isNonRetryable);
+            log.debug("Published failed message to orders.dlq topic: orderId={}",
+                    event.orderId());
 
         } catch (JsonProcessingException jsonException) {
             // Message deserialization failed - log the raw message for manual investigation
