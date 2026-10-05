@@ -22,8 +22,9 @@ import java.time.LocalDateTime;
  * Security configuration for the API with JWT validation and security headers.
  *
  * Security Best Practices Implemented:
- * - JWT authentication with HMAC-SHA256; any valid token can call every API
- *   endpoint, roles in the token are not checked
+ * - JWT authentication with HMAC-SHA256; any valid token can call the trading
+ *   API endpoints. The dead-letter queue admin endpoints also need the ADMIN
+ *   role (method security on DeadLetterQueueController)
  * - Missing or invalid tokens get an AUTH-401 error body
  * - Security headers to prevent common attacks
  * - CSRF disabled for stateless API (appropriate for REST)
