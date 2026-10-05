@@ -187,6 +187,33 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should execute one order when the same key is sent twice before the first is stored")
+        void testPlaceOrderDuplicateKeyRace() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"), "IDEM-RACE");
+
+                String first = placeOrder(request);
+                var secondResponse = mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andReturn().getResponse();
+
+                // 202 with the same order ID if the first order is not stored yet,
+                // otherwise ORD-409; either way only one order exists
+                if (secondResponse.getStatus() == 202) {
+                        String second = objectMapper.readTree(secondResponse.getContentAsString()).get("orderId").asText();
+                        assertThat(second).isEqualTo(first);
+                } else {
+                        assertThat(secondResponse.getStatus()).isEqualTo(409);
+                }
+                await().pollInSameThread().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
+                                .perform(get("/api/v1/orders/{orderId}", first))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status", equalTo("FILLED"))));
+                assertThat(orderRepository.findAll()).hasSize(1);
+        }
+
+        @Test
         @DisplayName("Should store an unaffordable order as REJECTED with the reason")
         void testPlaceOrderInsufficientFundsRejected() throws Exception {
                 PlaceOrderRequest request = new PlaceOrderRequest(

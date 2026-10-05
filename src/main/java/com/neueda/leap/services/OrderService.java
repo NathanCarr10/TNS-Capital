@@ -25,6 +25,7 @@ import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
 import org.springframework.stereotype.Service;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -96,7 +97,8 @@ public class OrderService {
         Objects.requireNonNull(request);
         validator.validate(request);
 
-        UUID orderId = UUID.randomUUID();
+        String idempotencyKey = InputNormalizer.normalize(request.idempotencyKey());
+        UUID orderId = orderIdFor(request.accountId(), idempotencyKey);
         OrderEvent event = new OrderEvent(
                 orderId,
                 request.accountId(),
@@ -105,10 +107,20 @@ public class OrderService {
                 request.quantity(),
                 request.price(),
                 clock.now(),
-                InputNormalizer.normalize(request.idempotencyKey()));
+                idempotencyKey);
 
         orderEventPublisher.publishEvent(event, request.accountId());
         return orderId;
+    }
+
+    /**
+     * The order ID is derived from the account and idempotency key, so a request
+     * repeated before the first one has been stored (when the duplicate check
+     * above cannot see it yet) gets the same order ID. The processor then treats
+     * the second event as a redelivery and the client polls the one real order.
+     */
+    static UUID orderIdFor(Long accountId, String idempotencyKey) {
+        return UUID.nameUUIDFromBytes((accountId + ":" + idempotencyKey).getBytes(StandardCharsets.UTF_8));
     }
 
     /**

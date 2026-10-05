@@ -129,6 +129,21 @@ class OrderServiceTest {
             verify(orderRepository, never()).save(any());
         }
 
+        @DisplayName("Should give a repeated request the same order ID, so it cannot become a second order")
+        @Test
+        void testSubmitOrderSameKeySameOrderId() {
+            PlaceOrderRequest request = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100,
+                    new BigDecimal("150.00"), "client-key-1");
+            PlaceOrderRequest otherAccount = new PlaceOrderRequest(2L, "AAPL", OrderSide.BUY, 100,
+                    new BigDecimal("150.00"), "client-key-1");
+
+            UUID first = orderService.submitOrder(request);
+            UUID second = orderService.submitOrder(request);
+
+            assertEquals(first, second);
+            assertNotEquals(first, orderService.submitOrder(otherAccount));
+        }
+
         @DisplayName("Should not publish when validation fails")
         @Test
         void testSubmitOrderValidationFailureDoesNotPublish() {
