@@ -33,6 +33,7 @@ import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
@@ -47,6 +48,9 @@ class OrderServiceTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Mock
+    private InstrumentRepository instrumentRepository;
 
     @Mock
     private OrderRepository orderRepository;
@@ -89,8 +93,9 @@ class OrderServiceTest {
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 
-        orderService = new OrderService(accountRepository, orderRepository, orderHistoryRepository,
-                positionRepository, validator, strategies, testClock, orderEventPublisher, tradeEventPublisher);
+        orderService = new OrderService(accountRepository, instrumentRepository, orderRepository,
+                orderHistoryRepository, positionRepository, validator, strategies, testClock, orderEventPublisher,
+                tradeEventPublisher);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -223,8 +228,10 @@ class OrderServiceTest {
 
             // Create service with empty strategies map
             Map<OrderSide, OrderExecutionStrategy> emptyStrategies = new HashMap<>();
-            OrderService serviceWithoutStrategies = new OrderService(accountRepository, orderRepository,
-                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock, orderEventPublisher, tradeEventPublisher);
+            OrderService serviceWithoutStrategies = new OrderService(accountRepository, instrumentRepository,
+                    orderRepository,
+                    orderHistoryRepository, positionRepository, validator, emptyStrategies, testClock,
+                    orderEventPublisher, tradeEventPublisher);
 
             assertThrows(IllegalStateException.class,
                     () -> serviceWithoutStrategies.placeOrder(placeOrderRequest),

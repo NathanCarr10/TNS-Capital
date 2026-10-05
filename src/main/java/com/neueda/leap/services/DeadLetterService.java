@@ -45,12 +45,34 @@ public class DeadLetterService {
             MessageEnvelope<OrderEvent> envelope,
             Exception exception,
             int retryCount) {
+        return captureFailedMessage(envelope, exception, retryCount, false);
+    }
+
+    /**
+     * Captures a failed message envelope and stores it in the DLQ table.
+     * 
+     * @param envelope   the failed MessageEnvelope
+     * @param exception  the exception that caused the failure
+     * @param retryCount the number of retries already attempted
+     * @param isNonRetryable true if this is a non-retryable error (not-found), false if retryable
+     * @return the stored DeadLetterMessage
+     */
+    public DeadLetterMessage captureFailedMessage(
+            MessageEnvelope<OrderEvent> envelope,
+            Exception exception,
+            int retryCount,
+            boolean isNonRetryable) {
 
         try {
             OrderEvent event = envelope.getPayload();
             String originalMessage = objectMapper.writeValueAsString(envelope);
             String failureReason = buildFailureReason(exception);
             String failureType = exception.getClass().getSimpleName();
+
+            // Prepend "NON_RETRYABLE_" to failure type if applicable
+            if (isNonRetryable) {
+                failureType = "NON_RETRYABLE_" + failureType;
+            }
 
             DeadLetterMessage dlqMessage = new DeadLetterMessage(
                     UUID.randomUUID(),
@@ -62,11 +84,12 @@ public class DeadLetterService {
 
             dlqMessage.setRetryCount(retryCount);
             dlqMessage.setStatus(DLQStatus.PENDING);
+            dlqMessage.setIsRetryable(!isNonRetryable); // false if non-retryable, true if retryable
 
             DeadLetterMessage saved = dlqRepository.save(dlqMessage);
 
-            log.info("Captured failed message in DLQ: dlqId={}, orderId={}, failureType={}, retryCount={}",
-                    saved.getId(), event.orderId(), failureType, retryCount);
+            log.info("Captured failed message in DLQ: dlqId={}, orderId={}, failureType={}, retryCount={}, isNonRetryable={}",
+                    saved.getId(), event.orderId(), failureType, retryCount, isNonRetryable);
 
             return saved;
         } catch (JsonProcessingException ex) {

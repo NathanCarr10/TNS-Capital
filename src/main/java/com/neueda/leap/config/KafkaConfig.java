@@ -3,6 +3,7 @@ package com.neueda.leap.config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.neueda.leap.exceptions.NonRetryableOrderException;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.services.DeadLetterService;
@@ -186,12 +187,16 @@ public class KafkaConfig {
     /**
      * Error handler with exponential backoff retry and DLQ routing.
      * 
-     * Retry strategy:
-     * - Initial backoff: 1000ms (1 second)
-     * - Max backoff: 10000ms (10 seconds)
-     * - Multiplier: 2.0 (exponential increase)
+     * SMART RETRY LOGIC:
+     * - Retryable exceptions (business logic failures): Use exponential backoff
+     * (1s, 2s, 4s)
      * - Max failures: 3 (after 3 retries, message is routed to DLQ via recovery
      * callback)
+     * 
+     * NOTE: NonRetryableOrderException is caught and handled in
+     * OrderMessageListener
+     * directly (see onOrderEvent), so this error handler only processes retryable
+     * exceptions.
      * 
      * When max failures are exhausted, the recovery callback is invoked which:
      * 1. Deserializes the message envelope from the ConsumerRecord
@@ -219,7 +224,8 @@ public class KafkaConfig {
     }
 
     /**
-     * Handles recovery when a message fails after max retries.
+     * Handles recovery when a message fails after max retries or when a
+     * non-retryable exception occurs.
      * Captures the failed message to the Dead-Letter Queue for administrative
      * review.
      * 
@@ -228,9 +234,13 @@ public class KafkaConfig {
      */
     private void handleRecovery(ConsumerRecord<?, ?> consumerRecord, Exception exception) {
         try {
-            log.warn("Max retries exhausted, capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
+            // Determine if this is a non-retryable error
+            boolean isNonRetryable = isNonRetryableException(exception);
+
+            log.warn(
+                    "Max retries exhausted, capturing message to DLQ: topic={}, partition={}, offset={}, error={}, isNonRetryable={}",
                     consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
-                    exception.getMessage());
+                    exception.getMessage(), isNonRetryable);
 
             // Deserialize the message envelope from the Kafka record using TypeReference
             MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
@@ -239,12 +249,15 @@ public class KafkaConfig {
                     });
 
             // Capture the failed message to DLQ database table
-            deadLetterService.captureFailedMessage(envelope, exception, 3);
+            // Pass the retryability flag so admin UI knows which messages can be safely
+            // replayed
+            deadLetterService.captureFailedMessage(envelope, exception, 3, isNonRetryable);
 
             // Also publish to orders.dlq Kafka topic for audit trail
             kafkaTemplate.send("orders.dlq", envelope.getPayload().accountId().toString(),
                     (String) consumerRecord.value());
-            log.info("Published failed message to orders.dlq topic: orderId={}", envelope.getPayload().orderId());
+            log.info("Published failed message to orders.dlq topic: orderId={}, isNonRetryable={}",
+                    envelope.getPayload().orderId(), isNonRetryable);
 
         } catch (JsonProcessingException jsonException) {
             // Message deserialization failed - log the raw message for manual investigation
@@ -260,5 +273,29 @@ public class KafkaConfig {
                     consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
                     recoveryException.getMessage(), recoveryException);
         }
+    }
+
+    /**
+     * Checks if an exception or its cause chain contains
+     * NonRetryableOrderException.
+     *
+     * @param exception the exception to check
+     * @return true if exception is non-retryable, false otherwise
+     */
+    private boolean isNonRetryableException(Exception exception) {
+        if (exception instanceof NonRetryableOrderException) {
+            return true;
+        }
+
+        // Check cause chain
+        Throwable cause = exception.getCause();
+        while (cause != null) {
+            if (cause instanceof NonRetryableOrderException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 }

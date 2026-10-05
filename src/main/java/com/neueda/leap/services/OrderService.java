@@ -13,9 +13,12 @@ import com.neueda.leap.utils.InputNormalizer;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.exceptions.NonRetryableOrderException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
@@ -40,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class OrderService {
     private final AccountRepository accountRepository;
+    private final InstrumentRepository instrumentRepository;
     private final OrderRepository orderRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final PositionRepository positionRepository;
@@ -51,6 +55,7 @@ public class OrderService {
 
     public OrderService(
             AccountRepository accountRepository,
+            InstrumentRepository instrumentRepository,
             OrderRepository orderRepository,
             OrderHistoryRepository orderHistoryRepository,
             PositionRepository positionRepository,
@@ -60,6 +65,7 @@ public class OrderService {
             OrderEventPublisher orderEventPublisher,
             TradeEventPublisher tradeEventPublisher) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
+        this.instrumentRepository = Objects.requireNonNull(instrumentRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
         this.orderHistoryRepository = Objects.requireNonNull(orderHistoryRepository);
         this.positionRepository = Objects.requireNonNull(positionRepository);
@@ -126,12 +132,23 @@ public class OrderService {
      * Called by OrderMessageListener when an order event is received from the Kafka
      * topic.
      * Validates and executes the order, creating a new Order entity if it doesn't
-     * already exist
-     * (based on order ID).
+     * already exist (based on order ID).
+     * 
+     * DEFENSIVE VALIDATION: Even though REST layer validates Account/Instrument
+     * existence, this method also validates defensively to catch race conditions
+     * (e.g., account deleted between REST validation and async processing).
+     * 
+     * EXCEPTION DIFFERENTIATION:
+     * - Not-found exceptions (Account/Instrument missing): Wrapped in
+     *   NonRetryableOrderException. Error handler will skip retries and route to DLQ.
+     * - Business logic exceptions (Insufficient funds/holdings, Account not active):
+     *   Re-thrown directly. Error handler will retry 3 times before DLQ.
      * 
      * @param event the order event to process
      * @return the processed order
-     * @throws Exception if validation or execution fails
+     * @throws NonRetryableOrderException if account/instrument not found (non-retryable)
+     * @throws InsufficientFundsException if order fails business logic validation (retryable)
+     * @throws Exception for other unexpected errors
      */
     @Transactional
     public Order processOrderEvent(OrderEvent event) {
@@ -159,9 +176,16 @@ public class OrderService {
             // Validate the order request
             validator.validate(request);
 
-            // Retrieve account
+            // DEFENSIVE VALIDATION: Retrieve account (may throw AccountNotFoundException)
+            // This catches race conditions where account was deleted between REST validation
+            // and async processing
             Account account = accountRepository.findById(event.accountId())
                     .orElseThrow(() -> new AccountNotFoundException("Account not found: " + event.accountId()));
+
+            // DEFENSIVE VALIDATION: Validate instrument exists
+            // This catches race conditions where instrument was deleted
+            instrumentRepository.findBySymbol(symbol)
+                    .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
             // Create order entity
             Order order = new Order(
@@ -199,18 +223,34 @@ public class OrderService {
                     ex.getMessage());
 
             // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol);
+            saveRejectedOrder(event, symbol, false); // false = retryable (business logic error)
 
+            // Re-throw to allow Kafka error handler to retry
             throw ex;
+
+        } catch (AccountNotFoundException | InstrumentNotFoundException ex) {
+            log.warn("Order rejected due to missing resource (non-retryable): orderId={}, error={}, type={}",
+                    event.orderId(), ex.getMessage(), ex.getClass().getSimpleName());
+
+            // Save rejected order in separate transaction before exception causes rollback
+            saveRejectedOrder(event, symbol, true); // true = non-retryable (not-found error)
+
+            // Wrap in NonRetryableOrderException to signal error handler to skip retries
+            throw new NonRetryableOrderException(
+                    "Order rejected due to missing resource: " + ex.getMessage(),
+                    ex);
 
         } catch (Exception ex) {
             log.error("Unexpected error processing order event: orderId={}, error={}", event.orderId(), ex.getMessage(),
                     ex);
 
             // Save rejected order in separate transaction before exception causes rollback
-            saveRejectedOrder(event, symbol);
+            saveRejectedOrder(event, symbol, true); // true = non-retryable (unexpected error)
 
-            throw new IllegalStateException("Unexpected error during order event processing: " + ex.getMessage(), ex);
+            // Wrap in NonRetryableOrderException for non-business-logic errors
+            throw new NonRetryableOrderException(
+                    "Unexpected error during order event processing: " + ex.getMessage(),
+                    ex);
         }
     }
 
@@ -222,11 +262,13 @@ public class OrderService {
      * 
      * @param event  the order event
      * @param symbol the normalized order symbol
+     * @param isNonRetryable true if this is a non-retryable error (not-found), false if retryable
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    private void saveRejectedOrder(OrderEvent event, String symbol) {
+    private void saveRejectedOrder(OrderEvent event, String symbol, boolean isNonRetryable) {
         try {
-            log.info("Attempting to save REJECTED order: orderId={}, accountId={}", event.orderId(), event.accountId());
+            log.info("Attempting to save REJECTED order: orderId={}, accountId={}, isNonRetryable={}",
+                    event.orderId(), event.accountId(), isNonRetryable);
 
             Order order = new Order(
                     event.accountId(),
