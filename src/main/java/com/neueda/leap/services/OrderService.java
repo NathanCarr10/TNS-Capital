@@ -232,11 +232,9 @@ public class OrderService {
             log.warn("Order rejected due to insufficient resources: orderId={}, error={}", event.orderId(),
                     ex.getMessage());
 
-            // Update order status to REJECTED (order already exists as NEW)
+            // Update order status to REJECTED and publish trade event
             if (order != null) {
-                order.setStatus(OrderStatus.REJECTED);
-                orderRepository.save(order);
-                log.info("Updated order status to REJECTED: orderId={}", event.orderId());
+                updateOrderToRejectedAndPublishEvent(order, OrderStatus.NEW, ex.getMessage());
             } else {
                 // Order creation failed - create and save REJECTED order
                 Order rejectedOrder = new Order(
@@ -249,8 +247,9 @@ public class OrderService {
                         clock);
                 rejectedOrder.setId(event.orderId());
                 rejectedOrder.setStatus(OrderStatus.REJECTED);
-                orderRepository.save(rejectedOrder);
+                saveOrderInSeparateTransaction(rejectedOrder);
                 log.info("Saved rejected order: orderId={}, reason={}", event.orderId(), ex.getMessage());
+                tradeEventPublisher.publish(rejectedOrder, OrderStatus.NEW, ex.getMessage());
             }
 
             // Rethrow exception to trigger error handler (which will route to DLQ without
@@ -276,6 +275,7 @@ public class OrderService {
             saveOrderInSeparateTransaction(rejectedOrder);
             log.info("Saved rejected order due to missing resource: orderId={}, reason={}", event.orderId(),
                     ex.getMessage());
+            tradeEventPublisher.publish(rejectedOrder, OrderStatus.NEW, ex.getMessage());
 
             // Rethrow exception to trigger error handler (which will route to DLQ without
             // retries)
@@ -287,9 +287,7 @@ public class OrderService {
 
             // Update or create rejected order
             if (order != null) {
-                order.setStatus(OrderStatus.REJECTED);
-                orderRepository.save(order);
-                log.info("Updated order status to REJECTED due to unexpected error: orderId={}", event.orderId());
+                updateOrderToRejectedAndPublishEvent(order, OrderStatus.NEW, ex.getMessage());
             } else {
                 Order rejectedOrder = new Order(
                         event.accountId(),
@@ -304,6 +302,7 @@ public class OrderService {
                 saveOrderInSeparateTransaction(rejectedOrder);
                 log.info("Saved rejected order due to unexpected error: orderId={}, reason={}", event.orderId(),
                         ex.getMessage());
+                tradeEventPublisher.publish(rejectedOrder, OrderStatus.NEW, ex.getMessage());
             }
 
             // Rethrow exception to trigger error handler (which will route to DLQ without
@@ -323,6 +322,28 @@ public class OrderService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     private void saveOrderInSeparateTransaction(Order order) {
         orderRepository.save(order);
+    }
+
+    /**
+     * Updates order status to REJECTED and publishes a trade event in separate
+     * transaction.
+     * 
+     * This ensures the status update and event publishing survive even if the
+     * parent
+     * transaction rolls back.
+     * 
+     * @param order           the order to update
+     * @param previousStatus  the previous order status (for event publishing)
+     * @param rejectionReason the reason for rejection
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    private void updateOrderToRejectedAndPublishEvent(Order order, OrderStatus previousStatus, String rejectionReason) {
+        order.setStatus(OrderStatus.REJECTED);
+        orderRepository.save(order);
+        log.info("Updated order status to REJECTED: orderId={}", order.getId());
+
+        // Publish trade event after status is persisted
+        tradeEventPublisher.publish(order, previousStatus, rejectionReason);
     }
 
     public Optional<Order> findByIdempotencyKey(String key) {
