@@ -42,7 +42,7 @@ trading:
   kafka:
     topics:
       orders: orders
-      trades: trade-events
+      trade-events: trade-events
       market-data: market-data
 
 jwt:
