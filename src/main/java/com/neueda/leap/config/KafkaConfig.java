@@ -283,7 +283,7 @@ public class KafkaConfig {
             // Capture the failed message to DLQ database table
             // Pass the retryability flag so admin UI knows which messages can be safely
             // replayed
-            deadLetterService.captureFailedMessage(envelope, exception, 3, isNonRetryable);
+            deadLetterService.captureFailedMessage(envelope, exception, 0, isNonRetryable);
 
             // Also publish to orders.dlq Kafka topic for audit trail
             kafkaTemplate.send("orders.dlq", event.accountId().toString(),

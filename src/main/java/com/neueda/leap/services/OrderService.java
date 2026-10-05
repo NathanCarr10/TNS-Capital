@@ -281,10 +281,14 @@ public class OrderService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     private void saveRejectedOrder(OrderEvent event, String symbol, String rejectionReason, boolean isNonRetryable) {
-        try {
-            log.info("Attempting to save REJECTED order: orderId={}, accountId={}, reason={}, isNonRetryable={}",
-                    event.orderId(), event.accountId(), rejectionReason, isNonRetryable);
+        log.info("Attempting to save REJECTED order: orderId={}, accountId={}, reason={}, isNonRetryable={}",
+                event.orderId(), event.accountId(), rejectionReason, isNonRetryable);
 
+        Order savedOrder = null;
+        boolean saveSucceeded = false;
+
+        try {
+            // Create new order with REJECTED status
             Order order = new Order(
                     event.accountId(),
                     symbol,
@@ -296,27 +300,51 @@ public class OrderService {
             order.setId(event.orderId());
             order.setStatus(OrderStatus.REJECTED);
 
+            log.debug("Created Order entity: orderId={}, status={}", order.getId(), order.getStatus());
+
+            // Attempt to save the order
+            savedOrder = orderRepository.save(order);
+            saveSucceeded = true;
+            log.info("Successfully inserted REJECTED order into database: orderId={}", event.orderId());
+
+        } catch (DataIntegrityViolationException e) {
+            // Order already exists (duplicate idempotencyKey): update status instead
+            log.warn(
+                    "Order already exists (duplicate key), attempting to update status to REJECTED: orderId={}, error={}",
+                    event.orderId(), e.getMessage());
+
             try {
-                orderRepository.save(order);
-            } catch (DataIntegrityViolationException e) {
-                // Order already exists (duplicate idempotencyKey): update status instead
-                log.warn("Order already exists, updating status to REJECTED: orderId={}", event.orderId());
-                orderRepository.findById(event.orderId())
-                        .ifPresent(existingOrder -> {
-                            existingOrder.setStatus(OrderStatus.REJECTED);
-                            orderRepository.save(existingOrder);
-                        });
+                savedOrder = orderRepository.findById(event.orderId()).orElse(null);
+                if (savedOrder != null) {
+                    savedOrder.setStatus(OrderStatus.REJECTED);
+                    savedOrder = orderRepository.save(savedOrder);
+                    saveSucceeded = true;
+                    log.info("Successfully updated existing order status to REJECTED: orderId={}", event.orderId());
+                } else {
+                    log.error("Order not found after duplicate key error: orderId={}", event.orderId());
+                }
+            } catch (Exception updateEx) {
+                log.error("Failed to update order status after duplicate key error: orderId={}, error={}",
+                        event.orderId(), updateEx.getMessage(), updateEx);
             }
+        } catch (Exception saveEx) {
+            log.error("Failed to save rejected order (unexpected error): orderId={}, accountId={}, error={}",
+                    event.orderId(), event.accountId(), saveEx.getMessage(), saveEx);
+            throw new IllegalStateException("Failed to save rejected order: " + saveEx.getMessage(), saveEx);
+        }
 
-            log.info("Successfully saved REJECTED order: orderId={}", event.orderId());
-
-            // Publish trade event to notify downstream systems of rejection
-            tradeEventPublisher.publish(order, OrderStatus.NEW, rejectionReason);
-            log.info("Published REJECTED trade event: orderId={}, reason={}", event.orderId(), rejectionReason);
-
-        } catch (Exception ex) {
-            log.error("Failed to save rejected order: orderId={}, accountId={}, error={}",
-                    event.orderId(), event.accountId(), ex.getMessage(), ex);
+        // Only publish trade event if save succeeded
+        if (saveSucceeded && savedOrder != null) {
+            try {
+                tradeEventPublisher.publish(savedOrder, OrderStatus.NEW, rejectionReason);
+                log.info("Published REJECTED trade event: orderId={}, reason={}", event.orderId(), rejectionReason);
+            } catch (Exception publishEx) {
+                log.error("Failed to publish trade event for rejected order: orderId={}, error={}",
+                        event.orderId(), publishEx.getMessage(), publishEx);
+                // Don't rethrow - order is already saved, event publishing failure is not fatal
+            }
+        } else {
+            log.error("Skipped trade event publishing - order save did not succeed: orderId={}", event.orderId());
         }
     }
 
