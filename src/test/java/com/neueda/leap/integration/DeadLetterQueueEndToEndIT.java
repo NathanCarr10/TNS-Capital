@@ -3,11 +3,13 @@ package com.neueda.leap.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.DLQStatus;
 import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.DeadLetterMessage;
 import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
@@ -96,7 +98,8 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -135,22 +138,22 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("E2E: Insufficient funds → DLQ → Admin deposits → Replay succeeds")
-    void testInsufficientFundsRecoveryWorkflow() throws Exception {
-        // Step 1: Create account with low balance
+    @DisplayName("E2E: Insufficient funds → order REJECTED with reason, nothing in DLQ")
+    void testInsufficientFundsIsRejectedNotDeadLettered() throws Exception {
         Account poorAccount = new Account("POOR", "Low Balance Account", new BigDecimal("10.00"), clock);
         poorAccount = accountRepository.save(poorAccount);
+        Long poorAccountId = poorAccount.getId();
 
-        // Step 2: Attempt large order (will fail)
         UUID orderId = UUID.randomUUID();
         OrderEvent event = new OrderEvent(
                 orderId,
-                poorAccount.getId(),
+                poorAccountId,
                 instrument.getSymbol(),
                 OrderSide.BUY,
                 1000,
                 new BigDecimal("100.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -159,38 +162,72 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
                 "ORDER_ACCEPTED",
                 event);
 
-        String message = objectMapper.writeValueAsString(envelope);
-        kafkaTemplate.send("orders", poorAccount.getId().toString(), message);
+        kafkaTemplate.send("orders", poorAccountId.toString(), objectMapper.writeValueAsString(envelope));
 
-        // Step 3: Wait for DLQ capture
+        // A business rule failure is a final outcome: stored as REJECTED, not retried
+        await()
+                .atMost(10, TimeUnit.SECONDS)
+                .pollInterval(100, TimeUnit.MILLISECONDS)
+                .untilAsserted(() -> {
+                    Optional<Order> order = orderRepository.findById(orderId);
+                    assertThat(order).isPresent();
+                    assertThat(order.get().getStatus()).isEqualTo(OrderStatus.REJECTED);
+                    assertThat(order.get().getStatusReason()).contains("Insufficient funds");
+                });
+
+        assertThat(dlqRepository.findAll()).isEmpty();
+        assertThat(accountRepository.findById(poorAccountId).get().getCashBalance())
+                .isEqualByComparingTo("10.00");
+    }
+
+    @Test
+    @DisplayName("E2E: Unknown instrument → DLQ → Admin adds instrument → Replay succeeds")
+    void testUnknownInstrumentRecoveryWorkflow() throws Exception {
+        // Step 1: Order for a symbol that is not set up yet
+        UUID orderId = UUID.randomUUID();
+        OrderEvent event = new OrderEvent(
+                orderId,
+                account.getId(),
+                "NEWCO",
+                OrderSide.BUY,
+                10,
+                new BigDecimal("5.00"),
+                clock.now(),
+                "it-" + UUID.randomUUID());
+
+        MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
+                clock.now(),
+                UUID.randomUUID().toString(),
+                "1.0",
+                "ORDER_ACCEPTED",
+                event);
+
+        kafkaTemplate.send("orders", account.getId().toString(), objectMapper.writeValueAsString(envelope));
+
+        // Step 2: Not retryable, so it reaches the DLQ on the first failure
         await()
                 .atMost(10, TimeUnit.SECONDS)
                 .pollInterval(100, TimeUnit.MILLISECONDS)
                 .untilAsserted(() -> {
                     List<DeadLetterMessage> dlqMessages = dlqRepository
                             .findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
-                    assertThat(dlqMessages).isNotEmpty();
-                    assertThat(dlqMessages.get(0).getFailureType()).contains("InsufficientFundsException");
+                    assertThat(dlqMessages).hasSize(1);
+                    assertThat(dlqMessages.get(0).getFailureType()).isEqualTo("InstrumentNotFoundException");
                 });
+        DeadLetterMessage dlqMsg = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING).get(0);
 
-        List<DeadLetterMessage> dlqMessages = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
-        DeadLetterMessage dlqMsg = dlqMessages.get(0);
+        // Step 3: Admin sets up the instrument
+        instrumentRepository.save(new Instrument("NEWCO", "New Company", "EQUITY", "USD", true));
 
-        // Step 4: Admin deposits funds to account
-        BigDecimal currentBalance = poorAccount.getCashBalance();
-        BigDecimal amountToDeposit = new BigDecimal("200000.00").subtract(currentBalance);
-        poorAccount.credit(amountToDeposit);
-        accountRepository.save(poorAccount);
-
-        // Step 5: Admin replays the message
+        // Step 4: Admin replays the message
         boolean replaySuccess = deadLetterService.replayMessage(dlqMsg.getId(), orderService);
 
-        // Step 6: Verify replay was successful
+        // Step 5: Verify replay was successful and the order filled
         assertThat(replaySuccess).isTrue();
-
         Optional<DeadLetterMessage> replayed = dlqRepository.findById(dlqMsg.getId());
         assertThat(replayed.get().getStatus()).isEqualTo(DLQStatus.RESOLVED);
         assertThat(replayed.get().getResolvedOn()).isNotNull();
+        assertThat(orderRepository.findById(orderId).get().getStatus()).isEqualTo(OrderStatus.FILLED);
     }
 
     @Test
@@ -206,7 +243,8 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
                     OrderSide.BUY,
                     100,
                     new BigDecimal("50.00"),
-                    clock.now());
+                    clock.now(),
+                    "it-" + UUID.randomUUID());
 
             MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                     clock.now(),
@@ -231,8 +269,10 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
 
         List<DeadLetterMessage> dlqMessages = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
 
-        // Resolve first message
-        deadLetterService.replayMessage(dlqMessages.get(0).getId(), orderService);
+        // Replay the first: the account still does not exist, so it stays PENDING
+        boolean replayed = deadLetterService.replayMessage(dlqMessages.get(0).getId(), orderService);
+        assertThat(replayed).isFalse();
+        assertThat(dlqRepository.findById(dlqMessages.get(0).getId()).get().getRetryCount()).isEqualTo(1);
 
         // Dismiss second message
         deadLetterService.dismissMessage(dlqMessages.get(1).getId(), "Duplicate order");
@@ -244,8 +284,8 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
         long resolved = dlqRepository.countByStatus(DLQStatus.RESOLVED);
         long ignored = dlqRepository.countByStatus(DLQStatus.IGNORED);
 
-        assertThat(pending).isEqualTo(1);
-        assertThat(resolved).isGreaterThanOrEqualTo(1);
+        assertThat(pending).isEqualTo(2);
+        assertThat(resolved).isZero();
         assertThat(ignored).isEqualTo(1);
     }
 
@@ -261,7 +301,8 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),

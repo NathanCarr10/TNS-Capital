@@ -3,6 +3,8 @@ package com.neueda.leap.config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.services.DeadLetterService;
@@ -152,8 +154,10 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 50);
-        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
-        configProps.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
+        // The listener container commits offsets after each record is processed or
+        // recovered to the DLQ; auto-commit could commit a record before it is handled
+        // and lose it if the app stops mid-processing
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
         return new DefaultKafkaConsumerFactory<>(configProps);
     }
@@ -165,7 +169,8 @@ public class KafkaConfig {
      * - Initial interval: 1 second
      * - Max interval: 10 seconds
      * - Multiplier: 2.0 (doubles on each retry)
-     * - Max failures: 3 (after 3 retries, message is routed to DLQ)
+     * - Gives up after ~30 seconds of retrying, then routes the message to the DLQ
+     * - Unreadable messages and unknown accounts/instruments skip the retries
      * 
      * The error handler captures failures to DeadLetterService.
      * 
@@ -190,10 +195,14 @@ public class KafkaConfig {
      * - Initial backoff: 1000ms (1 second)
      * - Max backoff: 10000ms (10 seconds)
      * - Multiplier: 2.0 (exponential increase)
-     * - Max failures: 3 (after 3 retries, message is routed to DLQ via recovery
-     * callback)
+     * - Max elapsed: 30000ms, then the message is routed to the DLQ via the
+     * recovery callback
+     * - Not retried: JsonProcessingException, AccountNotFoundException and
+     * InstrumentNotFoundException go to the DLQ on the first failure
+     * - Business rejections (insufficient funds etc.) never reach this handler;
+     * OrderService saves them as REJECTED orders
      * 
-     * When max failures are exhausted, the recovery callback is invoked which:
+     * When retries are exhausted, the recovery callback is invoked which:
      * 1. Deserializes the message envelope from the ConsumerRecord
      * 2. Extracts the OrderEvent and failure details
      * 3. Calls DeadLetterService.captureFailedMessage() to persist in dlq_messages
@@ -213,52 +222,59 @@ public class KafkaConfig {
                 (consumerRecord, exception) -> handleRecovery(consumerRecord, exception),
                 backOff);
 
+        // Retrying cannot fix these, so they go to the DLQ on the first failure:
+        // unreadable messages, and orders whose account or instrument does not exist
+        errorHandler.addNotRetryableExceptions(
+                JsonProcessingException.class,
+                AccountNotFoundException.class,
+                InstrumentNotFoundException.class);
+
         log.info(
                 "Kafka error handler configured: exponential backoff (1s initial, 2x multiplier, 10s max interval, 30s max elapsed), DLQ recovery enabled");
         return errorHandler;
     }
 
     /**
-     * Handles recovery when a message fails after max retries.
-     * Captures the failed message to the Dead-Letter Queue for administrative
-     * review.
-     * 
+     * Handles recovery when a message fails after max retries, or on the first
+     * failure for non-retryable exceptions. Captures the failed message to the
+     * Dead-Letter Queue for administrative review.
+     *
+     * If the DLQ capture itself fails (for example the database is down), the
+     * exception is rethrown so the error handler retries the record instead of
+     * committing its offset and losing it.
+     *
      * @param consumerRecord the Kafka consumer record that failed
      * @param exception      the exception that caused the failure
      */
     private void handleRecovery(ConsumerRecord<?, ?> consumerRecord, Exception exception) {
+        log.warn("Capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
+                consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                exception.getMessage());
+
+        String rawMessage = String.valueOf(consumerRecord.value());
+        String key = consumerRecord.key() != null ? consumerRecord.key().toString() : null;
+
+        MessageEnvelope<OrderEvent> envelope = null;
         try {
-            log.warn("Max retries exhausted, capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
-                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
-                    exception.getMessage());
-
-            // Deserialize the message envelope from the Kafka record using TypeReference
-            MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
-                    (String) consumerRecord.value(),
-                    new TypeReference<MessageEnvelope<OrderEvent>>() {
-                    });
-
-            // Capture the failed message to DLQ database table
-            deadLetterService.captureFailedMessage(envelope, exception, 3);
-
-            // Also publish to orders.dlq Kafka topic for audit trail
-            kafkaTemplate.send("orders.dlq", envelope.getPayload().accountId().toString(),
-                    (String) consumerRecord.value());
-            log.info("Published failed message to orders.dlq topic: orderId={}", envelope.getPayload().orderId());
-
-        } catch (JsonProcessingException jsonException) {
-            // Message deserialization failed - log the raw message for manual investigation
-            log.error(
-                    "Failed to deserialize order message for DLQ capture (message will remain in orders topic): topic={}, partition={}, offset={}, deserializationError={}",
-                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
-                    jsonException.getMessage(), jsonException);
-        } catch (Exception recoveryException) {
-            // Unexpected error during recovery - log but don't throw to prevent cascading
-            // failures
-            log.error(
-                    "Unexpected error while capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
-                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
-                    recoveryException.getMessage(), recoveryException);
+            envelope = objectMapper.readValue(rawMessage, new TypeReference<MessageEnvelope<OrderEvent>>() {
+            });
+        } catch (JsonProcessingException unreadable) {
+            log.debug("DLQ message is not an order envelope: {}", unreadable.getMessage());
         }
+
+        if (envelope == null || envelope.getPayload() == null) {
+            // Not an order envelope at all: keep the raw text so it can be inspected
+            deadLetterService.captureUnreadableMessage(rawMessage, exception);
+            kafkaTemplate.send(ORDERS_DLQ_TOPIC, key, rawMessage);
+            return;
+        }
+
+        // Retry count records admin replays, so a newly captured message starts at 0
+        deadLetterService.captureFailedMessage(envelope, exception, 0);
+
+        // Also publish to orders.dlq Kafka topic for audit trail
+        kafkaTemplate.send(ORDERS_DLQ_TOPIC, key, rawMessage);
+        log.info("Published failed message to {} topic: orderId={}", ORDERS_DLQ_TOPIC,
+                envelope.getPayload().orderId());
     }
 }

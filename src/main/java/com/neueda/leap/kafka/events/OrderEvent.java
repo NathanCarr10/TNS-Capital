@@ -11,6 +11,10 @@ import java.util.UUID;
  * Represents an accepted order that should be processed.
  * Keyed by accountId so all orders for one account land on the same partition
  * and are processed in order.
+ *
+ * idempotencyKey is the client's key from PlaceOrderRequest, already normalized.
+ * Events captured before the field existed have no key; the processor then
+ * falls back to the order ID.
  */
 public record OrderEvent(
         UUID orderId,
@@ -19,6 +23,7 @@ public record OrderEvent(
         OrderSide side,
         Integer quantity,
         BigDecimal price,
-        Instant createdOn
+        Instant createdOn,
+        String idempotencyKey
 ) {
 }

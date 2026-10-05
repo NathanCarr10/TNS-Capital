@@ -22,7 +22,7 @@ import java.time.LocalDateTime;
 /**
  * Global exception handler that provides secure, consistent error responses.
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
- *   ACC-409, ORD-404, POS-404, AUTH-403, NOT-404 and SYS-500 extend the catalog
+ *   ACC-409, ORD-404, ORD-503, POS-404, AUTH-403, NOT-404 and SYS-500 extend the catalog
  *   for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
@@ -96,6 +96,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleOrderCancellationConflict(OrderCancellationConflictException e) {
         logger.warn("Order cancellation conflict: {}", e.getMessage());
         return error(HttpStatus.CONFLICT, "ORD-409", "Only NEW orders can be cancelled");
+    }
+
+    // The order was valid but Kafka did not acknowledge it, so it was not accepted
+    @ExceptionHandler(OrderSubmissionException.class)
+    public ResponseEntity<ErrorResponse> handleOrderSubmission(OrderSubmissionException e) {
+        logger.error("Order could not be queued: {}", e.getMessage(), e);
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "ORD-503",
+                "The order could not be accepted right now. Please try again.");
     }
 
     @ExceptionHandler(OrderNotFoundException.class)

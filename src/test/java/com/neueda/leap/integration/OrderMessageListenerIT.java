@@ -3,6 +3,7 @@ package com.neueda.leap.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.DLQStatus;
 import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
@@ -90,7 +91,8 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -142,7 +144,8 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -175,7 +178,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should route insufficient funds OrderEvent to DLQ")
+    @DisplayName("Should save insufficient funds OrderEvent as REJECTED, not route it to DLQ")
     void testProcessInsufficientFundsOrderEvent() {
         // Arrange - Create account with low balance
         Account lowBalanceAccount = new Account("LOW_BALANCE", "Poor Trader", new BigDecimal("10.00"), clock);
@@ -189,7 +192,8 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 1000, // Large quantity requiring significant funds
                 new BigDecimal("100.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -203,18 +207,17 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
             String message = objectMapper.writeValueAsString(envelope);
             kafkaTemplate.send("orders", lowBalanceAccount.getId().toString(), message);
 
-            // Assert - Wait for DLQ capture
+            // Assert - Business rejections are stored as REJECTED and never retried
             await()
                     .atMost(10, TimeUnit.SECONDS)
                     .pollInterval(100, TimeUnit.MILLISECONDS)
                     .untilAsserted(() -> {
-                        List<DeadLetterMessage> dlqMessages = dlqRepository
-                                .findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
-                        assertThat(dlqMessages)
-                                .isNotEmpty()
-                                .anyMatch(msg -> msg.getOriginalOrderId().equals(orderId))
-                                .anyMatch(msg -> msg.getFailureType().contains("InsufficientFundsException"));
+                        Optional<Order> rejected = orderRepository.findById(orderId);
+                        assertThat(rejected).isPresent();
+                        assertThat(rejected.get().getStatus()).isEqualTo(OrderStatus.REJECTED);
+                        assertThat(rejected.get().getStatusReason()).contains("Insufficient funds");
                     });
+            assertThat(dlqRepository.findAll()).isEmpty();
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to publish insufficient funds order event", e);
@@ -223,7 +226,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should capture exception details in DLQ message")
-    void testDLQMessageContainsFullStackTrace() {
+    void testDLQMessageContainsFailureDetails() {
         // Arrange
         UUID orderId = UUID.randomUUID();
         Long invalidAccountId = 99999L;
@@ -235,7 +238,8 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                 OrderSide.BUY,
                 100,
                 new BigDecimal("50.00"),
-                clock.now());
+                clock.now(),
+                "it-" + UUID.randomUUID());
 
         MessageEnvelope<OrderEvent> envelope = new MessageEnvelope<>(
                 clock.now(),
@@ -262,7 +266,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                                 .satisfies(dlqMsg -> {
                                     assertThat(dlqMsg.getFailureReason())
                                             .contains("AccountNotFoundException")
-                                            .contains("Stack Trace");
+                                            .contains("Account not found");
                                     assertThat(dlqMsg.getFailureType()).isEqualTo("AccountNotFoundException");
                                     assertThat(dlqMsg.getRetryCount()).isGreaterThanOrEqualTo(0);
                                     assertThat(dlqMsg.getCreatedOn()).isNotNull();
@@ -270,7 +274,7 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                     });
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to publish order event for stack trace verification", e);
+            throw new RuntimeException("Failed to publish order event for failure detail verification", e);
         }
     }
 }

@@ -48,6 +48,9 @@ public class Order {
     @Column(nullable = false)
     private Instant createdOn;
 
+    @Column(name = "status_reason")
+    private String statusReason;
+
     protected Order() {
         // JPA no-arg constructor
     }
@@ -84,6 +87,7 @@ public class Order {
         this.status = other.status;
         this.idempotencyKey = other.idempotencyKey;
         this.createdOn = other.createdOn;
+        this.statusReason = other.statusReason;
     }
 
     private void validateConstructorArgs(Long accountId, String symbol, OrderSide side, Integer quantity,
@@ -147,6 +151,18 @@ public class Order {
 
     public Instant getCreatedOn() {
         return createdOn;
+    }
+
+    public String getStatusReason() {
+        return statusReason;
+    }
+
+    /**
+     * Marks the order REJECTED and records why, for the audit trail and order history.
+     */
+    public void reject(String reason) {
+        setStatus(OrderStatus.REJECTED);
+        this.statusReason = reason;
     }
 
     public void setStatus(OrderStatus newStatus) {
