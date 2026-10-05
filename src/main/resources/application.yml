@@ -70,8 +70,8 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
+# DEBUG for these packages logs every request and Kafka poll; enable it per run
+# when needed, e.g. LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA=DEBUG
 logging:
   level:
-    org.springdoc: DEBUG
-    org.springframework.web: DEBUG
-    org.springframework.kafka: DEBUG
+    com.neueda.leap: INFO
