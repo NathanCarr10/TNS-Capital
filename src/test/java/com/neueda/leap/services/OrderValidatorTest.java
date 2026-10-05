@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,9 +20,9 @@ import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
-import com.neueda.leap.repositories.AccountRepository;
-import com.neueda.leap.repositories.InstrumentRepository;
-import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.mappers.AccountMapper;
+import com.neueda.leap.mappers.InstrumentMapper;
+import com.neueda.leap.mappers.OrderMapper;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.time.ClockTest;
@@ -33,13 +32,13 @@ class OrderValidatorTest {
     private OrderValidator orderValidator;
 
     @Mock
-    private AccountRepository accountRepository;
+    private AccountMapper accountMapper;
 
     @Mock
-    private InstrumentRepository instrumentRepository;
+    private InstrumentMapper instrumentMapper;
 
     @Mock
-    private OrderRepository orderRepository;
+    private OrderMapper orderMapper;
 
     private ClockTest testClock;
     private PlaceOrderRequest validRequest;
@@ -49,7 +48,7 @@ class OrderValidatorTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        orderValidator = new OrderValidator(accountRepository, instrumentRepository, orderRepository);
+        orderValidator = new OrderValidator(accountMapper, instrumentMapper, orderMapper);
 
         testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"), testClock);
@@ -68,16 +67,16 @@ class OrderValidatorTest {
         @DisplayName("Should validate request successfully with all valid data")
         @Test
         void testValidateSuccess() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.of(testInstrument));
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(testInstrument);
 
             assertDoesNotThrow(() -> orderValidator.validate(validRequest),
                     "Should not throw exception for valid request");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, times(1)).findById(1L);
-            verify(instrumentRepository, times(1)).findBySymbol("AAPL");
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, times(1)).findById(1L);
+            verify(instrumentMapper, times(1)).findBySymbol("AAPL");
         }
 
         @DisplayName("Should validate request with different order sides")
@@ -86,10 +85,10 @@ class OrderValidatorTest {
             PlaceOrderRequest sellRequest = new PlaceOrderRequest(1L, "MSFT", OrderSide.SELL, 50,
                     new BigDecimal("300.00"), "ORDER-002");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-002")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderMapper.existsByIdempotencyKey("ORDER-002")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
 Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD", true);
-                when(instrumentRepository.findBySymbol("MSFT")).thenReturn(Optional.of(msftInstrument));
+                when(instrumentMapper.findBySymbol("MSFT")).thenReturn(msftInstrument);
 
             assertDoesNotThrow(() -> orderValidator.validate(sellRequest),
                     "Should validate SELL order successfully");
@@ -101,13 +100,13 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
             PlaceOrderRequest lowercaseRequest = new PlaceOrderRequest(1L, "aapl", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), "ORDER-003");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-003")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.of(testInstrument));
+            when(orderMapper.existsByIdempotencyKey("ORDER-003")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(testInstrument);
 
             assertDoesNotThrow(() -> orderValidator.validate(lowercaseRequest));
 
-            verify(instrumentRepository, times(1)).findBySymbol("AAPL");
+            verify(instrumentMapper, times(1)).findBySymbol("AAPL");
         }
     }
 
@@ -117,14 +116,14 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
         @DisplayName("Should throw DuplicateOrderException when order already submitted")
         @Test
         void testValidateDuplicateOrder() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
 
             assertThrows(DuplicateOrderException.class, () -> orderValidator.validate(validRequest),
                     "Should throw DuplicateOrderException for duplicate idempotency key");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, never()).findById(any());
-            verify(instrumentRepository, never()).findBySymbol(any());
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, never()).findById(any());
+            verify(instrumentMapper, never()).findBySymbol(any());
         }
 
         @DisplayName("Should detect duplicate orders with different account IDs")
@@ -133,7 +132,7 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
             PlaceOrderRequest differentAccountRequest = new PlaceOrderRequest(2L, "AAPL", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), "ORDER-001");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
 
             assertThrows(DuplicateOrderException.class, () -> orderValidator.validate(differentAccountRequest),
                     "Should throw DuplicateOrderException even with different account");
@@ -145,7 +144,7 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
             PlaceOrderRequest lowercaseKeyRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), " order-001 ");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
 
             assertThrows(DuplicateOrderException.class, () -> orderValidator.validate(lowercaseKeyRequest),
                     "Should match the stored key regardless of case and whitespace");
@@ -158,30 +157,30 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
         @DisplayName("Should throw AccountNotFoundException when account not found")
         @Test
         void testValidateAccountNotFound() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.empty());
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(null);
 
             assertThrows(AccountNotFoundException.class, () -> orderValidator.validate(validRequest),
                     "Should throw AccountNotFoundException when account not found");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, times(1)).findById(1L);
-            verify(instrumentRepository, never()).findBySymbol(any());
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, times(1)).findById(1L);
+            verify(instrumentMapper, never()).findBySymbol(any());
         }
 
         @DisplayName("Should throw AccountNotActiveException when account is inactive")
         @Test
         void testValidateAccountNotActive() {
             testAccount.setStatus(AccountStatus.SUSPENDED);
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
 
             assertThrows(AccountNotActiveException.class, () -> orderValidator.validate(validRequest),
                     "Should throw AccountNotActiveException when account is not active");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, times(1)).findById(1L);
-            verify(instrumentRepository, never()).findBySymbol(any());
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, times(1)).findById(1L);
+            verify(instrumentMapper, never()).findBySymbol(any());
         }
 
         @DisplayName("Should throw AccountNotFoundException for non-existent account ID")
@@ -190,8 +189,8 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
             PlaceOrderRequest invalidRequest = new PlaceOrderRequest(999L, "AAPL", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), "ORDER-004");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-004")).thenReturn(false);
-            when(accountRepository.findById(999L)).thenReturn(Optional.empty());
+            when(orderMapper.existsByIdempotencyKey("ORDER-004")).thenReturn(false);
+            when(accountMapper.findById(999L)).thenReturn(null);
 
             assertThrows(AccountNotFoundException.class, () -> orderValidator.validate(invalidRequest),
                     "Should throw AccountNotFoundException for invalid account ID");
@@ -204,32 +203,32 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
         @DisplayName("Should throw InstrumentNotFoundException when instrument not found")
         @Test
         void testValidateInstrumentNotFound() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.empty());
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(null);
 
             assertThrows(InstrumentNotFoundException.class, () -> orderValidator.validate(validRequest),
                     "Should throw InstrumentNotFoundException when instrument not found");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, times(1)).findById(1L);
-            verify(instrumentRepository, times(1)).findBySymbol("AAPL");
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, times(1)).findById(1L);
+            verify(instrumentMapper, times(1)).findBySymbol("AAPL");
         }
 
         @DisplayName("Should throw InstrumentNotFoundException when instrument is not tradable")
         @Test
         void testValidateInstrumentNotTradable() {
             Instrument nonTradableInstrument = new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", false);
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.of(nonTradableInstrument));
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(nonTradableInstrument);
 
             assertThrows(InstrumentNotFoundException.class, () -> orderValidator.validate(validRequest),
                     "Should throw InstrumentNotFoundException when instrument is not tradable");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, times(1)).findById(1L);
-            verify(instrumentRepository, times(1)).findBySymbol("AAPL");
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, times(1)).findById(1L);
+            verify(instrumentMapper, times(1)).findBySymbol("AAPL");
         }
 
         @DisplayName("Should validate various tradable instruments")
@@ -244,9 +243,9 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
                         new BigDecimal("150.00"), "ORDER-" + symbol);
                 Instrument instrument = new Instrument(symbol, stockNames[i], "EQUITY", "USD", true);
 
-                when(orderRepository.existsByIdempotencyKey("ORDER-" + symbol)).thenReturn(false);
-                when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-                when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(instrument));
+                when(orderMapper.existsByIdempotencyKey("ORDER-" + symbol)).thenReturn(false);
+                when(accountMapper.findById(1L)).thenReturn(testAccount);
+                when(instrumentMapper.findBySymbol(symbol)).thenReturn(instrument);
 
                 assertDoesNotThrow(() -> orderValidator.validate(request),
                         "Should validate tradable instrument: " + symbol);
@@ -260,37 +259,37 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
         @DisplayName("Should check duplicate order first before checking account")
         @Test
         void testValidatesOrderDuplicateBeforeAccount() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
-            when(accountRepository.findById(1L)).thenReturn(Optional.empty());
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(true);
+            when(accountMapper.findById(1L)).thenReturn(null);
 
             assertThrows(DuplicateOrderException.class, () -> orderValidator.validate(validRequest),
                     "Should throw DuplicateOrderException before checking account");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, never()).findById(any());
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, never()).findById(any());
         }
 
         @DisplayName("Should check account before checking instrument")
         @Test
         void testValidatesAccountBeforeInstrument() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.empty());
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.empty());
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(null);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(null);
 
             assertThrows(AccountNotFoundException.class, () -> orderValidator.validate(validRequest),
                     "Should throw AccountNotFoundException before checking instrument");
 
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
-            verify(accountRepository, times(1)).findById(1L);
-            verify(instrumentRepository, never()).findBySymbol(any());
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(accountMapper, times(1)).findById(1L);
+            verify(instrumentMapper, never()).findBySymbol(any());
         }
 
         @DisplayName("Should check instrument exists before checking tradability")
         @Test
         void testValidatesInstrumentExistsBeforeTradability() {
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.empty());
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(null);
 
             assertThrows(InstrumentNotFoundException.class, () -> orderValidator.validate(validRequest),
                     "Should throw InstrumentNotFoundException when instrument not found");
@@ -306,12 +305,12 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
             PlaceOrderRequest mixedCaseRequest = new PlaceOrderRequest(1L, "ApPl", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), "ORDER-005");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-005")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("APPL")).thenReturn(Optional.of(testInstrument));
+            when(orderMapper.existsByIdempotencyKey("ORDER-005")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("APPL")).thenReturn(testInstrument);
 
             assertDoesNotThrow(() -> orderValidator.validate(mixedCaseRequest));
-            verify(instrumentRepository, times(1)).findBySymbol("APPL");
+            verify(instrumentMapper, times(1)).findBySymbol("APPL");
         }
 
         @DisplayName("Should handle idempotency key normalization")
@@ -320,12 +319,12 @@ Instrument msftInstrument = new Instrument("MSFT", "Microsoft", "EQUITY", "USD",
             PlaceOrderRequest requestWithSpaces = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100,
                     new BigDecimal("150.00"), "  ORDER-001  ");
 
-            when(orderRepository.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
-            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.of(testInstrument));
+            when(orderMapper.existsByIdempotencyKey("ORDER-001")).thenReturn(false);
+            when(accountMapper.findById(1L)).thenReturn(testAccount);
+            when(instrumentMapper.findBySymbol("AAPL")).thenReturn(testInstrument);
 
             assertDoesNotThrow(() -> orderValidator.validate(requestWithSpaces));
-            verify(orderRepository, times(1)).existsByIdempotencyKey("ORDER-001");
+            verify(orderMapper, times(1)).existsByIdempotencyKey("ORDER-001");
         }
     }
 }

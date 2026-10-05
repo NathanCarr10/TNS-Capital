@@ -3,6 +3,10 @@ package com.neueda.leap.security;
 import com.neueda.leap.controllers.AccountController;
 import com.neueda.leap.controllers.DeadLetterQueueController;
 import com.neueda.leap.enums.DLQStatus;
+import com.neueda.leap.mappers.AccountMapper;
+import com.neueda.leap.mappers.InstrumentMapper;
+import com.neueda.leap.mappers.OrderMapper;
+import com.neueda.leap.mappers.PositionMapper;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.services.AccountService;
@@ -62,6 +66,16 @@ class JwtSecurityTest {
     private DeadLetterService deadLetterService;
     @MockitoBean
     private OrderService orderService;
+
+    // @MapperScan registers the MyBatis mappers, which need a database in a web-layer test
+    @MockitoBean
+    private AccountMapper accountMapper;
+    @MockitoBean
+    private InstrumentMapper instrumentMapper;
+    @MockitoBean
+    private OrderMapper orderMapper;
+    @MockitoBean
+    private PositionMapper positionMapper;
 
     @BeforeEach
     void setUp() {
