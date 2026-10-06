@@ -1,31 +1,35 @@
 package com.neueda.leap.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.time.LocalDateTime;
 
 /**
  * Security configuration for the API with JWT validation and security headers.
  *
  * Security Best Practices Implemented:
  * - JWT authentication with HMAC-SHA256
+ * - Missing or invalid tokens get an AUTH-401 error body
  * - Security headers to prevent common attacks
  * - CSRF disabled for stateless API (appropriate for REST)
- * - Rate limiting headers configured
  * - X-Frame-Options set to prevent clickjacking
- * - Content-Security-Policy to prevent XSS
- * - Method-level security for role-based access control on endpoints
+ * - The token's "roles" claim is mapped to Spring roles (ROLE_ADMIN etc.)
  *
  * Roles (from the JWT "roles" claim, e.g. {"sub":"john","roles":["CUSTOMER"]}):
  * - ADMIN: full access to every account, order, instrument and the DLQ
@@ -54,18 +58,17 @@ public class SecurityConfig {
         }
 
         /**
-         * Maps the token's "roles" claim to Spring authorities with the ROLE_ prefix,
-         * so ["ADMIN"] becomes ROLE_ADMIN and hasRole('ADMIN') works. Without this,
-         * Spring only reads the "scope" claim and role checks never match.
+         * Reads the auth service's "roles" claim instead of Spring's default "scope"
+         * claim, so a token with roles ["ADMIN"] gets the authority ROLE_ADMIN.
          */
         @Bean
         public JwtAuthenticationConverter jwtAuthenticationConverter() {
-                JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-                authoritiesConverter.setAuthoritiesClaimName("roles");
-                authoritiesConverter.setAuthorityPrefix("ROLE_");
+                JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+                authorities.setAuthoritiesClaimName("roles");
+                authorities.setAuthorityPrefix("ROLE_");
 
                 JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-                converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+                converter.setJwtGrantedAuthoritiesConverter(authorities);
                 return converter;
         }
 
@@ -74,10 +77,16 @@ public class SecurityConfig {
          * - JWT authentication for API endpoints
          * - Security headers to prevent common attacks
          * - Public access to Swagger/OpenAPI documentation
-         * - Coarse role rules per URL; per-account ownership is checked in the controllers
          */
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                AuthenticationEntryPoint unauthorised = (request, response, e) -> writeError(response,
+                                HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
+                // Same body as GlobalExceptionHandler's AUTH-403, for requests the URL rules below refuse
+                AccessDeniedHandler forbidden = (request, response, e) -> writeError(response,
+                                HttpServletResponse.SC_FORBIDDEN, "AUTH-403",
+                                "You do not have permission to access this resource");
+
                 http
                                 // Disable CSRF for stateless APIs (no session state)
                                 .csrf(csrf -> csrf.disable())
@@ -116,11 +125,27 @@ public class SecurityConfig {
                                                 // Require authentication for all other requests
                                                 .anyRequest().authenticated())
 
+                                // Return AUTH-401 / AUTH-403 JSON for missing tokens and refused roles
+                                .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorised)
+                                                .accessDeniedHandler(forbidden))
+
                                 // Configure OAuth2 resource server with JWT
-                                .oauth2ResourceServer((OAuth2ResourceServerConfigurer<HttpSecurity> oauth2) -> oauth2
-                                                .jwt(jwt -> jwt.decoder(jwtDecoder())
+                                .oauth2ResourceServer(oauth2 -> oauth2
+                                                .authenticationEntryPoint(unauthorised)
+                                                .accessDeniedHandler(forbidden)
+                                                .jwt(jwt -> jwt
+                                                                .decoder(jwtDecoder())
                                                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
                 return http.build();
+        }
+
+        private static void writeError(HttpServletResponse response, int status, String errorCode, String message)
+                        throws IOException {
+                response.setStatus(status);
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.getWriter().write(String.format(
+                                "{\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
+                                errorCode, message, LocalDateTime.now()));
         }
 }

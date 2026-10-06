@@ -181,8 +181,8 @@ public class AuthorizationIT extends AbstractIntegrationTest {
                 void cannotTradeUntilActivated() throws Exception {
                         mockMvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON)
                                         .content(orderFor(franksSuspendedAccount, "auth-it-frank-1")))
-                                        .andExpect(status().isConflict())
-                                        .andExpect(jsonPath("$.errorCode", equalTo("ACCOUNT_NOT_ACTIVE")));
+                                        .andExpect(status().isForbidden())
+                                        .andExpect(jsonPath("$.errorCode", equalTo("ACC-403")));
                 }
         }
 

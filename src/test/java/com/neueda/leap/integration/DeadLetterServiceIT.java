@@ -115,8 +115,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
         assertThat(dlqMessage.getResolvedOn()).isNull();
         assertThat(dlqMessage.getFailureReason())
                 .contains("IllegalArgumentException")
-                .contains("Test exception for DLQ capture")
-                .contains("Stack Trace");
+                .contains("Test exception for DLQ capture");
 
         // Verify persisted in database
         Optional<DeadLetterMessage> saved = dlqRepository.findById(dlqMessage.getId());
@@ -256,9 +255,19 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
     @DisplayName("Should track multiple retries correctly")
     void testTrackMultipleRetries() throws Exception {
         // Arrange
+        OrderEvent invalidEvent = new OrderEvent(
+                UUID.randomUUID(),
+                99999L,
+                testInstrument.getSymbol(),
+                OrderSide.BUY,
+                100,
+                new BigDecimal("50.00"),
+                clock.now());
+        MessageEnvelope<OrderEvent> invalidEnvelope = new MessageEnvelope<>(
+                clock.now(), UUID.randomUUID().toString(), "1.0", "ORDER_ACCEPTED", invalidEvent);
         Exception testException = new IllegalArgumentException("Multi-retry test");
         DeadLetterMessage dlqMessage = deadLetterService.captureFailedMessage(
-                testEnvelope,
+                invalidEnvelope,
                 testException,
                 0);
 

@@ -139,4 +139,46 @@ public class AccountControllerIT extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("Should open a new account")
+    void testCreateAccount() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"ACC002\",\"holderName\":\"Jane Roe\",\"cashBalance\":500.00,\"ownerUsername\":\"jane\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accountNumber", is("ACC002")))
+                .andExpect(jsonPath("$.status", is("ACTIVE")));
+    }
+
+    @Test
+    @DisplayName("Should return ACC-409 for a duplicate account number")
+    void testCreateAccountDuplicateNumber() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"ACC001\",\"holderName\":\"Someone Else\",\"cashBalance\":1.00,\"ownerUsername\":\"someone\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode", is("ACC-409")));
+    }
+
+    @Test
+    @DisplayName("Should update the holder name")
+    void testUpdateHolderName() throws Exception {
+        mockMvc.perform(patch("/api/v1/accounts/{id}", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"holderName\":\"Johnny Doe\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.holderName", is("Johnny Doe")));
+    }
+
+    @Test
+    @DisplayName("Should close an account and keep the record")
+    void testCloseAccountKeepsRecord() throws Exception {
+        mockMvc.perform(delete("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("CLOSED")));
+    }
 }

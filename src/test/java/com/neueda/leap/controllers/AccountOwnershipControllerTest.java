@@ -12,11 +12,14 @@ import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
+import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.security.AccountAccess;
+import com.neueda.leap.services.AccountService;
 import com.neueda.leap.services.OrderService;
 import com.neueda.leap.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,9 +63,13 @@ class AccountOwnershipControllerTest {
         orderEventPublisher = mock(OrderEventPublisher.class);
         accountAccess = new AccountAccess(accountRepository, orderRepository, mock(OrderHistoryRepository.class));
 
-        accountController = new AccountController(accountRepository, mock(PositionRepository.class),
-                orderRepository, clock, accountAccess);
-        orderController = new OrderController(orderRepository, accountRepository,
+        AccountService accountService = new AccountService(accountRepository, mock(PositionRepository.class),
+                orderRepository, clock);
+        accountController = new AccountController(accountService, accountAccess);
+        InstrumentRepository instrumentRepository = mock(InstrumentRepository.class);
+        when(instrumentRepository.findBySymbol("ACME"))
+                .thenReturn(Optional.of(new Instrument("ACME", "Acme Corp", "EQUITY", "USD", true)));
+        orderController = new OrderController(orderRepository, accountRepository, instrumentRepository,
                 mock(OrderHistoryRepository.class), mock(OrderService.class), orderEventPublisher, accountAccess);
 
         johnsAccount = new Account("ACC-1", "John Doe", new BigDecimal("100.00"), clock);

@@ -102,3 +102,8 @@ def test_failed_run_leaves_reporting_tables_unchanged(db):
         db.execute("ALTER TABLE orders_offline RENAME TO orders")
 
     assert query(db, "SELECT COUNT(*) FROM analytics.fact_trades") == before
+
+
+def test_valid_seed_data_produces_no_rejects(db):
+    assert pipeline.run_pipeline() is True
+    assert query(db, "SELECT COUNT(*) FROM analytics.etl_rejected_orders") == [(0,)]

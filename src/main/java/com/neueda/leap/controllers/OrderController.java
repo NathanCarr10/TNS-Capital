@@ -6,14 +6,16 @@ import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
+import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
-import com.neueda.leap.model.Account;
 import com.neueda.leap.security.AccountAccess;
 import com.neueda.leap.services.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +46,7 @@ import java.util.stream.Collectors;
 public class OrderController {
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
+    private final InstrumentRepository instrumentRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
     private final OrderEventPublisher orderEventPublisher;
@@ -59,23 +62,45 @@ public class OrderController {
      * Failures (invalid account, insufficient funds, etc.) are captured in the DLQ
      * for administrative review and replay.
      * 
+     * NOTE: This endpoint validates that the Account and Instrument exist BEFORE
+     * publishing to Kafka. This fail-fast approach prevents non-recoverable errors
+     * (e.g., deleted account) from wasting Kafka retry attempts. Business logic
+     * exceptions (insufficient funds, etc.) are still handled in the async
+     * consumer.
+     * 
      * @param request the order placement request with validation
      * @return 202 ACCEPTED with order ID for client tracking
+     * @throws AccountNotFoundException    if account does not exist
+     * @throws InstrumentNotFoundException if instrument does not exist
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsAccount(authentication, #request.accountId())")
     public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request,
             Authentication authentication) {
-        // Customers get an immediate 409 if their account has not been approved (or was
-        // suspended/closed), instead of the order silently failing into the DLQ later
-        if (!accountAccess.isAdmin(authentication)) {
-            Account account = accountRepository.findById(request.accountId())
-                    .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
-            if (!account.isActive()) {
-                throw new AccountNotActiveException("Account not active: " + request.accountId());
-            }
+        // FAIL-FAST VALIDATION: Check Account and Instrument existence before
+        // publishing to Kafka
+        // This prevents non-recoverable errors from triggering Kafka retries
+
+        // Validate Account exists
+        Account account = accountRepository.findById(request.accountId())
+                .orElseThrow(() -> {
+                    log.warn("Order placement rejected: Account not found: accountId={}", request.accountId());
+                    return new AccountNotFoundException("Account not found: " + request.accountId());
+                });
+
+        // Customers get an immediate ACC-403 if their account has not been approved (or was
+        // suspended/closed); admin orders keep the asynchronous validation path
+        if (!accountAccess.isAdmin(authentication) && !account.isActive()) {
+            log.warn("Order placement rejected: Account not active: accountId={}", request.accountId());
+            throw new AccountNotActiveException("Account not active: " + request.accountId());
         }
 
+        // Validate Instrument exists
+        instrumentRepository.findBySymbol(request.symbol())
+                .orElseThrow(() -> {
+                    log.warn("Order placement rejected: Instrument not found: symbol={}", request.symbol());
+                    return new InstrumentNotFoundException("Instrument not found: " + request.symbol());
+                });
 
         // Generate order ID for this request
         UUID orderId = UUID.randomUUID();
@@ -94,7 +119,7 @@ public class OrderController {
         // Message will be retried with exponential backoff and routed to DLQ on failure
         orderEventPublisher.publishEvent(event, request.accountId());
 
-        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}", 
+        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
                 orderId, request.accountId(), request.symbol());
 
         // Return 202 ACCEPTED with order ID for client tracking

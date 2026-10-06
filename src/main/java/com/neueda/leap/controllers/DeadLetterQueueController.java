@@ -107,35 +107,34 @@ public class DeadLetterQueueController {
 
     /**
      * Replays a DLQ message (admin-initiated retry).
-     * 
+     *
      * Attempts to re-process the original order event. If successful, the DLQ
      * message status is set to RESOLVED. If replay fails, the message remains
-     * PENDING and retry count is incremented.
-     * 
+     * PENDING and retry count is incremented. Either way the request itself
+     * succeeded, so the response is 200 with the message's updated state; the
+     * status field tells the caller whether the replay worked.
+     *
      * @param id the UUID of the DLQ message to replay
-     * @return ResponseEntity with 200 OK on successful replay, or error status
+     * @return 200 with the updated DLQ message, or 404 if it does not exist
      */
     @PostMapping("/messages/{id}/replay")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> replayMessage(@PathVariable UUID id) {
-        try {
-            boolean success = deadLetterService.replayMessage(id, orderService);
-
-            if (success) {
-                log.info("DLQ message replay successful: id={}", id);
-                return ResponseEntity.ok().build();
-            } else {
-                log.warn("DLQ message replay failed: id={}", id);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-            }
-
-        } catch (IllegalArgumentException ex) {
+    public ResponseEntity<DeadLetterMessageDTO> replayMessage(@PathVariable UUID id) {
+        if (!dlqRepository.existsById(id)) {
             log.warn("DLQ message not found for replay: id={}", id);
             return ResponseEntity.notFound().build();
-        } catch (Exception ex) {
-            log.error("Error replaying DLQ message: id={}, error={}", id, ex.getMessage(), ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+
+        boolean success = deadLetterService.replayMessage(id, orderService);
+        if (success) {
+            log.info("DLQ message replay successful: id={}", id);
+        } else {
+            log.warn("DLQ message replay did not succeed: id={}", id);
+        }
+
+        return dlqRepository.findById(id)
+                .map(message -> ResponseEntity.ok(mapToDTO(message)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**

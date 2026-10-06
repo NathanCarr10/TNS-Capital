@@ -44,7 +44,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tns-capital-db-user} -d tns_capital"]
+      # -h localhost checks over TCP, which only opens once the init SQL has finished
+      test: ["CMD-SHELL", "pg_isready -h localhost -U ${DB_USER:-tns-capital-db-user} -d tns_capital"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,7 +54,7 @@ services:
     build:
       context: ./shared/auth-stub
     environment:
-      JWT_SECRET: "mission-control-shared-secret-key-32-bytes-minimum"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       PORT: 4000
       # Browser origins allowed to call /token (where Swagger UI is opened from)
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
@@ -71,6 +72,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-tns-capital-db-user}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AUTH_TOKEN_URL: ${AUTH_TOKEN_URL:-http://localhost:4000/token}
     ports:
@@ -83,17 +85,17 @@ services:
       kafka:
         condition: service_healthy
 
-  # etl:
-  #   build: ./etl
-  #   environment:
-  #     ETL_DB_HOST: postgres
-  #     DB_USER: ${DB_USER:-tns-capital-db-user}
-  #     DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-  #     ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   restart: unless-stopped
+  etl:
+    build: ./etl
+    environment:
+      ETL_DB_HOST: postgres
+      DB_USER: ${DB_USER:-tns-capital-db-user}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
 
   kafka-ui:
     image: kafbat/kafka-ui:v1.5.0

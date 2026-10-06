@@ -110,4 +110,42 @@ class PositionTest {
                     "Market value at higher price should be 100 * 200");
         }
     }
+
+    @Nested
+    @DisplayName("Selling with apply()")
+    class SellApplyTests {
+        @Test
+        @DisplayName("A partial sell reduces quantity and keeps the average cost")
+        void partialSellKeepsAverageCost() {
+            Position holding = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
+
+            holding.apply(-40, new BigDecimal("200.00"));
+
+            assertEquals(60, holding.getQuantity());
+            assertEquals(new BigDecimal("150.00"), holding.getAverageCost());
+        }
+
+        @Test
+        @DisplayName("Selling the whole holding leaves it flat instead of dividing by zero")
+        void fullSellLeavesFlatPosition() {
+            Position holding = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
+
+            assertDoesNotThrow(() -> holding.apply(-100, new BigDecimal("200.00")));
+
+            assertEquals(0, holding.getQuantity());
+            assertEquals(0, holding.getAverageCost().compareTo(BigDecimal.ZERO));
+        }
+
+        @Test
+        @DisplayName("Buying back into a flat holding starts a new cost basis")
+        void buyAfterFlatStartsNewCostBasis() {
+            Position holding = new Position(1L, "AAPL", 100, new BigDecimal("150.00"));
+            holding.apply(-100, new BigDecimal("200.00"));
+
+            holding.apply(10, new BigDecimal("180.00"));
+
+            assertEquals(10, holding.getQuantity());
+            assertEquals(new BigDecimal("180.00"), holding.getAverageCost());
+        }
+    }
 }

@@ -11,3 +11,4 @@ node_modules/
 security-reports/
 __pycache__/
 .pytest_cache/
+etl/test-results.xml

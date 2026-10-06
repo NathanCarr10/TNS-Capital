@@ -79,23 +79,45 @@ pipeline {
                 // Builds the Docker image using the multi-stage Dockerfile from Lab 06.
                 // Tags with the Jenkins build number so every build produces a uniquely
                 // tagged image — avoids overwriting previous builds' artefacts.
-                sh 'mvn -B clean package'
+                // Tests are skipped here because the Test stage runs them.
+                sh 'mvn -B clean package -DskipTests'
                 sh "docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} ."
             }
         }
 
         stage('Test') {
             steps {
-                // Runs the Maven test suite inside the build environment.
-                // -B (batch mode) suppresses interactive prompts so output is clean in logs.
-                sh "mvn -B test"
+                // verify runs the unit tests (surefire) and the *IT integration tests
+                // (failsafe). The integration tests start Postgres and Kafka with
+                // Testcontainers, so the agent needs Docker, which it already has for
+                // the image build. -B (batch mode) keeps the log output clean.
+                sh "mvn -B verify"
             }
             post {
                 always {
                     // Publishes JUnit XML results to Jenkins regardless of pass/fail.
                     // This gives a test-trend chart in the Jenkins UI and lets branch
                     // protection rules check the test result as a status check.
-                    junit 'target/surefire-reports/*.xml'
+                    junit 'target/surefire-reports/*.xml, target/failsafe-reports/*.xml'
+                }
+            }
+        }
+
+        stage('ETL Tests') {
+            steps {
+                // The Python ETL pipeline's pytest suite, run in the same Python image
+                // the ETL container uses. The Postgres integration tests skip here
+                // (they need ETL_IT=1 and a database).
+                sh '''
+                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+                        -v "$WORKSPACE":/repo -w /repo/etl python:3.12-slim \
+                        sh -c "pip install --quiet --user -r requirements-dev.txt && \
+                               python -m pytest -p no:cacheprovider --junitxml=test-results.xml"
+                '''
+            }
+            post {
+                always {
+                    junit 'etl/test-results.xml'
                 }
             }
         }
@@ -127,11 +149,15 @@ pipeline {
                     // findings that have a fixed version available (--ignore-unfixed).
                     // Accepted risks go in .trivyignore. The trivy-cache volume keeps the
                     // vulnerability DB between builds so it isn't re-downloaded each time.
+                    // The databases come from GitHub's registry: Trivy's default mirror
+                    // (mirror.gcr.io) served a broken copy, failing the stage on every branch.
                     sh '''
                         TRIVY="docker run --rm -v trivy-cache:/root/.cache/ \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -v $WORKSPACE:/src:ro -w /src $TRIVY_IMAGE"
-                        COMMON="--scanners vuln --ignorefile /src/.trivyignore --quiet"
+                        COMMON="--scanners vuln --ignorefile /src/.trivyignore --quiet \
+                            --db-repository ghcr.io/aquasecurity/trivy-db:2 \
+                            --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1"
 
                         $TRIVY fs $COMMON --severity HIGH,CRITICAL \
                             --format sarif /src > "$REPORTS_DIR/trivy-fs.sarif"

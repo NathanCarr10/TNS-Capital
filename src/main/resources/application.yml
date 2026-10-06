@@ -4,15 +4,15 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tns_capital}
     username: ${SPRING_DATASOURCE_USERNAME:tns-capital-db-user}
-    password: ${SPRING_DATASOURCE_PASSWORD:n3u3d4!}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      # The db/ image owns the schema; Hibernate only checks the entities match it
+      ddl-auto: validate
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
           batch_size: 10
@@ -42,11 +42,12 @@ trading:
   kafka:
     topics:
       orders: orders
-      trades: trade-events
+      trade-events: trade-events
       market-data: market-data
 
 jwt:
-  shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
+  # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
+  shared-secret: ${JWT_SECRET}
 
 auth:
   # Where Swagger UI (running in your browser) sends username/password to get a JWT
@@ -81,9 +82,8 @@ springdoc:
   api-docs:
     path: /v3/api-docs
 
+# DEBUG for these packages logs every request and Kafka poll; enable it per run
+# when needed, e.g. LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA=DEBUG
 logging:
   level:
-    org.springdoc: DEBUG
-    org.springframework.web: DEBUG
-    org.flywaydb: DEBUG
-    org.springframework.kafka: DEBUG
+    com.neueda.leap: INFO

@@ -42,3 +42,19 @@ CREATE TABLE IF NOT EXISTS analytics.fact_trades (
     is_filled        BOOLEAN       NOT NULL,
     created_on       TIMESTAMP     NOT NULL    -- UTC
 );
+
+-- Orders that failed validation in the latest run, with the rule they broke.
+-- Replaced on every run. Values are text because they did not pass as valid
+-- numbers or dates.
+CREATE TABLE IF NOT EXISTS analytics.etl_rejected_orders (
+    order_id        TEXT,
+    account_number  TEXT,
+    symbol          TEXT,
+    side            TEXT,
+    quantity        TEXT,
+    price           TEXT,
+    status          TEXT,
+    created_on      TEXT,
+    reject_reason   VARCHAR(100) NOT NULL,
+    rejected_at     TIMESTAMP    NOT NULL DEFAULT NOW()
+);

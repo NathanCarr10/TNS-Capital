@@ -10,6 +10,7 @@ from transform import (
     build_dim_instrument,
     build_fact_trades,
     clean_orders,
+    find_rejected_orders,
     transform,
 )
 
@@ -52,6 +53,48 @@ def test_invalid_orders_are_removed(orders, instruments, column, bad_value):
     clean = clean_orders(orders, instruments)
 
     assert clean["order_id"].tolist() == ["order-1"]
+
+
+@pytest.mark.parametrize("column, bad_value, reason", [
+    ("order_id", None, "missing order_id"),
+    ("symbol", "UNKNOWN", "unknown symbol"),
+    ("side", "HOLD", "invalid side"),
+    ("quantity", -5, "quantity is not a positive number"),
+    ("price", "abc", "price is not a positive number"),
+    ("created_on", None, "created_on is missing or unreadable"),
+])
+def test_invalid_orders_are_kept_with_the_reason(orders, instruments, column, bad_value, reason):
+    orders[column] = orders[column].astype(object)
+    orders.loc[1, column] = bad_value
+
+    rejected = find_rejected_orders(orders, instruments)
+
+    assert len(rejected) == 1
+    assert rejected.loc[0, "reject_reason"] == reason
+    assert rejected.loc[0, "account_number"] == "ACC-1002"
+
+
+def test_rejected_orders_keep_the_values_as_received(orders, instruments):
+    orders["price"] = orders["price"].astype(object)
+    orders.loc[1, "price"] = "abc"
+
+    rejected = find_rejected_orders(orders, instruments)
+
+    assert rejected.loc[0, "price"] == "abc"
+    assert rejected.loc[0, "quantity"] == "10"
+
+
+def test_first_broken_rule_is_reported(orders, instruments):
+    orders.loc[1, "symbol"] = "UNKNOWN"
+    orders.loc[1, "side"] = "HOLD"
+
+    rejected = find_rejected_orders(orders, instruments)
+
+    assert rejected.loc[0, "reject_reason"] == "unknown symbol"
+
+
+def test_valid_orders_produce_no_rejects(orders, instruments):
+    assert find_rejected_orders(orders, instruments).empty
 
 
 def test_duplicate_orders_are_removed(orders, instruments):
@@ -112,10 +155,11 @@ def test_dim_date_has_one_row_per_trading_day(orders, instruments):
 
 # ---------- transform (everything together) ----------
 
-def test_transform_returns_all_four_tables(accounts, instruments, orders):
+def test_transform_returns_all_tables(accounts, instruments, orders):
     tables = transform(accounts, instruments, orders)
-    assert list(tables) == ["dim_account", "dim_instrument", "dim_date", "fact_trades"]
+    assert list(tables) == ["dim_account", "dim_instrument", "dim_date", "fact_trades", "etl_rejected_orders"]
     assert len(tables["fact_trades"]) == 2
+    assert tables["etl_rejected_orders"].empty
 
 
 def test_transform_gives_the_same_result_every_time(accounts, instruments, orders):

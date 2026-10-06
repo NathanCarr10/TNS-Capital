@@ -50,3 +50,20 @@ def load(conn, tables):
             for table in ["dim_account", "dim_instrument", "dim_date", "fact_trades"]:
                 upsert(cur, table, tables[table])
                 logger.info("Loaded %d rows into analytics.%s", len(tables[table]), table)
+
+            replace_rejects(cur, tables.get("etl_rejected_orders"))
+
+
+def replace_rejects(cur, rejects):
+    """Replace the rejected-orders table with this run's rejects.
+
+    It always shows the rows that failed the latest run: a row fixed at the
+    source disappears from it on the next run.
+    """
+    cur.execute("DELETE FROM analytics.etl_rejected_orders")
+    if rejects is None or rejects.empty:
+        return
+    columns = list(rejects.columns)
+    rows = rejects.astype(object).where(rejects.notna(), None).values.tolist()
+    execute_values(cur, f"INSERT INTO analytics.etl_rejected_orders ({', '.join(columns)}) VALUES %s", rows)
+    logger.warning("%d orders failed validation; see analytics.etl_rejected_orders", len(rejects))

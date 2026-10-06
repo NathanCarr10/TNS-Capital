@@ -262,8 +262,10 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                                 .satisfies(dlqMsg -> {
                                     assertThat(dlqMsg.getFailureReason())
                                             .contains("AccountNotFoundException")
-                                            .contains("Stack Trace");
-                                    assertThat(dlqMsg.getFailureType()).isEqualTo("AccountNotFoundException");
+                                            .contains("Account not found");
+                                    // Unknown accounts are marked non-retryable
+                                    assertThat(dlqMsg.getFailureType()).isEqualTo("NON_RETRYABLE_AccountNotFoundException");
+                                    assertThat(dlqMsg.getIsRetryable()).isFalse();
                                     assertThat(dlqMsg.getRetryCount()).isGreaterThanOrEqualTo(0);
                                     assertThat(dlqMsg.getCreatedOn()).isNotNull();
                                 });

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -214,6 +215,7 @@ public class DeadLetterQueueControllerIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should return 401 when not authenticated")
+    @WithAnonymousUser
     void testAccessDeniedWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/dlq/messages"))
                 .andExpect(status().isUnauthorized());

@@ -96,7 +96,7 @@ check 403 "john cannot open accounts"         "$JOHN" -X POST "$API/accounts" \
 # ---------------------------------------------------------------------
 # 6. Account must be validated (ACTIVE) before a customer can trade
 # ---------------------------------------------------------------------
-check 409 "frank cannot trade on his SUSPENDED account" "$FRANK" -X POST "$API/orders" -d "$(order "$FRANK_ACC")"
+check 403 "frank cannot trade on his SUSPENDED account (ACC-403)" "$FRANK" -X POST "$API/orders" -d "$(order "$FRANK_ACC")"
 check 403 "frank cannot approve his own account"        "$FRANK" -X PATCH "$API/accounts/$FRANK_ACC/status" -d '{"status":"ACTIVE"}'
 check 200 "admin approves frank's account"              "$ADMIN" -X PATCH "$API/accounts/$FRANK_ACC/status" -d '{"status":"ACTIVE"}'
 check 202 "frank can now trade"                         "$FRANK" -X POST "$API/orders" -d "$(order "$FRANK_ACC")"
