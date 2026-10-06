@@ -123,7 +123,7 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
         List<DeadLetterMessage> dlqMessages = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
         DeadLetterMessage dlqMsg = dlqMessages.get(0);
 
-        assertThat(dlqMsg.getFailureReason()).contains("AccountNotFoundException");
+        assertThat(dlqMsg.getFailureReason()).contains("Account not found");
         assertThat(dlqMsg.getRetryCount()).isGreaterThanOrEqualTo(0);
 
         // Step 4: Admin dismisses as unfixable

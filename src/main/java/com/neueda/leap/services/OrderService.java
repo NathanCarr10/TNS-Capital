@@ -113,11 +113,13 @@ public class OrderService {
         } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
             previousStatus = order.getStatus();
             order.setStatus(OrderStatus.REJECTED);
+            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
             rejectionReason = ex.getMessage();
             throw ex;
         } catch (Exception ex) {
             previousStatus = order.getStatus();
             order.setStatus(OrderStatus.REJECTED);
+            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
             rejectionReason = ex.getMessage();
             throw new IllegalStateException("Unexpected error during order execution", ex);
         } finally {

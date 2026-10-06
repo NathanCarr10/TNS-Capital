@@ -3,6 +3,7 @@ package com.neueda.leap.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.DLQStatus;
 import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
@@ -216,6 +217,20 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                                 .anyMatch(msg -> msg.getFailureType().contains("InsufficientFundsException"));
                     });
 
+            // The REJECTED order carries the same reason as the DLQ record, without the
+            // exception class name
+            DeadLetterMessage dlqMsg = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING).stream()
+                    .filter(msg -> orderId.equals(msg.getOriginalOrderId()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(dlqMsg.getFailureReason()).doesNotContain("Exception");
+            assertThat(orderRepository.findById(orderId))
+                    .get()
+                    .satisfies(order -> {
+                        assertThat(order.getStatus()).isEqualTo(OrderStatus.REJECTED);
+                        assertThat(order.getStatusReason()).isEqualTo(dlqMsg.getFailureReason());
+                    });
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to publish insufficient funds order event", e);
         }
@@ -261,8 +276,8 @@ public class OrderMessageListenerIT extends AbstractIntegrationTest {
                                 .first()
                                 .satisfies(dlqMsg -> {
                                     assertThat(dlqMsg.getFailureReason())
-                                            .contains("AccountNotFoundException")
-                                            .contains("Account not found");
+                                            .startsWith("Account not found")
+                                            .doesNotContain("AccountNotFoundException");
                                     // Unknown accounts are marked non-retryable
                                     assertThat(dlqMsg.getFailureType()).isEqualTo("NON_RETRYABLE_AccountNotFoundException");
                                     assertThat(dlqMsg.getIsRetryable()).isFalse();

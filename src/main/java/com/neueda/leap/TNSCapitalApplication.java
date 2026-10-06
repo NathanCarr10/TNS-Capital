@@ -3,6 +3,7 @@ package com.neueda.leap;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.mybatis.spring.annotation.MapperScan;
 
 /**
@@ -15,6 +16,7 @@ import org.mybatis.spring.annotation.MapperScan;
  */
 @SpringBootApplication
 @EnableKafka
+@EnableScheduling
 @MapperScan("com.neueda.leap.mappers")
 public class TNSCapitalApplication {
     public static void main(String[] args) {

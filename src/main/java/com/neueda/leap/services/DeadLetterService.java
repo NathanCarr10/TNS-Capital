@@ -10,10 +10,13 @@ import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.time.Clock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -32,6 +35,12 @@ public class DeadLetterService {
     private final DeadLetterMessageRepository dlqRepository;
     private final ObjectMapper objectMapper;
     private final Clock clock;
+
+    @Value("${dlq.auto-resolve.enabled:true}")
+    private boolean autoResolveEnabled;
+
+    @Value("${dlq.auto-resolve.after-ms:10000}")
+    private long autoResolveAfterMs;
 
     /**
      * Captures a failed message envelope and stores it in the DLQ table.
@@ -198,20 +207,46 @@ public class DeadLetterService {
 
     /**
      * Builds a failure reason string from an exception.
-     * Extracts the root cause first, then formats it as "ExceptionName: message".
-     * Handles null messages gracefully by using empty string.
-     * 
+     * Uses the root cause's message only (e.g. "Account not active: 3"); the
+     * exception class is recorded separately as the failure type. Falls back to
+     * the class name when the root cause has no message, since the reason is
+     * required.
      * Also used as the order's status reason so it matches the DLQ record.
      * 
      * @param exception the exception to format
-     * @return failure reason string with root cause class name and message
+     * @return failure reason string with the root cause message
      */
     public static String buildFailureReason(Throwable exception) {
         Throwable rootCause = getRootCause(exception);
         String message = rootCause.getMessage();
-        if (message == null) {
-            message = "";
+        if (message == null || message.isBlank()) {
+            return rootCause.getClass().getSimpleName();
         }
-        return rootCause.getClass().getSimpleName() + ": " + message;
+        return message;
+    }
+
+    /**
+     * Marks PENDING DLQ messages as RESOLVED once they are older than
+     * {@code dlq.auto-resolve.after-ms} (default 10 seconds).
+     * Runs every {@code dlq.auto-resolve.interval-ms} (default 1 second) when
+     * {@code dlq.auto-resolve.enabled} is true (the default).
+     */
+    @Scheduled(fixedDelayString = "${dlq.auto-resolve.interval-ms:1000}")
+    public void autoResolvePendingMessages() {
+        if (!autoResolveEnabled) {
+            return;
+        }
+        Instant now = clock.now();
+        Instant cutoff = now.minusMillis(autoResolveAfterMs);
+        List<DeadLetterMessage> due = dlqRepository.findByStatusAndCreatedOnBefore(DLQStatus.PENDING, cutoff);
+        for (DeadLetterMessage dlqMessage : due) {
+            dlqMessage.setStatus(DLQStatus.RESOLVED);
+            dlqMessage.setResolvedOn(now);
+            log.info("DLQ message auto-resolved: dlqId={}, orderId={}",
+                    dlqMessage.getId(), dlqMessage.getOriginalOrderId());
+        }
+        if (!due.isEmpty()) {
+            dlqRepository.saveAll(due);
+        }
     }
 }

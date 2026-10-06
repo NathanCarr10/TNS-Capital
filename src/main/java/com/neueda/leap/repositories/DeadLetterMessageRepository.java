@@ -20,6 +20,8 @@ public interface DeadLetterMessageRepository extends JpaRepository<DeadLetterMes
     List<DeadLetterMessage> findRecentMessages(@Param("status") DLQStatus status,
             @Param("startDate") Instant startDate);
 
+    List<DeadLetterMessage> findByStatusAndCreatedOnBefore(DLQStatus status, Instant cutoff);
+
     long countByStatus(DLQStatus status);
 
     long countByStatusAndFailureType(DLQStatus status, String failureType);

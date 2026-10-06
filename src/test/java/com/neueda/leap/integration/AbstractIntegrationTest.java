@@ -68,6 +68,8 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
         // No default secret is committed; tests use @WithMockUser, so any value works
         registry.add("jwt.shared-secret", () -> "integration-test-secret-at-least-32-bytes");
+        // Tests inspect PENDING DLQ messages, so they must not be auto-resolved
+        registry.add("dlq.auto-resolve.enabled", () -> "false");
     }
 
     @Autowired
