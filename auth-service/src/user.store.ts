@@ -12,11 +12,16 @@ interface StoredUser extends User {
 
 const SALT_ROUNDS = 10;
 
-// Same accounts and roles as shared/auth-stub, so this service is a drop-in
+// Same accounts and roles as shared/auth-stub (including the admin and
+// CUSTOMER users from the account-ownership work), so this service is a drop-in
 // replacement for it. Stand-in until registration and the Postgres users table land.
 const SEED_USERS = [
+  { username: "admin", password: "adminPassword", roles: ["ADMIN"] },
   { username: "alice", password: "mission123", roles: ["MISSION_OPERATOR", "ADMIN"] },
   { username: "bob", password: "wrongpermissions", roles: ["GUEST"] },
+  { username: "john", password: "customer123", roles: ["CUSTOMER"] },
+  { username: "frank", password: "customer123", roles: ["CUSTOMER"] },
+  { username: "nina", password: "customer123", roles: ["CUSTOMER"] },
 ];
 
 @Injectable()

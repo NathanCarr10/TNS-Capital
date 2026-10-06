@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { unauthorised } from "./auth-errors";
 import { logAuthEvent } from "./logger";
@@ -6,8 +6,10 @@ import { RefreshTokenStore } from "./refresh-token.store";
 import { RefreshClaims, TokenService } from "./token.service";
 import { UserStore } from "./user.store";
 
+// "token" is the access token, named as in the contract's LoginResponse so
+// existing clients of the stub keep working.
 export interface TokenPair {
-  accessToken: string;
+  token: string;
   refreshToken: string;
 }
 
@@ -22,7 +24,7 @@ export class AuthService {
   async login(username: string, password: string): Promise<TokenPair> {
     const user = await this.users.verifyCredentials(username, password);
     if (!user) {
-      throw new UnauthorizedException({ errorCode: "AUTH-401", message: "Invalid username or password" });
+      throw unauthorised("invalid username or password");
     }
     logAuthEvent("login_success", username);
     return this.issueTokenPair(user.username, user.roles, randomUUID());
@@ -59,9 +61,9 @@ export class AuthService {
   }
 
   private issueTokenPair(username: string, roles: string[], familyId: string): TokenPair {
-    const accessToken = this.tokens.issueAccessToken(username, roles);
+    const token = this.tokens.issueAccessToken(username, roles);
     const { token: refreshToken, claims } = this.tokens.issueRefreshToken(username, familyId);
     this.refreshTokens.save(refreshToken, username, familyId, claims.exp);
-    return { accessToken, refreshToken };
+    return { token, refreshToken };
   }
 }

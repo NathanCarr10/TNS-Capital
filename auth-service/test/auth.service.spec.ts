@@ -1,6 +1,6 @@
 import { UnauthorizedException } from "@nestjs/common";
 import * as jwt from "jsonwebtoken";
-import { AUTH_401_BODY } from "../src/auth-errors";
+import { AUTH_401 } from "../src/auth-errors";
 import { AuthService } from "../src/auth.service";
 import { ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_SECONDS } from "../src/config";
 import { hashToken, RefreshTokenStore } from "../src/refresh-token.store";
@@ -10,7 +10,7 @@ import { TEST_CONFIG } from "./test-config";
 
 async function expectAuth401(promise: Promise<unknown>): Promise<void> {
   await expect(promise).rejects.toBeInstanceOf(UnauthorizedException);
-  await promise.catch((e: UnauthorizedException) => expect(e.getResponse()).toEqual(AUTH_401_BODY));
+  await promise.catch((e: UnauthorizedException) => expect(e.getResponse()).toEqual(AUTH_401));
 }
 
 describe("AuthService refresh", () => {
@@ -33,12 +33,12 @@ describe("AuthService refresh", () => {
 
     expect(second.refreshToken).not.toBe(first.refreshToken);
     expect(third.refreshToken).not.toBe(second.refreshToken);
-    expect(third.accessToken).not.toBe(second.accessToken);
+    expect(third.token).not.toBe(second.token);
   });
 
   it("returns an access token with the full claim set", async () => {
     const { refreshToken } = await service.login("alice", "mission123");
-    const { accessToken } = await service.refresh(refreshToken);
+    const { token: accessToken } = await service.refresh(refreshToken);
 
     const claims = jwt.verify(accessToken, TEST_CONFIG.accessSecret, { algorithms: ["HS256"] }) as jwt.JwtPayload;
     expect(claims).toEqual({
@@ -126,7 +126,7 @@ describe("AuthService refresh", () => {
   });
 
   it("refuses an access token presented as a refresh token", async () => {
-    const { accessToken } = await service.login("alice", "mission123");
+    const { token: accessToken } = await service.login("alice", "mission123");
     await expectAuth401(service.refresh(accessToken));
   });
 

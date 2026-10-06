@@ -1,12 +1,13 @@
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsString, Length } from "class-validator";
 
 export class LoginDto {
+  // Limits from LoginRequest in contracts/auth-api.yaml.
   @IsString()
-  @IsNotEmpty()
+  @Length(1, 100)
   username!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @Length(1, 256)
   password!: string;
 }
 

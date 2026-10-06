@@ -3,7 +3,7 @@ import http from "http";
 import https from "https";
 import * as jwt from "jsonwebtoken";
 import net from "net";
-import { AUTH_401_BODY } from "../src/auth-errors";
+import { AUTH_401 } from "../src/auth-errors";
 import { AuthenticatedRequest, JwtAuthGuard } from "../src/jwt-auth.guard";
 import { TokenService } from "../src/token.service";
 import { TEST_CONFIG } from "./test-config";
@@ -69,12 +69,12 @@ describe("JwtAuthGuard", () => {
 
   it("refuses an expired token with AUTH-401", () => {
     const expired = signAccess({ payload: { exp: Math.floor(Date.now() / 1000) - 10 }, options: { expiresIn: undefined } });
-    expect(rejectionBody(guard, `Bearer ${expired}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${expired}`)).toEqual(AUTH_401);
   });
 
   it("refuses a token signed with the wrong secret with AUTH-401", () => {
     const forged = signAccess({ secret: "some-other-secret-at-least-32-characters" });
-    expect(rejectionBody(guard, `Bearer ${forged}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${forged}`)).toEqual(AUTH_401);
   });
 
   it("refuses a token whose payload was tampered with", () => {
@@ -82,7 +82,7 @@ describe("JwtAuthGuard", () => {
     const escalated = Buffer.from(
       JSON.stringify({ sub: "bob", roles: ["ADMIN"], typ: "access", iss: TEST_CONFIG.issuer, jti: "x", exp: 9999999999 }),
     ).toString("base64url");
-    expect(rejectionBody(guard, `Bearer ${header}.${escalated}.${signature}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${header}.${escalated}.${signature}`)).toEqual(AUTH_401);
   });
 
   it.each([
@@ -90,11 +90,11 @@ describe("JwtAuthGuard", () => {
     ["two segments", "Bearer aaa.bbb"],
     ["garbage base64", "Bearer !!!.@@@.###"],
   ])("refuses a malformed token (%s)", (_label, header) => {
-    expect(rejectionBody(guard, header)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, header)).toEqual(AUTH_401);
   });
 
   it("refuses a request with no Authorization header", () => {
-    expect(rejectionBody(guard, undefined)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, undefined)).toEqual(AUTH_401);
   });
 
   it.each([
@@ -104,12 +104,12 @@ describe("JwtAuthGuard", () => {
     ["extra parts", "Bearer TOKEN_PLACEHOLDER extra"],
   ])("refuses a wrong or broken scheme (%s)", (_label, header) => {
     const token = tokens.issueAccessToken("alice", ["MISSION_OPERATOR"]);
-    expect(rejectionBody(guard, header.replace("TOKEN_PLACEHOLDER", token))).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, header.replace("TOKEN_PLACEHOLDER", token))).toEqual(AUTH_401);
   });
 
   it("refuses a token from a different issuer", () => {
     const foreign = signAccess({ options: { issuer: "someone-else" } });
-    expect(rejectionBody(guard, `Bearer ${foreign}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${foreign}`)).toEqual(AUTH_401);
   });
 
   it("refuses an unsigned (alg: none) token", () => {
@@ -118,17 +118,17 @@ describe("JwtAuthGuard", () => {
       "",
       { algorithm: "none", expiresIn: 60 },
     );
-    expect(rejectionBody(guard, `Bearer ${unsigned}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${unsigned}`)).toEqual(AUTH_401);
   });
 
   it("refuses a refresh token presented as an access token", () => {
     const { token } = tokens.issueRefreshToken("alice", "family-1");
-    expect(rejectionBody(guard, `Bearer ${token}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${token}`)).toEqual(AUTH_401);
   });
 
   it("refuses a correctly signed token that is not typed as an access token", () => {
     const untyped = signAccess({ payload: { typ: undefined } });
-    expect(rejectionBody(guard, `Bearer ${untyped}`)).toEqual(AUTH_401_BODY);
+    expect(rejectionBody(guard, `Bearer ${untyped}`)).toEqual(AUTH_401);
   });
 
   it("returns the identical AUTH-401 body whatever the reason", () => {
@@ -141,7 +141,7 @@ describe("JwtAuthGuard", () => {
       rejectionBody(guard, `Bearer ${signAccess({ options: { issuer: "someone-else" } })}`),
     ];
     for (const body of bodies) {
-      expect(JSON.stringify(body)).toBe(JSON.stringify(AUTH_401_BODY));
+      expect(JSON.stringify(body)).toBe(JSON.stringify(AUTH_401));
     }
   });
 

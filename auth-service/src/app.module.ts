@@ -4,6 +4,7 @@ import { AuthService } from "./auth.service";
 import { AUTH_CONFIG, AuthConfig } from "./config";
 import { HealthController } from "./health.controller";
 import { JwtAuthGuard } from "./jwt-auth.guard";
+import { PlatformExceptionFilter } from "./platform-exception.filter";
 import { RefreshTokenStore } from "./refresh-token.store";
 import { TokenService } from "./token.service";
 import { UserStore } from "./user.store";
@@ -28,4 +29,5 @@ export class AppModule {
 
 export function configureApp(app: INestApplication): void {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+  app.useGlobalFilters(new PlatformExceptionFilter());
 }

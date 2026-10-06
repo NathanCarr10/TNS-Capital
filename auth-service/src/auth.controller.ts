@@ -5,7 +5,7 @@ import { LoginDto, RefreshDto } from "./dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AccessClaims } from "./token.service";
 
-@Controller("auth")
+@Controller()
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

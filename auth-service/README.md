@@ -2,7 +2,8 @@
 
 A NestJS service that issues the JWTs the trading API trusts, and replaces `shared/auth-stub`.
 Access tokens are signed with the same `JWT_SECRET` as before, so the trading API's
-`SecurityConfig` accepts them unchanged.
+`SecurityConfig` accepts them unchanged. It follows [contracts/auth-api.yaml](../contracts/auth-api.yaml):
+the same port, `/login` and `/health` as the stub, plus `/refresh` and `/me`.
 
 ## Run it
 
@@ -13,7 +14,7 @@ npm run build
 JWT_SECRET=<same value as the project .env> JWT_REFRESH_SECRET=<a different value> npm start
 ```
 
-Listens on `http://localhost:3000` (set `PORT` to change it).
+Listens on `http://localhost:4000`, the stub's port (set `PORT` to change it; 3000 is the trading API).
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -25,20 +26,27 @@ Listens on `http://localhost:3000` (set `PORT` to change it).
 
 | Method and path | Auth | Returns |
 |---|---|---|
-| `POST /auth/login` `{username, password}` | none | `{accessToken, refreshToken}` |
-| `POST /auth/refresh` `{refreshToken}` | none | a new `{accessToken, refreshToken}`; the old refresh token is spent |
-| `GET /auth/me` | `Bearer <accessToken>` | the verified access-token claims |
+| `POST /login` `{username, password}` | none | `{token, refreshToken}` |
+| `POST /refresh` `{refreshToken}` | none | a new `{token, refreshToken}`; the old refresh token is spent |
+| `GET /me` | `Bearer <token>` | the verified access-token claims |
 | `GET /health` | none | `{status: "up"}` |
 
-The seeded users match the old stub: `alice`/`mission123` (MISSION_OPERATOR, ADMIN) and
-`bob`/`wrongpermissions` (GUEST). They are held in memory until registration and the Postgres
-`users` table are built.
+`token` is the access token; it keeps the stub's field name so existing clients work.
+
+The seeded users match the stub, including the account-ownership users from PR #80: `admin`/`adminPassword`
+(ADMIN), `alice`/`mission123` (MISSION_OPERATOR, ADMIN), `bob`/`wrongpermissions` (GUEST), and
+`john`, `frank`, `nina`/`customer123` (CUSTOMER). They are held in memory until registration and the
+Postgres `users` table are built.
+
+Every error uses the platform envelope from the contract, `{errorCode, message, timestamp}`:
+AUTH-401 for bad credentials or tokens, VAL-422 (status 400) for a request body that fails the
+contract's schema or is not valid JSON, NOT-404 for unknown routes, and SYS-500 otherwise.
 
 ```bash
-curl -s -X POST localhost:3000/auth/login -H "Content-Type: application/json" \
+curl -s -X POST localhost:4000/login -H "Content-Type: application/json" \
   -d '{"username":"alice","password":"mission123"}'
-curl -s localhost:3000/auth/me -H "Authorization: Bearer <accessToken>"
-curl -s -X POST localhost:3000/auth/refresh -H "Content-Type: application/json" \
+curl -s localhost:4000/me -H "Authorization: Bearer <token>"
+curl -s -X POST localhost:4000/refresh -H "Content-Type: application/json" \
   -d '{"refreshToken":"<refreshToken>"}'
 ```
 
@@ -49,7 +57,7 @@ curl -s -X POST localhost:3000/auth/refresh -H "Content-Type: application/json" 
 | Lifetime | **15 minutes** | **7 days** from issue |
 | Signed with | `JWT_SECRET` (HS256) | `JWT_REFRESH_SECRET` (HS256) |
 | Claims | `sub`, `roles`, `typ: "access"`, `iss`, `jti`, `iat`, `exp` | `sub`, `typ: "refresh"`, `fam`, `iss`, `jti`, `iat`, `exp` |
-| Checked by | the trading API and `JwtAuthGuard` | `POST /auth/refresh` only |
+| Checked by | the trading API and `JwtAuthGuard` | `POST /refresh` only |
 
 Both lifetimes are constants in [src/config.ts](src/config.ts). Because each refresh issues a new
 7-day token, an active user stays signed in indefinitely; a session that goes 7 days without a
@@ -62,10 +70,11 @@ checks the signature, expiry, issuer and `typ`, with the algorithm pinned to HS2
 and algorithm-swap tokens fail). The handler gets the verified claims through `@Claims()`.
 
 Any failure, including a missing header, the wrong scheme (for example `Basic`), a malformed,
-expired or tampered token, the wrong issuer, or a refresh token, returns 401 with exactly this body:
+expired or tampered token, the wrong issuer, or a refresh token, returns 401 with the same body.
+Only the timestamp, the time of the response, changes:
 
 ```json
-{"errorCode":"AUTH-401","message":"Unauthorised or invalid token"}
+{"errorCode":"AUTH-401","message":"Unauthorised or invalid token","timestamp":"2026-10-06T15:00:00.000Z"}
 ```
 
 Verification is local: the guard depends only on `TokenService`, which holds the secret and makes
@@ -73,7 +82,7 @@ no network call or database lookup.
 
 ## Security review: refresh tokens
 
-**Rotation.** Each refresh token works once. `POST /auth/refresh` spends the presented token and
+**Rotation.** Each refresh token works once. `POST /refresh` spends the presented token and
 returns a new access token and a new refresh token.
 
 **Revocation is built.** Every token rotated from one login shares a family id (`fam`). If a spent
@@ -88,7 +97,7 @@ bcrypt is kept for passwords.
 
 **Type confusion.** Refresh tokens are signed with a secret the trading API does not have, so the
 API cannot accept one as an access token. Both sides also check `typ`, so an access token is
-refused at `/auth/refresh` and a refresh token is refused by the guard.
+refused at `/refresh` and a refresh token is refused by the guard.
 
 **Residual risks**
 
@@ -114,4 +123,5 @@ npm test
   identical bodies; and no network calls.
 - `test/auth.service.spec.ts`: refresh rotation, reuse detection, the access-token claim set,
   expired, tampered or malformed refresh tokens, token-type confusion, and hashed storage.
-- `test/auth.e2e.spec.ts`: the same flows over HTTP against the real Nest app.
+- `test/auth.e2e.spec.ts`: the same flows over HTTP against the real Nest app, plus the platform
+  error envelope (AUTH-401, VAL-422, NOT-404) and the contract's response shapes.
