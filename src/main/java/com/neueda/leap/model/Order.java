@@ -48,6 +48,11 @@ public class Order {
     @Column(nullable = false)
     private Instant createdOn;
 
+    @Column(name = "status_reason", length = STATUS_REASON_MAX_LENGTH)
+    private String statusReason;
+
+    public static final int STATUS_REASON_MAX_LENGTH = 255;
+
     protected Order() {
         // JPA no-arg constructor
     }
@@ -84,6 +89,7 @@ public class Order {
         this.status = other.status;
         this.idempotencyKey = other.idempotencyKey;
         this.createdOn = other.createdOn;
+        this.statusReason = other.statusReason;
     }
 
     private void validateConstructorArgs(Long accountId, String symbol, OrderSide side, Integer quantity,
@@ -149,6 +155,23 @@ public class Order {
         return createdOn;
     }
 
+    public String getStatusReason() {
+        return statusReason;
+    }
+
+    /**
+     * Sets the reason for the current status (e.g. why the order was REJECTED).
+     * Values longer than the column size are truncated.
+     *
+     * @param statusReason the reason text, may be null
+     */
+    public void setStatusReason(String statusReason) {
+        if (statusReason != null && statusReason.length() > STATUS_REASON_MAX_LENGTH) {
+            statusReason = statusReason.substring(0, STATUS_REASON_MAX_LENGTH);
+        }
+        this.statusReason = statusReason;
+    }
+
     public void setStatus(OrderStatus newStatus) {
         if (newStatus == null) {
             throw new IllegalArgumentException("Status cannot be null");
@@ -212,6 +235,7 @@ public class Order {
                 ", status=" + status +
                 ", idempotencyKey='" + idempotencyKey + '\'' +
                 ", createdOn=" + createdOn +
+                ", statusReason='" + statusReason + '\'' +
                 '}';
     }
 }

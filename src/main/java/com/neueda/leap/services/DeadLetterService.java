@@ -201,10 +201,12 @@ public class DeadLetterService {
      * Extracts the root cause first, then formats it as "ExceptionName: message".
      * Handles null messages gracefully by using empty string.
      * 
+     * Also used as the order's status reason so it matches the DLQ record.
+     * 
      * @param exception the exception to format
      * @return failure reason string with root cause class name and message
      */
-    private String buildFailureReason(Exception exception) {
+    public static String buildFailureReason(Throwable exception) {
         Throwable rootCause = getRootCause(exception);
         String message = rootCause.getMessage();
         if (message == null) {

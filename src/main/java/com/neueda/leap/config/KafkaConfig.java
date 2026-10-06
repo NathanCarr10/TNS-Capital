@@ -255,6 +255,8 @@ public class KafkaConfig {
 
             // DEFENSIVE GUARANTEE: Explicitly update order status to REJECTED
             // This ensures status is REJECTED even if saveRejectedOrder() failed earlier
+            // and records the same failure reason that is stored in dlq_messages
+            String failureReason = DeadLetterService.buildFailureReason(exception);
             orderRepository.findById(event.orderId())
                     .ifPresent(order -> {
                         // Only update status and publish event if order is not already REJECTED
@@ -263,6 +265,7 @@ public class KafkaConfig {
                         if (order.getStatus() != OrderStatus.REJECTED) {
                             OrderStatus previousStatus = order.getStatus();
                             order.setStatus(OrderStatus.REJECTED);
+                            order.setStatusReason(failureReason);
                             orderRepository.save(order);
                             log.info(
                                     "Updated order status to REJECTED in recovery handler (was not REJECTED): orderId={}, previousStatus={}",
@@ -273,6 +276,10 @@ public class KafkaConfig {
                             log.info("Published REJECTED trade event in recovery handler: orderId={}, previousStatus={}",
                                     event.orderId(), previousStatus);
                         } else {
+                            if (order.getStatusReason() == null) {
+                                order.setStatusReason(failureReason);
+                                orderRepository.save(order);
+                            }
                             log.debug(
                                     "Order already REJECTED (trade event was published during processing): orderId={}",
                                     event.orderId());
