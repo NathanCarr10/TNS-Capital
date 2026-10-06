@@ -48,6 +48,10 @@ trading:
 jwt:
   shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
 
+auth:
+  # Where Swagger UI (running in your browser) sends username/password to get a JWT
+  token-url: ${AUTH_TOKEN_URL:http://localhost:4000/token}
+
 mybatis:
   type-handlers-package: com.neueda.leap.config
   type-aliases-package: com.neueda.leap.model
@@ -72,6 +76,8 @@ management:
 springdoc:
   swagger-ui:
     enabled: true
+    # Keep the login across page refreshes
+    persist-authorization: true
   api-docs:
     path: /v3/api-docs
 

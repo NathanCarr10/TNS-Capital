@@ -4,6 +4,7 @@ import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
@@ -12,11 +13,15 @@ import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
+import com.neueda.leap.model.Account;
+import com.neueda.leap.security.AccountAccess;
 import com.neueda.leap.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -27,6 +32,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Admins (ROLE_ADMIN) can view, place and cancel any order. Customers can only
+ * act on orders belonging to accounts they own, and can only place orders
+ * against an owned account that is ACTIVE.
+ */
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
@@ -37,6 +47,7 @@ public class OrderController {
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
     private final OrderEventPublisher orderEventPublisher;
+    private final AccountAccess accountAccess;
 
     /**
      * Places an order asynchronously by publishing to Kafka.
@@ -52,7 +63,20 @@ public class OrderController {
      * @return 202 ACCEPTED with order ID for client tracking
      */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+    @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsAccount(authentication, #request.accountId())")
+    public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request,
+            Authentication authentication) {
+        // Customers get an immediate 409 if their account has not been approved (or was
+        // suspended/closed), instead of the order silently failing into the DLQ later
+        if (!accountAccess.isAdmin(authentication)) {
+            Account account = accountRepository.findById(request.accountId())
+                    .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
+            if (!account.isActive()) {
+                throw new AccountNotActiveException("Account not active: " + request.accountId());
+            }
+        }
+
+
         // Generate order ID for this request
         UUID orderId = UUID.randomUUID();
 
@@ -83,10 +107,14 @@ public class OrderController {
     }
 
     @GetMapping
-    public ResponseEntity<List<OrderResponse>> getAllOrders() {
-        // Queries all orders; enables bulk retrieval and monitoring of system order
-        // flow
-        List<Order> orders = orderRepository.findAll();
+    public ResponseEntity<List<OrderResponse>> getAllOrders(Authentication authentication) {
+        // Admins see all orders (system monitoring); customers only see orders on
+        // their own accounts
+        List<Order> orders = accountAccess.isAdmin(authentication)
+                ? orderRepository.findAll()
+                : orderRepository.findByAccountIdIn(accountAccess.ownedAccounts(authentication).stream()
+                        .map(Account::getId)
+                        .toList());
         List<OrderResponse> responses = orders.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -94,6 +122,7 @@ public class OrderController {
     }
 
     @GetMapping("/{orderId}")
+    @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsOrder(authentication, #orderId)")
     @SuppressWarnings("null")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID orderId) {
         // Retrieves order by UUID; throws exception if not found to maintain REST
@@ -105,6 +134,7 @@ public class OrderController {
     }
 
     @DeleteMapping("/{orderId}")
+    @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsOrder(authentication, #orderId)")
     public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
         // Validates order exists before cancellation; prevents silently ignoring
         // requests for non-existent orders
@@ -119,6 +149,7 @@ public class OrderController {
     }
 
     @GetMapping("/history/{orderId}")
+    @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsOrderHistory(authentication, #orderId)")
     public ResponseEntity<OrderHistoryResponse> getOrderHistory(@PathVariable UUID orderId) {
         // Retrieves order history record for a cancelled/deleted order
         OrderHistory history = orderHistoryRepository.findByOrderId(orderId)
@@ -128,6 +159,7 @@ public class OrderController {
     }
 
     @GetMapping("/{accountId}/history")
+    @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsAccount(authentication, #accountId)")
     public ResponseEntity<List<OrderHistoryResponse>> getAccountOrderHistory(@PathVariable Long accountId) {
         // Retrieves all order history records for an account; enables audit trail
         // queries even for deleted accounts

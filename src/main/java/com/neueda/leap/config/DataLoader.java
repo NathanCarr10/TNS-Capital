@@ -79,22 +79,24 @@ public class DataLoader implements CommandLineRunner {
 
         private void loadAccounts() {
                 Object[][] accountData = {
-                                { "ACC-1001", "John Doe", "5000.00", AccountStatus.ACTIVE },
-                                { "ACC-1002", "Jane Smith", "12000.00", AccountStatus.ACTIVE },
-                                { "ACC-1003", "Bob Lee", "1000.00", AccountStatus.SUSPENDED },
-                                { "ACC-1004", "Alice Johnson", "8500.00", AccountStatus.ACTIVE },
-                                { "ACC-1005", "Charlie Brown", "15000.00", AccountStatus.ACTIVE },
-                                { "ACC-1006", "Diana Prince", "2500.00", AccountStatus.ACTIVE },
-                                { "ACC-1007", "Eve Wilson", "20000.00", AccountStatus.ACTIVE },
-                                { "ACC-1008", "Frank Miller", "500.00", AccountStatus.SUSPENDED },
-                                { "ACC-1009", "Grace Hopper", "11000.00", AccountStatus.ACTIVE },
-                                { "ACC-1010", "Henry Foster", "7250.00", AccountStatus.ACTIVE },
+                                { "ACC-1001", "John Doe", "5000.00", AccountStatus.ACTIVE, "john" },
+                                { "ACC-1002", "Jane Smith", "12000.00", AccountStatus.ACTIVE, "jane" },
+                                { "ACC-1003", "Bob Lee", "1000.00", AccountStatus.SUSPENDED, "bob" },
+                                { "ACC-1004", "Alice Johnson", "8500.00", AccountStatus.ACTIVE, "alice" },
+                                { "ACC-1005", "Charlie Brown", "15000.00", AccountStatus.ACTIVE, "charlie" },
+                                { "ACC-1006", "Diana Prince", "2500.00", AccountStatus.ACTIVE, "diana" },
+                                { "ACC-1007", "Eve Wilson", "20000.00", AccountStatus.ACTIVE, "eve" },
+                                { "ACC-1008", "Frank Miller", "500.00", AccountStatus.SUSPENDED, "frank" },
+                                { "ACC-1009", "Grace Hopper", "11000.00", AccountStatus.ACTIVE, "grace" },
+                                { "ACC-1010", "Henry Foster", "7250.00", AccountStatus.ACTIVE, "henry" },
                 };
 
                 for (Object[] data : accountData) {
                         Account account = new Account((String) data[0], (String) data[1],
                                         new BigDecimal((String) data[2]), clock);
                         account.setStatus((AccountStatus) data[3]);
+                        // Owner is the JWT "sub" (username) allowed to use this account as a CUSTOMER
+                        account.setOwnerUsername((String) data[4]);
                         accountRepository.save(account);
                 }
                 System.out.println("✓ Loaded " + accountData.length + " accounts");

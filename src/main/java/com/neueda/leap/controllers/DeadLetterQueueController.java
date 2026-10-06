@@ -50,7 +50,7 @@ public class DeadLetterQueueController {
      * @return ResponseEntity with list of DLQ message DTOs
      */
     @GetMapping("/messages")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<DeadLetterMessageDTO>> getDLQMessages(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String failureType) {
@@ -92,7 +92,7 @@ public class DeadLetterQueueController {
      * @return ResponseEntity with the DLQ message DTO, or 404 if not found
      */
     @GetMapping("/messages/{id}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<DeadLetterMessageDTO> getDLQMessage(@PathVariable UUID id) {
         return dlqRepository.findById(id)
                 .map(message -> {
@@ -116,7 +116,7 @@ public class DeadLetterQueueController {
      * @return ResponseEntity with 200 OK on successful replay, or error status
      */
     @PostMapping("/messages/{id}/replay")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> replayMessage(@PathVariable UUID id) {
         try {
             boolean success = deadLetterService.replayMessage(id, orderService);
@@ -149,7 +149,7 @@ public class DeadLetterQueueController {
      * @return ResponseEntity with 204 No Content on success
      */
     @DeleteMapping("/messages/{id}")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> dismissMessage(
             @PathVariable UUID id,
             @RequestParam(required = false) String adminNotes) {
@@ -174,7 +174,7 @@ public class DeadLetterQueueController {
      * @return ResponseEntity with DLQ statistics
      */
     @GetMapping("/statistics")
-    // @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<DLQStatistics> getDLQStatistics() {
         try {
             long pendingCount = dlqRepository.countByStatus(DLQStatus.PENDING);

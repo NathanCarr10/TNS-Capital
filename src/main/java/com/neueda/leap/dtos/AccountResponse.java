@@ -10,5 +10,6 @@ public record AccountResponse(
         String holderName,
         BigDecimal cashBalance,
         AccountStatus status,
-        Long lastUpdated) {
+        Long lastUpdated,
+        String ownerUsername) {
 }

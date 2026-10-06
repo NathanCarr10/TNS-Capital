@@ -11,5 +11,7 @@ public record CreateAccountRequest(
 
                 @NotBlank(message = "Holder name cannot be blank") String holderName,
 
-                @NotNull(message = "Cash balance cannot be null") @DecimalMin(value = "0.0", inclusive = true, message = "Cash balance must be non-negative") BigDecimal cashBalance) {
+                @NotNull(message = "Cash balance cannot be null") @DecimalMin(value = "0.0", inclusive = true, message = "Cash balance must be non-negative") BigDecimal cashBalance,
+
+                @NotBlank(message = "Owner username cannot be blank") String ownerUsername) {
 }

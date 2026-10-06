@@ -55,6 +55,8 @@ services:
     environment:
       JWT_SECRET: "mission-control-shared-secret-key-32-bytes-minimum"
       PORT: 4000
+      # Browser origins allowed to call /token (where Swagger UI is opened from)
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:
       - "4000:4000"
     healthcheck:
@@ -70,6 +72,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-tns-capital-db-user}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      AUTH_TOKEN_URL: ${AUTH_TOKEN_URL:-http://localhost:4000/token}
     ports:
       - "3000:3000"
     depends_on:

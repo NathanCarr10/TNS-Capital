@@ -2,6 +2,7 @@ package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Account;
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -18,4 +19,12 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
      * @return Optional containing the account if found, empty otherwise
      */
     Optional<Account> findByAccountNumber(String accountNumber);
+
+    /**
+     * Finds the accounts owned by a customer (JWT subject).
+     *
+     * @param ownerUsername the username from the token's "sub" claim
+     * @return the customer's accounts, empty if they have none
+     */
+    List<Account> findByOwnerUsername(String ownerUsername);
 }

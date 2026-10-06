@@ -6,7 +6,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     cash_balance    NUMERIC(18,2)       NOT NULL CHECK (cash_balance >= 0) DEFAULT 0,
     status          VARCHAR(20)         NOT NULL CHECK (status IN ('ACTIVE', 'SUSPENDED', 'CLOSED')) DEFAULT 'ACTIVE',
     version         INT                 NOT NULL DEFAULT 0,
-    last_updated    TIMESTAMP           NOT NULL DEFAULT NOW()
+    last_updated    TIMESTAMP           NOT NULL DEFAULT NOW(),
+    owner_username  VARCHAR(255)        -- JWT subject of the customer who owns the account
 );
+
+CREATE INDEX IF NOT EXISTS idx_accounts_owner_username ON accounts (owner_username);
 
 COMMENT ON TABLE accounts IS 'Trading accounts and their cash balances.';

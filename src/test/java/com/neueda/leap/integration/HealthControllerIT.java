@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests HTTP health check endpoints
  */
 @DisplayName("Health Controller Integration Tests")
-@WithMockUser(username = "testuser", roles = "USER")
+@WithMockUser(username = "testuser", roles = "ADMIN")
 public class HealthControllerIT extends AbstractIntegrationTest {
 
     @Autowired

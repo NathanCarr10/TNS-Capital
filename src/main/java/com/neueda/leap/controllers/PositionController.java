@@ -7,6 +7,7 @@ import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.utils.InputNormalizer;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.constraints.NotNull;
 
@@ -27,6 +28,7 @@ public class PositionController {
         }
 
         @SuppressWarnings("null")
+        @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsAccount(authentication, #accountId)")
         @GetMapping("/{accountId}")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 // Validates account exists before querying positions; prevents exposing
@@ -42,6 +44,7 @@ public class PositionController {
         }
 
         @SuppressWarnings("null")
+        @PreAuthorize("hasRole('ADMIN') or @accountAccess.ownsAccount(authentication, #accountId)")
         @GetMapping("/{accountId}/{symbol}")
         public ResponseEntity<PositionResponse> getPosition(@PathVariable @NotNull Long accountId,
                         @PathVariable String symbol) {

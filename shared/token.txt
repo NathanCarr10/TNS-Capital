@@ -1,7 +1,116 @@
-TOKEN=$(curl -s -X POST http://localhost:4000/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"mission123"}' | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+# =====================================================================
+# Terminal tests for authentication (who you are) and authorization
+# (what you may do). Needs the stack running: docker compose up -d --build
+#
+# Run everything at once:   bash shared/token.txt
+# Or paste one section at a time into your terminal (section 1 first).
+# =====================================================================
 
-echo $TOKEN
+AUTH=http://localhost:4000
+API=http://localhost:3000/api/v1
 
-curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/your-protected-endpoint
+# ---------------------------------------------------------------------
+# 1. Helpers
+# ---------------------------------------------------------------------
+
+# Log in and print only the JWT: login <username> <password>
+login() {
+  curl -s -X POST "$AUTH/login" -H "Content-Type: application/json" \
+    -d "{\"username\":\"$1\",\"password\":\"$2\"}" | jq -r .token
+}
+
+# Print just the HTTP status: status <token> <curl args...>   (use "" for no token)
+status() {
+  local token=$1; shift
+  if [ -n "$token" ]; then
+    curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $token" -H "Content-Type: application/json" "$@"
+  else
+    curl -s -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" "$@"
+  fi
+}
+
+# Compare the actual status with the expected one: check <expected> <description> <token> <curl args...>
+check() {
+  local expected=$1 description=$2; shift 2
+  local actual
+  actual=$(status "$@")
+  if [ "$actual" = "$expected" ]; then echo "PASS  $actual  $description"; else echo "FAIL  $actual (expected $expected)  $description"; fi
+}
+
+# Body for POST /orders: order <accountId>  (a fresh idempotency key each time)
+order() {
+  echo "{\"accountId\":$1,\"symbol\":\"ACME\",\"side\":\"BUY\",\"quantity\":1,\"price\":10,\"idempotencyKey\":\"cli-$RANDOM-$RANDOM\"}"
+}
+
+# ---------------------------------------------------------------------
+# 2. Log in as each user (authentication)
+# ---------------------------------------------------------------------
+ADMIN=$(login admin adminPassword)     # ADMIN    - sees and manages everything
+JOHN=$(login john customer123)         # CUSTOMER - owns ACC-1001 (ACTIVE)
+FRANK=$(login frank customer123)       # CUSTOMER - owns ACC-1008 (SUSPENDED)
+NINA=$(login nina customer123)         # CUSTOMER - has no account
+BOB=$(login bob wrongpermissions)      # GUEST    - no trading role
+
+echo "admin's token: $ADMIN"
+# Wrong password -> 401 from the auth service, no token issued
+check 401 "login with wrong password is rejected" "" -X POST "$AUTH/login" -d '{"username":"admin","password":"nope"}'
+
+# Look up database ids by account number (ids depend on load order)
+account_id() { curl -s -H "Authorization: Bearer $ADMIN" "$API/accounts" | jq -r ".[] | select(.accountNumber==\"$1\") | .id"; }
+JOHN_ACC=$(account_id ACC-1001)
+JANE_ACC=$(account_id ACC-1002)
+FRANK_ACC=$(account_id ACC-1008)
+echo "ACC-1001=$JOHN_ACC  ACC-1002=$JANE_ACC  ACC-1008=$FRANK_ACC"
+
+# ---------------------------------------------------------------------
+# 3. No token / bad token / wrong role
+# ---------------------------------------------------------------------
+check 401 "no token"                       ""          "$API/accounts"
+check 401 "tampered token"                 "${JOHN}x"  "$API/accounts"
+check 403 "GUEST role cannot use the API"  "$BOB"      "$API/accounts"
+
+# ---------------------------------------------------------------------
+# 4. ADMIN can do everything
+# ---------------------------------------------------------------------
+check 200 "admin lists all accounts"          "$ADMIN" "$API/accounts"
+check 200 "admin reads jane's account"        "$ADMIN" "$API/accounts/$JANE_ACC"
+check 200 "admin lists all orders"            "$ADMIN" "$API/orders"
+check 200 "admin reads the DLQ"               "$ADMIN" "$API/dlq/messages"
+
+# ---------------------------------------------------------------------
+# 5. CUSTOMER john - only his own account
+# ---------------------------------------------------------------------
+echo "john sees these accounts:"; curl -s -H "Authorization: Bearer $JOHN" "$API/accounts" | jq -r '.[].accountNumber'
+check 200 "john reads his account"            "$JOHN" "$API/accounts/$JOHN_ACC"
+check 200 "john reads his balance"            "$JOHN" "$API/accounts/$JOHN_ACC/balance"
+check 200 "john reads his orders"             "$JOHN" "$API/accounts/$JOHN_ACC/orders"
+check 403 "john cannot read jane's account"   "$JOHN" "$API/accounts/$JANE_ACC"
+check 403 "john cannot read jane's orders"    "$JOHN" "$API/accounts/$JANE_ACC/orders"
+check 202 "john orders on his own account"    "$JOHN" -X POST "$API/orders" -d "$(order "$JOHN_ACC")"
+check 403 "john cannot order on jane's"       "$JOHN" -X POST "$API/orders" -d "$(order "$JANE_ACC")"
+check 200 "john can browse instruments"       "$JOHN" "$API/instruments"
+check 403 "john cannot read the DLQ"          "$JOHN" "$API/dlq/messages"
+check 403 "john cannot open accounts"         "$JOHN" -X POST "$API/accounts" \
+  -d '{"accountNumber":"ACC-9999","holderName":"John","cashBalance":1,"ownerUsername":"john"}'
+
+# ---------------------------------------------------------------------
+# 6. Account must be validated (ACTIVE) before a customer can trade
+# ---------------------------------------------------------------------
+check 409 "frank cannot trade on his SUSPENDED account" "$FRANK" -X POST "$API/orders" -d "$(order "$FRANK_ACC")"
+check 403 "frank cannot approve his own account"        "$FRANK" -X PATCH "$API/accounts/$FRANK_ACC/status" -d '{"status":"ACTIVE"}'
+check 200 "admin approves frank's account"              "$ADMIN" -X PATCH "$API/accounts/$FRANK_ACC/status" -d '{"status":"ACTIVE"}'
+check 202 "frank can now trade"                         "$FRANK" -X POST "$API/orders" -d "$(order "$FRANK_ACC")"
+check 200 "admin suspends frank again (reset)"          "$ADMIN" -X PATCH "$API/accounts/$FRANK_ACC/status" -d '{"status":"SUSPENDED"}'
+
+# ---------------------------------------------------------------------
+# 7. CUSTOMER with no account
+# ---------------------------------------------------------------------
+echo "nina sees $(curl -s -H "Authorization: Bearer $NINA" "$API/accounts" | jq length) accounts"
+check 403 "nina cannot read john's account"   "$NINA" "$API/accounts/$JOHN_ACC"
+check 403 "nina cannot order on john's"       "$NINA" -X POST "$API/orders" -d "$(order "$JOHN_ACC")"
+
+# ---------------------------------------------------------------------
+# 8. OAuth2 password flow - what Swagger's Authorize dialog does
+# ---------------------------------------------------------------------
+curl -s -X POST "$AUTH/token" -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password&username=john&password=customer123" | jq '{token_type, expires_in}'

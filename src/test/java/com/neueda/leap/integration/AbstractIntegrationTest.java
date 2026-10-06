@@ -20,7 +20,7 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@WithMockUser(username = "testuser", roles = "USER")
+@WithMockUser(username = "testuser", roles = "ADMIN")
 public abstract class AbstractIntegrationTest {
 
     @Container

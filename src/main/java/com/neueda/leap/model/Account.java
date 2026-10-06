@@ -39,6 +39,10 @@ public class Account {
     @Column(nullable = false)
     private Instant lastUpdated;
 
+    // JWT subject (username) of the customer who owns this account
+    @Column(name = "owner_username")
+    private String ownerUsername;
+
     public Account() {
     }
 
@@ -63,6 +67,7 @@ public class Account {
         this.status = other.status;
         this.version = other.version;
         this.lastUpdated = other.lastUpdated;
+        this.ownerUsername = other.ownerUsername;
     }
 
     private void validateConstructorArgs(String accountNumber, String holderName, BigDecimal cashBalance) {
@@ -154,6 +159,14 @@ public class Account {
         return lastUpdated;
     }
 
+    public String getOwnerUsername() {
+        return ownerUsername;
+    }
+
+    public void setOwnerUsername(String ownerUsername) {
+        this.ownerUsername = ownerUsername;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj)
@@ -179,6 +192,7 @@ public class Account {
                 ", status=" + status +
                 ", version=" + version +
                 ", lastUpdated=" + lastUpdated +
+                ", ownerUsername='" + ownerUsername + '\'' +
                 '}';
     }
 }

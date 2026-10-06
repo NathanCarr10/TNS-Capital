@@ -2,6 +2,7 @@ package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Order;
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,4 +29,6 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
      * @return list of orders for the account; empty list if none found
      */
     List<Order> findByAccountId(Long accountId);
+
+    List<Order> findByAccountIdIn(Collection<Long> accountIds);
 }
