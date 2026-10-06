@@ -131,7 +131,124 @@ public record CreateInstrumentRequest(
 
 ---
 
-## 3. 🛡️ Error Handling
+## 3. � Password Hashing (Auth Service)
+
+### Algorithm: Argon2id
+
+**Implementation:** Located in `shared/auth-stub/src/passwordHasher.js`
+
+**Choice Rationale:**
+- **Argon2id** selected over bcrypt because it is memory-hard and resistant to GPU/ASIC attacks
+- **Industry Standard**: RFC 9106, recommended by OWASP
+- **Future-Proof**: Parameters (memory, time, parallelism) can be upgraded in stored hash format without requiring password re-entry
+
+### Cost Parameters
+
+| Parameter | Value | Justification |
+|-----------|-------|----------------|
+| Algorithm | Argon2id | Memory-hard, GPU-resistant |
+| Memory | 65,540 KiB (~64 MiB) | Strong against brute force while maintaining reasonable hardware requirements |
+| Time | 3 iterations | ~50-100ms per hash on typical 2025 server hardware |
+| Parallelism | 4 threads | Balanced multi-core utilization without excessive overhead |
+
+**Timing Justification**: Hashing a password takes ~50-100ms on typical server hardware, making brute-force attacks computationally expensive (billions of attempts would take weeks) while keeping legitimate user registration/login responsive.
+
+### Hash Storage Format
+
+Passwords are stored using Argon2id's standard format:
+```
+$argon2id$v=19$m=65540,t=3,p=4$<salt>$<hash>
+```
+
+This format encodes:
+- **Algorithm**: `argon2id` (memory-hard variant)
+- **Version**: `19` (Argon2 version)
+- **Parameters**: `m=memory`, `t=iterations`, `p=parallelism`
+- **Salt**: Cryptographically random, prevents rainbow tables
+- **Hash**: Actual password verification hash
+
+**Stored in Database:**
+```sql
+-- Complete hash string stored in password_hash column
+password_hash VARCHAR(255) NOT NULL  -- e.g., $argon2id$v=19$m=65540,t=3,p=4$abc123$xyz789
+```
+
+**Upgrade Path**: Parameters can be increased in the future (e.g., `m=131080`) without requiring password re-entry — old and new hashes are verified using the same algorithm, and new passwords use updated parameters.
+
+### Password Policies
+
+- **Minimum Length**: 8 characters (enforced at registration)
+- **Maximum Length**: 256 characters (no artificial limit; passphrases welcome)
+- **No Character Restrictions**: User can use any printable characters
+- **Storage**: Only the Argon2id hash is stored; plaintext is never persisted
+
+### Plaintext Prevention
+
+✅ Passwords hashed immediately upon registration using `passwordHasher.hashPassword()`  
+✅ Hashes verified during login (plaintext input compared to stored hash via `verifyPassword()`)  
+✅ Error responses never include password or hash  
+✅ Response DTOs exclude passwordHash field  
+✅ Request/response logs redact password fields automatically  
+
+### Implementation Details
+
+**Registration Flow** (`POST /register`):
+```
+1. Client sends {username, password} in request body
+2. Server validates username (3-100 chars) and password (8-256 chars)
+3. Server checks for duplicate username → 409 USR-409 if exists
+4. Server hashes password with Argon2id → passwordHash
+5. Server inserts (username, passwordHash) into database
+6. Server returns {id, username, createdAt} (NO password or hash)
+```
+
+**Login Flow** (`POST /login`):
+```
+1. Client sends {username, password} in request body
+2. Server retrieves user record from database by username
+3. Server verifies plaintext password against stored hash
+4. If password matches: Issue JWT token
+5. If password doesn't match: Return 401 AUTH-401 (no hint about username validity)
+```
+
+**Why No Username Hint?**: Returning different errors for "user not found" vs "password wrong" reveals whether a username exists, enabling account enumeration attacks. Always return "invalid username or password" for both cases.
+
+### Verification & Testing
+
+All password handling is tested in `shared/auth-stub/tests/`:
+
+**passwordHasher.spec.js** — Unit tests for hashing:
+- ✅ Hash always differs from input (random salt)
+- ✅ Same password produces different hashes (salt randomization)
+- ✅ Correct password verifies against stored hash
+- ✅ Incorrect password verification fails
+- ✅ Hash string includes algorithm, parameters, and salt
+- ✅ Invalid hash format returns false, not error
+
+**userService.spec.js** — Integration tests for registration/auth:
+- ✅ Registration succeeds and returns user (without password/hash)
+- ✅ Duplicate username throws error with code CONFLICT
+- ✅ Authentication succeeds with valid credentials
+- ✅ Authentication fails with wrong password
+- ✅ Plaintext password never stored in database
+
+**Run tests:**
+```bash
+cd shared/auth-stub
+npm install
+npm test
+```
+
+### References
+
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [Argon2 RFC 9106](https://datatracker.ietf.org/doc/html/rfc9106)
+- [Argon2 GitHub](https://github.com/P-H-C/phc-winner-argon2)
+- [Memory-Hard Password Hashing](https://cheatsheetseries.owasp.org/cheatsheets/Nodejs_Security_Cheat_Sheet.html#use-a-library-for-password-hashing)
+
+---
+
+## 4. 🛡️ Error Handling
 
 ### GlobalExceptionHandler
 
@@ -195,7 +312,7 @@ public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundExcept
 
 ---
 
-## 4. 🔒 Security Headers
+## 5. 🔒 Security Headers
 
 ### Implemented Headers
 
@@ -235,7 +352,7 @@ Content-Type: application/json
 
 ---
 
-## 5. 🚫 CSRF Protection
+## 6. 🚫 CSRF Protection
 
 ### Why CSRF is Disabled
 
@@ -252,7 +369,7 @@ Content-Type: application/json
 
 ---
 
-## 6. 🔑 Idempotency
+## 7. 🔑 Idempotency
 
 ### Purpose
 
@@ -280,7 +397,7 @@ Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns 409 
 
 ---
 
-## 7. 🔐 Sensitive Data Protection
+## 8. 🔐 Sensitive Data Protection
 
 ### What's Protected
 
@@ -325,7 +442,7 @@ JWT_SECRET=<output of: openssl rand -hex 32>
 
 ---
 
-## 8. 📋 API Endpoint Security
+## 9. 📋 API Endpoint Security
 
 ### Protected Endpoints (Require JWT)
 
@@ -362,7 +479,7 @@ GET  /info                     - App info
 
 ---
 
-## 9. 🧪 Security Testing
+## 10. 🧪 Security Testing
 
 ### Test Suites
 
