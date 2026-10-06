@@ -2,6 +2,7 @@ package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.CreateInstrumentRequest;
 import com.neueda.leap.dtos.InstrumentResponse;
+import com.neueda.leap.exceptions.DuplicateInstrumentException;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.utils.InputNormalizer;
@@ -44,7 +45,8 @@ public class InstrumentController {
     }
     @PostMapping
     public ResponseEntity<InstrumentResponse> createInstrument(@Valid @RequestBody CreateInstrumentRequest request) {
-        // Creates new instrument with auto-generated ID; validates symbol not duplicate via repository constraint
+        // symbol is the primary key, so save() would overwrite an existing instrument;
+        // reject duplicates explicitly instead
         Instrument instrument = new Instrument(
                 request.symbol(),
                 request.name(),
@@ -52,7 +54,11 @@ public class InstrumentController {
                 request.currency(),
                 request.tradable()
         );
-        
+
+        if (instrumentRepository.existsById(instrument.getSymbol())) {
+            throw new DuplicateInstrumentException("Instrument already exists: " + instrument.getSymbol());
+        }
+
         instrumentRepository.save(instrument);
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(instrument));
     }
@@ -77,7 +83,6 @@ public class InstrumentController {
     private InstrumentResponse mapToResponse(Instrument instrument) {
         // Converts Instrument entity to response; simple pass-through for immutable reference data
         return new InstrumentResponse(
-                instrument.getId(),
                 instrument.getSymbol(),
                 instrument.getName(),
                 instrument.getAssetClass(),

@@ -141,7 +141,6 @@ class OrderControllerValidationTest {
             testAccount.setId(accountId);
 
             Instrument testInstrument = new Instrument(instrument);
-            testInstrument.setId(1L);
 
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(testInstrument));
@@ -174,7 +173,6 @@ class OrderControllerValidationTest {
             testAccount.setId(accountId);
 
             Instrument testInstrument = new Instrument(instrument);
-            testInstrument.setId(1L);
 
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(testInstrument));

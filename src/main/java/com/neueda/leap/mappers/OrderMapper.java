@@ -10,14 +10,15 @@ import java.util.UUID;
 @Mapper
 public interface OrderMapper {
     /**
-     * Finds an order by idempotency key.
+     * Checks whether an order with the given idempotency key already exists.
+     * Returns a boolean rather than mapping an Order, because Order.setStatus
+     * rejects the null-to-status transition MyBatis would perform.
      *
-     * @param idempotencyKey the idempotency key
-     * @return the Order if found, null otherwise
+     * @param idempotencyKey the normalized idempotency key
+     * @return true if an order with this key exists
      */
-    @Select("SELECT id, account_id, symbol, side, quantity, price, status, idempotency_key, created_on " +
-            "FROM orders WHERE idempotency_key = #{idempotencyKey}")
-    Order findByIdempotencyKey(String idempotencyKey);
+    @Select("SELECT EXISTS (SELECT 1 FROM orders WHERE idempotency_key = #{idempotencyKey})")
+    boolean existsByIdempotencyKey(String idempotencyKey);
 
     /**
      * Finds an order by ID.

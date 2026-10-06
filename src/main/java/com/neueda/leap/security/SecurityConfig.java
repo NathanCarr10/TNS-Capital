@@ -1,28 +1,36 @@
 package com.neueda.leap.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.time.LocalDateTime;
 
 /**
  * Security configuration for the API with JWT validation and security headers.
- * 
+ *
  * Security Best Practices Implemented:
- * - JWT authentication with HMAC-SHA256
+ * - JWT authentication with HMAC-SHA256; any valid token can call the trading
+ *   API endpoints. The dead-letter queue admin endpoints also need the ADMIN
+ *   role (method security on DeadLetterQueueController)
+ * - Missing or invalid tokens get an AUTH-401 error body
  * - Security headers to prevent common attacks
  * - CSRF disabled for stateless API (appropriate for REST)
- * - Rate limiting headers configured
  * - X-Frame-Options set to prevent clickjacking
- * - Content-Security-Policy to prevent XSS
- * - Method-level security for role-based access control on endpoints
+ * - The token's "roles" claim is mapped to Spring roles (ROLE_ADMIN etc.) so
+ *   method-level @PreAuthorize checks can be added once roles are agreed
  */
 @Configuration
 @EnableMethodSecurity
@@ -42,6 +50,21 @@ public class SecurityConfig {
         }
 
         /**
+         * Reads the auth service's "roles" claim instead of Spring's default "scope"
+         * claim, so a token with roles ["ADMIN"] gets the authority ROLE_ADMIN.
+         */
+        @Bean
+        public JwtAuthenticationConverter jwtAuthenticationConverter() {
+                JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+                authorities.setAuthoritiesClaimName("roles");
+                authorities.setAuthorityPrefix("ROLE_");
+
+                JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+                converter.setJwtGrantedAuthoritiesConverter(authorities);
+                return converter;
+        }
+
+        /**
          * Configures the security filter chain with:
          * - JWT authentication for API endpoints
          * - Security headers to prevent common attacks
@@ -49,6 +72,9 @@ public class SecurityConfig {
          */
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                AuthenticationEntryPoint unauthorised = (request, response, e) -> writeError(response,
+                                HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
+
                 http
                                 // Disable CSRF for stateless APIs (no session state)
                                 .csrf(csrf -> csrf.disable())
@@ -75,10 +101,25 @@ public class SecurityConfig {
                                                 // Require authentication for all other requests
                                                 .anyRequest().authenticated())
 
+                                // Return AUTH-401 JSON for missing or invalid tokens
+                                .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorised))
+
                                 // Configure OAuth2 resource server with JWT
-                                .oauth2ResourceServer((OAuth2ResourceServerConfigurer<HttpSecurity> oauth2) -> oauth2
-                                                .jwt(jwt -> jwt.decoder(jwtDecoder())));
+                                .oauth2ResourceServer(oauth2 -> oauth2
+                                                .authenticationEntryPoint(unauthorised)
+                                                .jwt(jwt -> jwt
+                                                                .decoder(jwtDecoder())
+                                                                .jwtAuthenticationConverter(jwtAuthenticationConverter())));
 
                 return http.build();
+        }
+
+        private static void writeError(HttpServletResponse response, int status, String errorCode, String message)
+                        throws IOException {
+                response.setStatus(status);
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                response.getWriter().write(String.format(
+                                "{\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
+                                errorCode, message, LocalDateTime.now()));
         }
 }

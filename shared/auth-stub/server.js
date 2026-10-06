@@ -5,11 +5,13 @@ const app = express();
 app.use(express.json());
 
 // Shared secret - the mission service (Java) validates tokens signed with
-// this exact string. In a real system this would come from a secrets
-// manager, never be hardcoded, and never be the same value in two
-// unrelated services - here it's deliberately visible so the group can see
-// EXACTLY what "the two services agree on a secret" means in practice.
-const SECRET = process.env.JWT_SECRET || 'mission-control-shared-secret-key-32-bytes-minimum';
+// this exact value. Both services read it from the JWT_SECRET environment
+// variable (set in the project's .env), so it is never committed.
+const SECRET = process.env.JWT_SECRET;
+if (!SECRET) {
+  console.error('JWT_SECRET is not set. Add it to .env or the environment.');
+  process.exit(1);
+}
 
 // A stub, not a real user store - two hardcoded accounts is enough to
 // demonstrate "valid token in, protected data out" and "no token, or the

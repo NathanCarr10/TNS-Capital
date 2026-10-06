@@ -116,14 +116,14 @@ public record CreateInstrumentRequest(
 3. Jakarta Validation framework validates against constraints
 4. If valid: Request proceeds to controller
 5. If invalid: GlobalExceptionHandler catches MethodArgumentNotValidException
-6. Handler returns 400 BAD_REQUEST with field-specific error messages
+6. Handler returns 422 UNPROCESSABLE_ENTITY (VAL-422) with field-specific error messages
 ```
 
 ### Example Validation Error Response
 
 ```json
 {
-    "errorCode": "VALIDATION_ERROR",
+    "errorCode": "VAL-422",
     "message": "symbol: Symbol must contain 1-10 uppercase letters; quantity: Quantity exceeds maximum allowed (1,000,000)",
     "timestamp": "2026-09-28T14:15:00"
 }
@@ -145,15 +145,27 @@ Located in [GlobalExceptionHandler.java](../../controllers/GlobalExceptionHandle
 
 ### Exception Handling Map
 
+Codes follow section 21 of the specification; the codes marked * extend it for cases it does not list.
+
 | Exception | HTTP Status | Error Code | Message |
 |-----------|------------|-----------|---------|
-| `AccountNotFoundException` | 404 | `ACCOUNT_NOT_FOUND` | "The requested account could not be found" |
-| `AccountNotActiveException` | 409 | `ACCOUNT_NOT_ACTIVE` | "The account is not in an active state" |
-| `InstrumentNotFoundException` | 404 | `INSTRUMENT_NOT_FOUND` | "The requested instrument could not be found" |
-| `DuplicateOrderException` | 409 | `DUPLICATE_ORDER` | "Order with idempotency key already submitted" |
-| `InsufficientFundsException` | 400 | `INSUFFICIENT_FUNDS` | "Account lacks sufficient funds" |
-| `MethodArgumentNotValidException` | 400 | `VALIDATION_ERROR` | Field-specific validation messages |
-| Generic Exception | 500 | `INTERNAL_SERVER_ERROR` | "An unexpected error occurred" |
+| `AccountNotFoundException` | 404 | `ACC-404` | "The requested account could not be found" |
+| `AccountNotActiveException` | 403 | `ACC-403` | "The account is not in an active state for this operation" |
+| `AccountAlreadyExistsException`, `AccountDeletionConflictException` | 409 | `ACC-409`* | Duplicate account number / account has working orders |
+| `InstrumentNotFoundException` (unknown or not tradable) | 404 | `INS-404` | "The requested instrument could not be found or is not tradable" |
+| `InsufficientFundsException` | 400 | `ORD-400` | "The account does not have sufficient funds for this operation" |
+| `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` | 409 | `ORD-409` | Insufficient holdings / duplicate idempotency key / order cannot be cancelled |
+| `OrderNotFoundException` | 404 | `ORD-404`* | "The requested order could not be found" |
+| `MethodArgumentNotValidException`, malformed JSON, bad path variable | 422 | `VAL-422` | Field-specific validation messages |
+| Missing or invalid JWT | 401 | `AUTH-401` | "Unauthorised or invalid token" |
+| `AccessDeniedException` | 403 | `AUTH-403`* | "You do not have permission to access this resource" |
+| Unsupported method / media type | 405 / 415 | `REQ-405`* / `REQ-415`* | |
+| Generic Exception | 500 | `SYS-500`* | "An unexpected error occurred" |
+
+Insufficient funds and holdings are only known once an order executes, which
+happens asynchronously. The API accepts the order (202); if execution fails the
+order is stored as `REJECTED` (visible on `GET /api/v1/orders/{id}`) and the
+message is captured in the dead-letter queue, flagged as retryable or not.
 
 ### Example: Exception Handling Flow
 
@@ -162,12 +174,8 @@ Located in [GlobalExceptionHandler.java](../../controllers/GlobalExceptionHandle
 @ExceptionHandler(AccountNotFoundException.class)
 public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundException e) {
     logger.warn("Account not found: {}", e.getMessage());  // Logged server-side
-    return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(new ErrorResponse(
-                    "ACCOUNT_NOT_FOUND",
-                    "The requested account could not be found",  // Safe message
-                    LocalDateTime.now()
-            ));
+    return error(HttpStatus.NOT_FOUND, "ACC-404",
+            "The requested account could not be found");  // Safe message
 }
 ```
 
@@ -179,7 +187,7 @@ public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundExcept
 **Client Response (sanitized):**
 ```json
 {
-    "errorCode": "ACCOUNT_NOT_FOUND",
+    "errorCode": "ACC-404",
     "message": "The requested account could not be found",
     "timestamp": "2026-09-28T14:15:00"
 }
@@ -267,7 +275,7 @@ String idempotencyKey
 **Example Flow:**
 ```
 Request 1: POST /orders with idempotencyKey="ORDER-001" → Creates order
-Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns DUPLICATE_ORDER error
+Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns 409 ORD-409
 ```
 
 ---
@@ -296,7 +304,7 @@ Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns DUPL
 **Good (Sanitized):**
 ```json
 {
-    "errorCode": "INTERNAL_SERVER_ERROR",
+    "errorCode": "SYS-500",
     "message": "An unexpected error occurred. Please contact support with error timestamp if problem persists.",
     "timestamp": "2026-09-28T14:15:00"
 }
@@ -305,10 +313,14 @@ Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns DUPL
 ### Configuration Protection
 
 **Environment Variables:**
+Secrets come from `.env` (gitignored; copy `.env.example`), which docker-compose
+passes to the containers. `application.yml` has no defaults for them, so the app
+refuses to start rather than run with a known value.
+
 ```bash
-# Never in code!
-export SPRING_DATASOURCE_PASSWORD=n3u3d4!
-export JWT_SHARED_SECRET=mission-control-shared-secret-key-32-bytes
+# .env — never committed
+DB_PASSWORD=<your database password>
+JWT_SECRET=<output of: openssl rand -hex 32>
 ```
 
 ---
@@ -324,6 +336,7 @@ GET    /api/v1/orders/{id}     - Get order (Authenticated)
 DELETE /api/v1/orders/{id}     - Cancel order (Authenticated)
 GET    /api/v1/accounts        - List accounts (Authenticated)
 GET    /api/v1/positions       - List positions (Authenticated)
+*      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
 ```
 
 ### Public Endpoints (No Auth Required)
@@ -484,24 +497,23 @@ curl -X POST http://localhost:3000/api/v1/orders \
   }'
 ```
 
-**Success Response (201):**
+**Accepted Response (202):**
 ```json
 {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "accountId": 1,
-    "symbol": "AAPL",
-    "side": "BUY",
-    "quantity": 100,
-    "price": 150.00,
-    "status": "NEW",
-    "createdOn": "2026-09-28T14:15:00Z"
+    "orderId": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "ACCEPTED",
+    "message": "Order accepted for processing. Poll GET /api/v1/orders/{orderId} to track status."
 }
 ```
 
-**Validation Error (400):**
+The order executes asynchronously; `GET /api/v1/orders/{orderId}` then returns it
+with status `FILLED` or `REJECTED`. Rejected orders are also captured in the
+dead-letter queue (`/api/v1/dlq/messages`, ADMIN only) with the failure reason.
+
+**Validation Error (422):**
 ```json
 {
-    "errorCode": "VALIDATION_ERROR",
+    "errorCode": "VAL-422",
     "message": "symbol: Symbol must contain 1-10 uppercase letters; quantity: Quantity must be positive",
     "timestamp": "2026-09-28T14:15:00"
 }
@@ -510,7 +522,7 @@ curl -X POST http://localhost:3000/api/v1/orders \
 **Duplicate Order (409):**
 ```json
 {
-    "errorCode": "DUPLICATE_ORDER",
+    "errorCode": "ORD-409",
     "message": "An order with this idempotency key has already been submitted",
     "timestamp": "2026-09-28T14:15:00"
 }
@@ -579,5 +591,5 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.
 
 ---
 
-**Last Updated:** 2026-09-30  
+**Last Updated:** 2026-10-05  
 **Status:** ✅ Complete - All Acceptance Criteria Met

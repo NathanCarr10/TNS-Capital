@@ -10,7 +10,6 @@ import com.neueda.leap.mappers.InstrumentMapper;
 import com.neueda.leap.mappers.OrderMapper;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
-import com.neueda.leap.model.Order;
 import com.neueda.leap.utils.InputNormalizer;
 
 import java.util.Objects;
@@ -38,9 +37,9 @@ public class OrderValidator {
     }
 
     public void validate(PlaceOrderRequest request) {
-        // Check duplicate
-        Order order = orderMapper.findByIdempotencyKey(request.idempotencyKey());
-        if (order != null) {
+        // Check duplicate; keys are stored normalized, so look up the normalized form
+        String idempotencyKey = InputNormalizer.normalize(request.idempotencyKey());
+        if (orderMapper.existsByIdempotencyKey(idempotencyKey)) {
             throw new DuplicateOrderException("Order already submitted: " + request.idempotencyKey());
         }
 
