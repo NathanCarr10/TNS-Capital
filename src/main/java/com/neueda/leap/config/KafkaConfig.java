@@ -286,7 +286,7 @@ public class KafkaConfig {
                     event.orderId(), isNonRetryable);
 
             // Also publish to orders.dlq Kafka topic for audit trail
-            kafkaTemplate.send("orders.dlq", event.accountId().toString(),
+            kafkaTemplate.send(ORDERS_DLQ_TOPIC, event.accountId().toString(),
                     (String) consumerRecord.value());
             log.debug("Published failed message to orders.dlq topic: orderId={}",
                     event.orderId());

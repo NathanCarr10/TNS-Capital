@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -97,7 +97,7 @@ class OrderServiceExceptionDifferentiationTest {
         orderId = UUID.randomUUID();
 
         // Create strategy map
-        Map<OrderSide, OrderExecutionStrategy> strategies = new HashMap<>();
+        Map<OrderSide, OrderExecutionStrategy> strategies = new EnumMap<>(OrderSide.class);
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 

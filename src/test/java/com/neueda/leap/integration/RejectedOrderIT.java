@@ -9,6 +9,7 @@ import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.DeadLetterMessage;
 import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
@@ -45,7 +46,7 @@ import static org.awaitility.Awaitility.await;
  * trade event and one DLQ entry, and can be replayed once the cause is fixed.
  */
 @DisplayName("Rejected Order Integration Tests")
-public class RejectedOrderIT extends AbstractIntegrationTest {
+class RejectedOrderIT extends AbstractIntegrationTest {
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;
@@ -117,7 +118,7 @@ public class RejectedOrderIT extends AbstractIntegrationTest {
         await().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> {
             assertThat(orderRepository.findById(orderId))
                     .get()
-                    .extracting(order -> order.getStatus())
+                    .extracting(Order::getStatus)
                     .isEqualTo(OrderStatus.REJECTED);
             assertThat(dlqRepository.findAll()).hasSize(1);
         });
@@ -148,8 +149,8 @@ public class RejectedOrderIT extends AbstractIntegrationTest {
     private void pollTradeEvents(Duration duration) throws Exception {
         long deadline = System.currentTimeMillis() + duration.toMillis();
         while (System.currentTimeMillis() < deadline) {
-            for (ConsumerRecord<String, String> record : tradeEventsConsumer.poll(Duration.ofMillis(250))) {
-                tradeEvents.add(objectMapper.readTree(record.value()));
+            for (ConsumerRecord<String, String> consumerRecord : tradeEventsConsumer.poll(Duration.ofMillis(250))) {
+                tradeEvents.add(objectMapper.readTree(consumerRecord.value()));
             }
         }
     }
