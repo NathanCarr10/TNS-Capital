@@ -113,9 +113,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
         assertThat(dlqMessage.getCreatedOn()).isNotNull();
         assertThat(dlqMessage.getLastRetryOn()).isNull();
         assertThat(dlqMessage.getResolvedOn()).isNull();
-        assertThat(dlqMessage.getFailureReason())
-                .contains("IllegalArgumentException")
-                .contains("Test exception for DLQ capture");
+        assertThat(dlqMessage.getFailureReason()).isEqualTo("Test exception for DLQ capture");
 
         // Verify persisted in database
         Optional<DeadLetterMessage> saved = dlqRepository.findById(dlqMessage.getId());

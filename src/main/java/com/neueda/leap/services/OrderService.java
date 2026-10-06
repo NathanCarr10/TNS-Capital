@@ -113,11 +113,13 @@ public class OrderService {
         } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
             previousStatus = order.getStatus();
             order.setStatus(OrderStatus.REJECTED);
+            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
             rejectionReason = ex.getMessage();
             throw ex;
         } catch (Exception ex) {
             previousStatus = order.getStatus();
             order.setStatus(OrderStatus.REJECTED);
+            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
             rejectionReason = ex.getMessage();
             throw new IllegalStateException("Unexpected error during order execution", ex);
         } finally {
@@ -209,17 +211,17 @@ public class OrderService {
         } catch (AccountNotFoundException | InstrumentNotFoundException ex) {
             log.warn("Order rejected due to missing resource (non-retryable): orderId={}, error={}, type={}",
                     event.orderId(), ex.getMessage(), ex.getClass().getSimpleName());
-            recordRejectedOrder(event, ex.getMessage());
+            recordRejectedOrder(event, ex);
             throw new NonRetryableOrderException(ex.getMessage(), ex);
         } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
             log.warn("Order rejected due to insufficient resources: orderId={}, error={}", event.orderId(),
                     ex.getMessage());
-            recordRejectedOrder(event, ex.getMessage());
+            recordRejectedOrder(event, ex);
             throw ex;
         } catch (RuntimeException ex) {
             log.error("Unexpected error processing order event: orderId={}, error={}", event.orderId(),
                     ex.getMessage(), ex);
-            recordRejectedOrder(event, ex.getMessage());
+            recordRejectedOrder(event, ex);
             throw ex;
         }
 
@@ -273,7 +275,8 @@ public class OrderService {
      * REJECTED event. Failures here are logged and swallowed so the original
      * exception still reaches the Kafka error handler.
      */
-    private void recordRejectedOrder(OrderEvent event, String reason) {
+    private void recordRejectedOrder(OrderEvent event, RuntimeException cause) {
+        String reason = cause.getMessage();
         try {
             Order rejectedOrder = transactionTemplate.execute(status -> {
                 if (orderRepository.existsById(event.orderId())) {
@@ -281,6 +284,7 @@ public class OrderService {
                 }
                 Order order = newOrderFromEvent(event);
                 order.setStatus(OrderStatus.REJECTED);
+                order.setStatusReason(DeadLetterService.buildFailureReason(cause));
                 orderRepository.save(order);
                 return order;
             });

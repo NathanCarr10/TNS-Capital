@@ -145,8 +145,10 @@ class OrderServiceExceptionDifferentiationTest {
             assertInstanceOf(AccountNotFoundException.class, exception.getOriginalException());
             assertTrue(exception.getMessage().contains("Account not found"));
 
-            // Verify rejected order was saved (in separate transaction)
-            verify(orderRepository, atLeastOnce()).save(argThat(order -> order.getStatus() == OrderStatus.REJECTED));
+            // Verify rejected order was saved (in separate transaction) with the same
+            // reason that is recorded in dlq_messages.failure_reason
+            verify(orderRepository, atLeastOnce()).save(argThat(order -> order.getStatus() == OrderStatus.REJECTED
+                    && ("Account not found: " + accountId).equals(order.getStatusReason())));
         }
 
         @Test

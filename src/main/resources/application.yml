@@ -45,6 +45,13 @@ trading:
       trade-events: trade-events
       market-data: market-data
 
+dlq:
+  auto-resolve:
+    # PENDING DLQ messages are marked RESOLVED once older than after-ms
+    enabled: true
+    after-ms: 10000
+    interval-ms: 1000
+
 jwt:
   # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
   shared-secret: ${JWT_SECRET}

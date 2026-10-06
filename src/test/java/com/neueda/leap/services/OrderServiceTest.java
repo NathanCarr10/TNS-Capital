@@ -174,6 +174,7 @@ class OrderServiceTest {
             ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(orderCaptor.capture());
             assertEquals(OrderStatus.REJECTED, orderCaptor.getValue().getStatus());
+            assertEquals("Insufficient funds", orderCaptor.getValue().getStatusReason());
         }
 
         @DisplayName("Should set order status to REJECTED on InsufficientHoldingsException")
