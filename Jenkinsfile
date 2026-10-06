@@ -149,11 +149,15 @@ pipeline {
                     // findings that have a fixed version available (--ignore-unfixed).
                     // Accepted risks go in .trivyignore. The trivy-cache volume keeps the
                     // vulnerability DB between builds so it isn't re-downloaded each time.
+                    // The databases come from GitHub's registry: Trivy's default mirror
+                    // (mirror.gcr.io) served a broken copy, failing the stage on every branch.
                     sh '''
                         TRIVY="docker run --rm -v trivy-cache:/root/.cache/ \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -v $WORKSPACE:/src:ro -w /src $TRIVY_IMAGE"
-                        COMMON="--scanners vuln --ignorefile /src/.trivyignore --quiet"
+                        COMMON="--scanners vuln --ignorefile /src/.trivyignore --quiet \
+                            --db-repository ghcr.io/aquasecurity/trivy-db:2 \
+                            --java-db-repository ghcr.io/aquasecurity/trivy-java-db:1"
 
                         $TRIVY fs $COMMON --severity HIGH,CRITICAL \
                             --format sarif /src > "$REPORTS_DIR/trivy-fs.sarif"
