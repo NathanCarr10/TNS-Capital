@@ -7,3 +7,8 @@ INSERT INTO users (username, password_hash, created_at, updated_at) VALUES
 -- bob: password is "bob456" (example hash structure)
 ('bob', '$argon2id$v=19$m=65540,t=3,p=4$def456uvw012$hijklmnopqrstuvwxyzabcdef', NOW(), NOW())
 ON CONFLICT (username) DO NOTHING;
+
+-- admin: password is "adminPassword" (real Argon2id hash). Can access every account.
+INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES
+('admin', '$argon2id$v=19$m=65540,t=3,p=4$wA3ibiMbmFUmiY72k0sMOw$JVphLndgqNzW5Vxq8J65bnx9HbKc1ZhSVnqfc0mXs6o', 'ADMIN', NOW(), NOW())
+ON CONFLICT (username) DO NOTHING;
