@@ -1,0 +1,21 @@
+meta {
+  name: Withdraw
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{apiUrl}}/api/v1/accounts/{{accountId}}/withdraw
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "amount": 100.00
+  }
+}
+
+assert {
+  res.status: eq 200
+}

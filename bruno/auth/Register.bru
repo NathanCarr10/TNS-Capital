@@ -1,0 +1,33 @@
+meta {
+  name: Register
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{authUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setEnvVar("accountId", res.body.accountId);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Run once per username. Username needs 3+ characters, password 8+.
+  Optional field: "holderName" (defaults to the username).
+}
