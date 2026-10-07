@@ -2,6 +2,21 @@ const pool = require('./db');
 const { hashPassword, verifyPassword } = require('./passwordHasher');
 
 /**
+ * Maps usernames to their authorized roles
+ * Per contract: x-internal-notes User Store
+ *
+ * @param {string} username - Username
+ * @returns {string[]} Array of role strings
+ */
+function getRolesForUser(username) {
+  const roleMap = {
+    alice: ['MISSION_OPERATOR', 'ADMIN'],
+    bob: ['GUEST'],
+  };
+  return roleMap[username] || ['USER']; // Default to USER for unknown users
+}
+
+/**
  * Register a new user with hashed password
  *
  * @param {string} username - Username to register
@@ -46,7 +61,7 @@ async function registerUser(username, password) {
  *
  * @param {string} username - Username
  * @param {string} password - Plaintext password
- * @returns {Promise<{id, username}|null>} User object if authenticated, null otherwise
+ * @returns {Promise<{id, username, roles}|null>} User object with roles if authenticated, null otherwise
  *
  * Satisfies AC#1: Compares plaintext input to stored hash only
  * Satisfies AC#6: Verifies password matches stored hash
@@ -65,10 +80,11 @@ async function authenticateUser(username, password) {
     return null; // Password mismatch
   }
 
-  // Return user WITHOUT password_hash (AC#5)
+  // Return user WITHOUT password_hash (AC#5) and WITH roles
   return {
     id: user.id,
     username: user.username,
+    roles: getRolesForUser(user.username),
   };
 }
 
