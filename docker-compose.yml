@@ -1,6 +1,7 @@
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
+    mem_limit: 256m
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -14,6 +15,7 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
+    mem_limit: 1g
     ports:
       - "9092:9092"
     environment:
@@ -34,6 +36,7 @@ services:
 
   postgres:
     build: ./db
+    mem_limit: 512m
     environment:
       POSTGRES_DB: tns_capital
       POSTGRES_USER: ${DB_USER:-tns-capital-db-user}
@@ -41,6 +44,13 @@ services:
       DB_USER: ${DB_USER:-tns-capital-db-user}
     ports:
       - "5432:5432"
+    command:
+      - "-c"
+      - "max_connections=30"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "work_mem=8MB"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -53,11 +63,15 @@ services:
   auth-stub:
     build:
       context: ./shared/auth-stub
+    mem_limit: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       PORT: 4000
     ports:
       - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:4000/health || exit 1"]
       interval: 5s
@@ -66,12 +80,14 @@ services:
 
   app:
     build: .
+    mem_limit: 512m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-tns-capital-db-user}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
     ports:
       - "3000:3000"
     depends_on:
@@ -84,6 +100,7 @@ services:
 
   etl:
     build: ./etl
+    mem_limit: 384m
     environment:
       ETL_DB_HOST: postgres
       DB_USER: ${DB_USER:-tns-capital-db-user}
@@ -96,12 +113,14 @@ services:
 
   kafka-ui:
     image: kafbat/kafka-ui:v1.5.0
+    mem_limit: 384m
     depends_on:
       kafka:
         condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: trading-platform
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      JAVA_OPTS: -XX:MaxRAMPercentage=70
     ports:
       - "${KAFKA_UI_PORT:-8090}:8080"
     restart: unless-stopped

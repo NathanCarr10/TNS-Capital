@@ -12,6 +12,10 @@ import java.util.UUID;
 
 public interface DeadLetterMessageRepository extends JpaRepository<DeadLetterMessage, UUID> {
 
+    List<DeadLetterMessage> findAllByOrderByCreatedOnDesc();
+
+    List<DeadLetterMessage> findByFailureTypeOrderByCreatedOnDesc(String failureType);
+
     List<DeadLetterMessage> findByStatusOrderByCreatedOnDesc(DLQStatus status);
 
     List<DeadLetterMessage> findByStatusAndFailureTypeOrderByCreatedOnDesc(DLQStatus status, String failureType);

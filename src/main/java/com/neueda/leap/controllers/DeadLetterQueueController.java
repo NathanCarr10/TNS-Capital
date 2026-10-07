@@ -40,7 +40,7 @@ public class DeadLetterQueueController {
      * Retrieves DLQ messages with optional filtering.
      * 
      * Query Parameters:
-     * - status: Filter by DLQ status (PENDING, RESOLVED, IGNORED) [optional]
+     * - status: Filter by DLQ status (PENDING, RESOLVED, IGNORED) [optional, defaults to all]
      * - failureType: Filter by exception type [optional]
      * 
      * Returns: List of DLQ messages (newest first)
@@ -67,10 +67,13 @@ public class DeadLetterQueueController {
                 DLQStatus dlqStatus = DLQStatus.valueOf(status.toUpperCase());
                 messages = dlqRepository.findByStatusOrderByCreatedOnDesc(dlqStatus);
                 log.info("Retrieved DLQ messages: status={}, count={}", status, messages.size());
+            } else if (failureType != null) {
+                messages = dlqRepository.findByFailureTypeOrderByCreatedOnDesc(failureType);
+                log.info("Retrieved DLQ messages: failureType={}, count={}", failureType, messages.size());
             } else {
-                // Default to PENDING messages
-                messages = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
-                log.info("Retrieved pending DLQ messages: count={}", messages.size());
+                // No filters: return messages of every status
+                messages = dlqRepository.findAllByOrderByCreatedOnDesc();
+                log.info("Retrieved all DLQ messages: count={}", messages.size());
             }
 
             List<DeadLetterMessageDTO> dtos = messages.stream()
