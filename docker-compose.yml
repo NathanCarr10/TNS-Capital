@@ -64,6 +64,13 @@ services:
     build:
       context: ./shared/auth-stub
     mem_limit: 256m
+    args:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tns_capital
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       PORT: 4000

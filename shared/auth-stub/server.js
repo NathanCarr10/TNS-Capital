@@ -1,5 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const { registerUser, authenticateUser } = require('./src/userService');
 
 const app = express();
 app.use(express.json());
@@ -13,18 +16,16 @@ if (!SECRET) {
   process.exit(1);
 }
 
-// A stub, not a real user store - two hardcoded accounts is enough to
-// demonstrate "valid token in, protected data out" and "no token, or the
-// wrong one, in -> rejected".
-const USERS = {
-  alice: { password: 'mission123', roles: ['MISSION_OPERATOR', 'ADMIN'] },
-  bob: { password: 'wrongpermissions', roles: ['GUEST'] },
-};
+// Validate JWT_SECRET meets security requirements
+if (SECRET.length < 32) {
+  console.error('JWT_SECRET must be at least 32 bytes (256 bits) for HS256 security.');
+  process.exit(1);
+}
 
 /**
- * Creates a platform-compliant error response envelope matching Java ErrorResponse
+ * Creates a platform-compliant error response envelope
  * @param {string} errorCode - Error code (e.g., "AUTH-401", "VAL-422", "SYS-500")
- * @param {string} message - Human-readable error message (no stack traces or internal details)
+ * @param {string} message - Human-readable error message (no stack traces)
  * @returns {Object} Error response with errorCode, message, and ISO 8601 timestamp
  */
 function errorResponse(errorCode, message) {
@@ -36,178 +37,108 @@ function errorResponse(errorCode, message) {
 }
 
 /**
- * Validates login request body against contract schema
- * Contract schema requires:
- * - username: string, minLength 1, maxLength 100, required
- * - password: string, minLength 1, maxLength 256, required
- * - additionalProperties: false
- * @param {Object} body - Request body
- * @returns {Object|null} Validation error object or null if valid
+ * POST /register - Register a new user
+ *
+ * Satisfies AC#1: Passwords hashed with Argon2id, plaintext never stored
+ * Satisfies AC#4: Duplicate username returns 409 error
+ * Satisfies AC#5: Response never includes password or hash
  */
-function validateLoginRequest(body) {
-  if (!body) {
-    return { code: 'VAL-422', message: 'missing username or password' };
-  }
-
-  const { username, password } = body;
-
-  // Check for required fields (undefined/null/missing)
-  if (username === undefined || username === null) {
-    return { code: 'VAL-422', message: 'missing username or password' };
-  }
-  if (password === undefined || password === null) {
-    return { code: 'VAL-422', message: 'missing username or password' };
-  }
-
-  // Check types
-  if (typeof username !== 'string') {
-    return { code: 'VAL-422', message: 'username must be a string' };
-  }
-  if (typeof password !== 'string') {
-    return { code: 'VAL-422', message: 'password must be a string' };
-  }
-
-  // Check length constraints (minLength 1, maxLength enforced by contract)
-  if (username.length < 1 || username.length > 100) {
-    return { code: 'VAL-422', message: 'username must be between 1 and 100 characters' };
-  }
-  if (password.length < 1 || password.length > 256) {
-    return { code: 'VAL-422', message: 'password must be between 1 and 256 characters' };
-  }
-
-  // Check for additionalProperties - reject unknown fields per contract schema
-  const allowedKeys = new Set(['username', 'password']);
-  for (const key of Object.keys(body)) {
-    if (!allowedKeys.has(key)) {
-      return { code: 'VAL-422', message: `Unexpected property: ${key}` };
-    }
-  }
-
-  return null; // Valid
-}
-
-// POST /login - Authenticate user and return JWT token
-app.post('/login', (req, res, next) => {
+app.post('/register', async (req, res) => {
   try {
-    // Validate request body against contract schema
-    const validationError = validateLoginRequest(req.body);
-    if (validationError) {
-      return res.status(400).json(errorResponse(validationError.code, validationError.message));
+    const { username, password } = req.body || {};
+
+    // Validate inputs (AC#5 - don't log password)
+    if (!username || !password) {
+      return res.status(422).json(errorResponse('VAL-422', 'missing username or password'));
     }
 
-    const { username, password } = req.body;
-    const user = USERS[username];
+    // Register user (AC#1 - hashes password)
+    const user = await registerUser(username, password);
 
-    // Invalid credentials - 401 response in platform envelope
-    if (!user || user.password !== password) {
-      return res.status(401).json(errorResponse('AUTH-401', 'invalid username or password'));
+    // Return user info WITHOUT password (AC#5)
+    return res.status(201).json({
+      id: user.id,
+      username: user.username,
+      createdAt: user.created_at,
+    });
+  } catch (error) {
+    // Handle duplicate username (AC#4)
+    if (error.code === 'CONFLICT') {
+      return res.status(409).json(errorResponse('USR-409', 'User already exists'));
     }
 
-    // Valid credentials - issue JWT token
-    const token = jwt.sign(
-      { sub: username, roles: user.roles },
-      SECRET,
-      { algorithm: 'HS256', expiresIn: '1h' }
-    );
-    res.json({ token });
-  } catch (error) {
-    next(error);
+    // Validation errors
+    if (error.message.includes('must be')) {
+      return res.status(422).json(errorResponse('VAL-422', error.message));
+    }
+
+    // Generic server error (AC#5 - never expose internals)
+    console.error('Registration error:', error);
+    return res.status(500).json(errorResponse('SYS-500', 'Internal server error'));
   }
-});
-
-// GET /health - Service health check
-app.get('/health', (req, res, next) => {
-  try {
-    res.json({ status: 'up' });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// 405 handler - /health only allows GET
-app.post('/health', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method POST is not supported on this endpoint')
-  );
-});
-app.put('/health', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method PUT is not supported on this endpoint')
-  );
-});
-app.delete('/health', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method DELETE is not supported on this endpoint')
-  );
-});
-app.patch('/health', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method PATCH is not supported on this endpoint')
-  );
-});
-
-// 405 handler - /login only allows POST
-app.get('/login', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method GET is not supported on this endpoint')
-  );
-});
-app.put('/login', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method PUT is not supported on this endpoint')
-  );
-});
-app.delete('/login', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method DELETE is not supported on this endpoint')
-  );
-});
-app.patch('/login', (req, res) => {
-  res.status(405).json(
-    errorResponse('REQ-405', 'HTTP method PATCH is not supported on this endpoint')
-  );
-});
-
-// 404 handler - Unknown routes (must be after all defined routes)
-app.use((req, res) => {
-  res.status(404).json(
-    errorResponse('NOT-404', `Resource not found: ${req.method} ${req.path}`)
-  );
 });
 
 /**
- * Global error middleware - handles all unhandled exceptions
- * Must be registered last to catch errors from all routes and middleware
- * Never exposes stack traces or internal details to clients
- * Logs full details server-side for debugging
+ * POST /login - Authenticate user and issue JWT
+ *
+ * Satisfies AC#1: Verifies password against Argon2id hash
+ * Satisfies AC#5: Never logs password, response only contains token
+ * 
+ * Token Payload Compliance:
+ * - sub: username (subject)
+ * - roles: user's authorized roles array
+ * - iss: issuer identifier
+ * - iat: issued at timestamp (auto-generated by jwt.sign)
+ * - exp: expiration timestamp (1 hour)
+ * 
+ * Algorithm: HS256 (HMAC-SHA256) - pinned in code, not read from token
+ * Secret: JWT_SECRET environment variable (shared with validation service)
  */
-app.use((err, req, res, next) => {
-  // Specifically handle JSON parsing errors from express.json()
-  if (err instanceof SyntaxError && 'body' in err) {
-    return res.status(400).json(
-      errorResponse('VAL-422', 'Request body is missing or malformed')
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+
+    if (!username || !password) {
+      return res.status(422).json(errorResponse('VAL-422', 'missing username or password'));
+    }
+
+    // Authenticate against database (AC#1, AC#6)
+    const user = await authenticateUser(username, password);
+
+    if (!user) {
+      // Don't reveal whether user exists or password is wrong (security best practice)
+      return res.status(401).json(errorResponse('AUTH-401', 'invalid username or password'));
+    }
+
+    // Issue JWT token with contract-compliant claims
+    // Payload will include: sub, roles, iss, iat (auto), exp (auto)
+    const token = jwt.sign(
+      {
+        sub: user.username,
+        roles: user.roles,
+        iss: 'urn:tns-capital:auth-stub',
+      },
+      SECRET,
+      { algorithm: 'HS256', expiresIn: '1h' },
     );
+
+    return res.json({ token });
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json(errorResponse('SYS-500', 'Internal server error'));
   }
-
-  // Log full details server-side for debugging (but never expose to client)
-  console.error('Unhandled exception:', err);
-
-  // Return generic error response without exposing any internal details
-  res.status(500).json(
-    errorResponse(
-      'SYS-500',
-      'An unexpected error occurred. Please contact support with error timestamp if problem persists.'
-    )
-  );
 });
 
-// Only listen if this is the main module (being run directly, not imported for testing)
+app.get('/health', (req, res) => res.json({ status: 'up' }));
+
+// Export app for testing
+module.exports = app;
+
+// Start server only if run directly (not imported for testing)
 if (require.main === module) {
   const PORT = process.env.PORT || 4000;
-  const server = app.listen(PORT, () => {
-    console.log(`mission-auth-stub listening on http://localhost:${PORT}`);
-    console.log(`Try: curl -X POST http://localhost:${PORT}/login -H "Content-Type: application/json" -d '{"username":"alice","password":"mission123"}'`);
+  app.listen(PORT, () => {
+    console.log(`Auth service listening on http://localhost:${PORT}`);
+    console.log(`Try: curl -X POST http://localhost:${PORT}/login -H "Content-Type: application/json" -d '{"username":"alice","password":"alice123"}'`);
   });
 }
-
-module.exports = app; // Export for testing with Jest/Supertest
