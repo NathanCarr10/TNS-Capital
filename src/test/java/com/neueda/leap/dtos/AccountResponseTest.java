@@ -3,6 +3,7 @@ package com.neueda.leap.dtos;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class AccountResponseTest {
         String holderName = "John Doe";
         BigDecimal cashBalance = new BigDecimal("10000.00");
         AccountStatus status = AccountStatus.ACTIVE;
-        Long timestamp = System.currentTimeMillis();
+        Instant timestamp = Instant.now();
         AccountResponse response = new AccountResponse(id, accountNumber, holderName, cashBalance, status, timestamp);
         assertEquals(id, response.id());
         assertEquals(accountNumber, response.accountNumber());
@@ -31,7 +32,7 @@ class AccountResponseTest {
     void testAccountResponseWithSuspendedStatus() {
         AccountResponse response = new AccountResponse(
                 2L, "ACC654321", "Jane Smith", new BigDecimal("5000.00"),
-                AccountStatus.SUSPENDED, System.currentTimeMillis());
+                AccountStatus.SUSPENDED, Instant.now());
         assertEquals("ACC654321", response.accountNumber());
         assertEquals(AccountStatus.SUSPENDED, response.status());
     }

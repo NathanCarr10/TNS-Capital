@@ -95,7 +95,7 @@ public class AccountController {
                                 account.getHolderName(),
                                 account.getCashBalance(),
                                 account.getStatus(),
-                                account.getLastUpdated().toEpochMilli() // Convert Instant to Long (milliseconds)
+                                account.getLastUpdated()
                 );
         }
 
