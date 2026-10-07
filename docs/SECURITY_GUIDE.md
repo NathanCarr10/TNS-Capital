@@ -13,7 +13,7 @@ This document outlines the security measures implemented in the TNS Capital API 
 **Implementation:**
 - JWT tokens are signed using HMAC-SHA256 with a shared secret
 - Configured in [SecurityConfig.java](../../security/SecurityConfig.java)
-- Tokens are issued by the authentication stub service (`shared/auth-stub/`)
+- Tokens are issued by the NestJS authentication service (`shared/auth-stub/`)
 
 **Best Practices:**
 - ✅ **Shared Secret Management**: The JWT secret is externalized via environment variable `jwt.shared-secret`
@@ -34,6 +34,18 @@ jwt:
 4. API validates token using shared secret
 5. Request proceeds if token is valid and not expired
 ```
+
+### Roles and Account Ownership
+
+- `POST /register` on the auth service creates the user **and** opens their trading account
+  (ACTIVE, cash balance 0), linked by `users.account_id`. The token's `roles` claim comes from
+  `users.role`: `["USER"]` for registered users, `["ADMIN"]` for the seeded `admin` user.
+- **USER**: may only use the account linked to their username (the token's `sub`) — read it,
+  move cash, place/cancel orders on it, see its positions and orders. Anything else is
+  `403 AUTH-403`, including account IDs that do not exist (no probing for valid IDs).
+  `GET /api/v1/accounts` and `GET /api/v1/orders` return only the user's own rows.
+- **ADMIN**: may use every account, open accounts (`POST /api/v1/accounts`) and use the DLQ.
+- Enforced by [AccountAccessGuard.java](../src/main/java/com/neueda/leap/security/AccountAccessGuard.java).
 
 ---
 
@@ -135,7 +147,7 @@ public record CreateInstrumentRequest(
 
 ### Algorithm: Argon2id
 
-**Implementation:** Located in `shared/auth-stub/src/passwordHasher.js`
+**Implementation:** Located in `shared/auth-stub/src/users/password-hasher.ts` (NestJS auth service)
 
 **Choice Rationale:**
 - **Argon2id** selected over bcrypt because it is memory-hard and resistant to GPU/ASIC attacks
@@ -217,7 +229,7 @@ password_hash VARCHAR(255) NOT NULL  -- e.g., $argon2id$v=19$m=65540,t=3,p=4$abc
 
 All password handling is tested in `shared/auth-stub/tests/`:
 
-**passwordHasher.spec.js** — Unit tests for hashing:
+**password-hasher.spec.ts** — Unit tests for hashing:
 - ✅ Hash always differs from input (random salt)
 - ✅ Same password produces different hashes (salt randomization)
 - ✅ Correct password verifies against stored hash
@@ -225,14 +237,17 @@ All password handling is tested in `shared/auth-stub/tests/`:
 - ✅ Hash string includes algorithm, parameters, and salt
 - ✅ Invalid hash format returns false, not error
 
-**userService.spec.js** — Integration tests for registration/auth:
-- ✅ Registration succeeds and returns user (without password/hash)
-- ✅ Duplicate username throws error with code CONFLICT
+**users.service.spec.ts** — Integration tests for registration/auth (needs Postgres):
+- ✅ Registration opens an ACTIVE account with a 0 cash balance, linked via `users.account_id`
+- ✅ Duplicate username is rejected without opening a second account
+- ✅ A failed account insert rolls back the user
 - ✅ Authentication succeeds with valid credentials
 - ✅ Authentication fails with wrong password
 - ✅ Plaintext password never stored in database
 
-**Run tests:**
+**auth-api.spec.ts** — HTTP contract tests (no database): claims, roles, error envelope, validation.
+
+**Run tests** (Node 20+; set `DB_*` to reach a Postgres with the `db/` schema):
 ```bash
 cd shared/auth-stub
 npm install
@@ -447,12 +462,14 @@ JWT_SECRET=<output of: openssl rand -hex 32>
 ### Protected Endpoints (Require JWT)
 
 ```
-POST   /api/v1/orders          - Place order (Authenticated)
-GET    /api/v1/orders          - List orders (Authenticated)
-GET    /api/v1/orders/{id}     - Get order (Authenticated)
-DELETE /api/v1/orders/{id}     - Cancel order (Authenticated)
-GET    /api/v1/accounts        - List accounts (Authenticated)
-GET    /api/v1/positions       - List positions (Authenticated)
+POST   /api/v1/orders          - Place order (owner of the order's account, or ADMIN)
+GET    /api/v1/orders          - List orders (own orders; ADMIN sees all)
+GET    /api/v1/orders/{id}     - Get order (owner or ADMIN)
+DELETE /api/v1/orders/{id}     - Cancel order (owner or ADMIN)
+GET    /api/v1/accounts        - List accounts (own account; ADMIN sees all)
+POST   /api/v1/accounts        - Open account (ADMIN)
+*      /api/v1/accounts/{id}/** - Account, balance, deposit, withdraw, positions, orders (owner or ADMIN)
+GET    /api/v1/positions/{id}  - List positions (owner or ADMIN)
 *      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
 ```
 
