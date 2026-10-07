@@ -418,8 +418,9 @@ class AccountServiceTest {
         @DisplayName("Should refuse a withdrawal larger than the balance")
         @Test
         void testWithdrawInsufficientFunds() {
+            BigDecimal amount = new BigDecimal("50000.01");
             assertThrows(InsufficientFundsException.class,
-                    () -> accountService.withdraw(1L, new BigDecimal("50000.01")));
+                    () -> accountService.withdraw(1L, amount));
 
             assertEquals(new BigDecimal("50000.00"), testAccount.getCashBalance());
             verify(accountRepository, never()).save(any());
