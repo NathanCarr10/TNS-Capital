@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * HealthController was removed, so health is served by Spring Actuator at /actuator/health.
  */
 @DisplayName("Health Controller Integration Tests")
-@WithMockUser(username = "testuser", roles = "USER")
+@WithMockUser(username = "testuser", roles = "ADMIN")
 public class HealthControllerIT extends AbstractIntegrationTest {
 
     @Autowired

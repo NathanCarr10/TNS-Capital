@@ -25,6 +25,7 @@ import com.neueda.leap.exceptions.AccountAlreadyExistsException;
 import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
@@ -384,6 +385,70 @@ class AccountServiceTest {
 
             assertThrows(AccountDeletionConflictException.class, () -> accountService.closeAccount(1L));
             assertEquals(AccountStatus.ACTIVE, testAccount.getStatus());
+        }
+    }
+
+    @DisplayName("deposit and withdraw Tests")
+    @Nested
+    class CashTransactionTests {
+        @BeforeEach
+        void stubRepository() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+        }
+
+        @DisplayName("Should credit a deposit to the balance")
+        @Test
+        void testDepositCreditsBalance() {
+            Account result = accountService.deposit(1L, new BigDecimal("250.50"));
+
+            assertEquals(new BigDecimal("50250.50"), result.getCashBalance());
+            verify(accountRepository).save(testAccount);
+        }
+
+        @DisplayName("Should debit a withdrawal from the balance")
+        @Test
+        void testWithdrawDebitsBalance() {
+            Account result = accountService.withdraw(1L, new BigDecimal("50000.00"));
+
+            assertEquals(0, result.getCashBalance().compareTo(BigDecimal.ZERO));
+            verify(accountRepository).save(testAccount);
+        }
+
+        @DisplayName("Should refuse a withdrawal larger than the balance")
+        @Test
+        void testWithdrawInsufficientFunds() {
+            assertThrows(InsufficientFundsException.class,
+                    () -> accountService.withdraw(1L, new BigDecimal("50000.01")));
+
+            assertEquals(new BigDecimal("50000.00"), testAccount.getCashBalance());
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should refuse cash movements on an account that is not ACTIVE")
+        @ParameterizedTest
+        @ValueSource(strings = { "SUSPENDED", "CLOSED" })
+        void testCashMovementsRequireActiveAccount(String status) {
+            testAccount.setStatus(AccountStatus.valueOf(status));
+
+            assertThrows(AccountNotActiveException.class, () -> accountService.deposit(1L, BigDecimal.TEN));
+            assertThrows(AccountNotActiveException.class, () -> accountService.withdraw(1L, BigDecimal.TEN));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should reject a non-positive amount")
+        @Test
+        void testDepositRejectsNonPositiveAmount() {
+            assertThrows(IllegalArgumentException.class, () -> accountService.deposit(1L, BigDecimal.ZERO));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should throw when the account does not exist")
+        @Test
+        void testDepositAccountNotFound() {
+            when(accountRepository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(AccountNotFoundException.class, () -> accountService.deposit(99L, BigDecimal.TEN));
         }
     }
 }

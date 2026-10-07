@@ -19,7 +19,8 @@ import org.testcontainers.utility.MountableFile;
  * with the Spring Boot application context. The database container loads the
  * schema and seed data from db/ the same way the db/ image does, since
  * Hibernate only validates the schema.
- * Enables security testing with a mock user context.
+ * Requests run as an ADMIN mock user, who may use every account; ownership
+ * rules for regular users are covered by AccountOwnershipIT.
  *
  * The containers are shared by every integration test class and started once.
  * Spring caches one application context across the classes, so containers
@@ -31,7 +32,7 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@WithMockUser(username = "testuser", roles = "USER")
+@WithMockUser(username = "testuser", roles = "ADMIN")
 public abstract class AbstractIntegrationTest {
 
     @SuppressWarnings("resource")
@@ -75,7 +76,7 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    // CASCADE also clears orders, positions and executions, which reference these tables
+    // CASCADE also clears orders, positions, executions and users, which reference these tables
     @BeforeEach
     void clearTables() {
         jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
