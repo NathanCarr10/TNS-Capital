@@ -66,6 +66,11 @@ services:
     mem_limit: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tns_capital
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
     ports:
       - "4000:4000"
