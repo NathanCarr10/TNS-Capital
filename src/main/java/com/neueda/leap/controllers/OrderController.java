@@ -5,18 +5,22 @@ import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
+import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -34,9 +38,11 @@ import java.util.stream.Collectors;
 public class OrderController {
     private final OrderRepository orderRepository;
     private final AccountRepository accountRepository;
+    private final InstrumentRepository instrumentRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
     private final OrderEventPublisher orderEventPublisher;
+    private final AccountAccessGuard accessGuard;
 
     /**
      * Places an order asynchronously by publishing to Kafka.
@@ -48,11 +54,41 @@ public class OrderController {
      * Failures (invalid account, insufficient funds, etc.) are captured in the DLQ
      * for administrative review and replay.
      * 
+     * NOTE: This endpoint validates that the Account and Instrument exist BEFORE
+     * publishing to Kafka. This fail-fast approach prevents non-recoverable errors
+     * (e.g., deleted account) from wasting Kafka retry attempts. Business logic
+     * exceptions (insufficient funds, etc.) are still handled in the async
+     * consumer.
+     * 
      * @param request the order placement request with validation
      * @return 202 ACCEPTED with order ID for client tracking
+     * @throws AccessDeniedException       if the caller does not own the account
+     * @throws AccountNotFoundException    if account does not exist
+     * @throws InstrumentNotFoundException if instrument does not exist
      */
     @PostMapping
     public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+        // Checked first, so a non-owner cannot probe which account IDs exist
+        accessGuard.checkAccess(request.accountId());
+
+        // FAIL-FAST VALIDATION: Check Account and Instrument existence before
+        // publishing to Kafka
+        // This prevents non-recoverable errors from triggering Kafka retries
+
+        // Validate Account exists
+        accountRepository.findById(request.accountId())
+                .orElseThrow(() -> {
+                    log.warn("Order placement rejected: Account not found: accountId={}", request.accountId());
+                    return new AccountNotFoundException("Account not found: " + request.accountId());
+                });
+
+        // Validate Instrument exists
+        instrumentRepository.findBySymbol(request.symbol())
+                .orElseThrow(() -> {
+                    log.warn("Order placement rejected: Instrument not found: symbol={}", request.symbol());
+                    return new InstrumentNotFoundException("Instrument not found: " + request.symbol());
+                });
+
         // Generate order ID for this request
         UUID orderId = UUID.randomUUID();
 
@@ -70,7 +106,7 @@ public class OrderController {
         // Message will be retried with exponential backoff and routed to DLQ on failure
         orderEventPublisher.publishEvent(event, request.accountId());
 
-        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}", 
+        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
                 orderId, request.accountId(), request.symbol());
 
         // Return 202 ACCEPTED with order ID for client tracking
@@ -84,9 +120,11 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getAllOrders() {
-        // Queries all orders; enables bulk retrieval and monitoring of system order
-        // flow
-        List<Order> orders = orderRepository.findAll();
+        // Admins see every order (monitoring of system order flow); other users
+        // see only the orders on their own account
+        List<Order> orders = accessGuard.isAdmin()
+                ? orderRepository.findAll()
+                : accessGuard.currentAccountId().map(orderRepository::findByAccountId).orElse(List.of());
         List<OrderResponse> responses = orders.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -101,6 +139,7 @@ public class OrderController {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(
                         () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
+        accessGuard.checkAccess(order.getAccountId());
         return ResponseEntity.ok(mapToResponse(order));
     }
 
@@ -108,9 +147,10 @@ public class OrderController {
     public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
         // Validates order exists before cancellation; prevents silently ignoring
         // requests for non-existent orders
-        orderRepository.findById(orderId)
+        Order order = orderRepository.findById(orderId)
                 .orElseThrow(
                         () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
+        accessGuard.checkAccess(order.getAccountId());
 
         // Delegates cancellation to service layer; service validates business rules
         // (status, timing)
@@ -124,6 +164,7 @@ public class OrderController {
         OrderHistory history = orderHistoryRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new com.neueda.leap.exceptions.OrderNotFoundException(
                         "Order history not found: " + orderId));
+        accessGuard.checkAccess(history.getAccountId());
         return ResponseEntity.ok(mapHistoryToResponse(history));
     }
 
@@ -131,6 +172,7 @@ public class OrderController {
     public ResponseEntity<List<OrderHistoryResponse>> getAccountOrderHistory(@PathVariable Long accountId) {
         // Retrieves all order history records for an account; enables audit trail
         // queries even for deleted accounts
+        accessGuard.checkAccess(accountId);
         List<OrderHistory> histories = orderHistoryRepository.findByAccountId(accountId);
         List<OrderHistoryResponse> responses = histories.stream()
                 .map(this::mapHistoryToResponse)
@@ -149,7 +191,8 @@ public class OrderController {
                 order.getQuantity(),
                 order.getPrice(),
                 order.getStatus(),
-                order.getCreatedOn());
+                order.getCreatedOn(),
+                OrderResponse.statusReasonFor(order.getStatus(), order.getStatusReason()));
     }
 
     private OrderHistoryResponse mapHistoryToResponse(OrderHistory history) {

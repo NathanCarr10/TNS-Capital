@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests HTTP endpoints for account management with a real database
  */
 @DisplayName("Account Controller Integration Tests")
-@WithMockUser(username = "testuser", roles = "USER")
+@WithMockUser(username = "testuser", roles = "ADMIN")
 public class AccountControllerIT extends AbstractIntegrationTest {
 
     @Autowired
@@ -138,5 +138,47 @@ public class AccountControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/accounts/99999/orders")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Should open a new account")
+    void testCreateAccount() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"ACC002\",\"holderName\":\"Jane Roe\",\"cashBalance\":500.00}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.accountNumber", is("ACC002")))
+                .andExpect(jsonPath("$.status", is("ACTIVE")));
+    }
+
+    @Test
+    @DisplayName("Should return ACC-409 for a duplicate account number")
+    void testCreateAccountDuplicateNumber() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"ACC001\",\"holderName\":\"Someone Else\",\"cashBalance\":1.00}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode", is("ACC-409")));
+    }
+
+    @Test
+    @DisplayName("Should update the holder name")
+    void testUpdateHolderName() throws Exception {
+        mockMvc.perform(patch("/api/v1/accounts/{id}", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"holderName\":\"Johnny Doe\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.holderName", is("Johnny Doe")));
+    }
+
+    @Test
+    @DisplayName("Should close an account and keep the record")
+    void testCloseAccountKeepsRecord() throws Exception {
+        mockMvc.perform(delete("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("CLOSED")));
     }
 }

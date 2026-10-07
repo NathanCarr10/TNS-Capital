@@ -3,6 +3,7 @@ package com.neueda.leap.dtos;
 import com.neueda.leap.enums.AccountStatus;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 public record AccountResponse(
         Long id,
@@ -10,5 +11,5 @@ public record AccountResponse(
         String holderName,
         BigDecimal cashBalance,
         AccountStatus status,
-        Long lastUpdated) {
+        Instant lastUpdated) {
 }

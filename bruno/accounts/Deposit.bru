@@ -1,0 +1,21 @@
+meta {
+  name: Deposit
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{apiUrl}}/api/v1/accounts/{{accountId}}/deposit
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "amount": 10000.00
+  }
+}
+
+assert {
+  res.status: eq 200
+}

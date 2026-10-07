@@ -1,23 +1,20 @@
 package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.AccountResponse;
+import com.neueda.leap.dtos.CashTransactionRequest;
 import com.neueda.leap.dtos.CreateAccountRequest;
 import com.neueda.leap.dtos.UpdateAccountRequest;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.PositionResponse;
 
-import com.neueda.leap.exceptions.AccountDeletionConflictException;
-import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
-import com.neueda.leap.enums.OrderStatus;
-import com.neueda.leap.repositories.AccountRepository;
-import com.neueda.leap.repositories.OrderRepository;
-import com.neueda.leap.repositories.PositionRepository;
-import com.neueda.leap.time.Clock;
+import com.neueda.leap.security.AccountAccessGuard;
+import com.neueda.leap.services.AccountService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -27,125 +24,114 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Account endpoints. Admins can use every account; other users only the
+ * account opened for them at registration (see AccountAccessGuard).
+ */
 @RestController
 @RequestMapping("/api/v1/accounts")
 public class AccountController {
-        private final AccountRepository accountRepository;
-        private final PositionRepository positionRepository;
-        private final OrderRepository orderRepository;
-        private final Clock clock;
+        private final AccountService accountService;
+        private final AccountAccessGuard accessGuard;
 
-        public AccountController(AccountRepository accountRepository,
-                        PositionRepository positionRepository,
-                        OrderRepository orderRepository,
-                        Clock clock) {
-                this.accountRepository = accountRepository;
-                this.positionRepository = positionRepository;
-                this.orderRepository = orderRepository;
-                this.clock = clock;
+        public AccountController(AccountService accountService, AccountAccessGuard accessGuard) {
+                this.accountService = accountService;
+                this.accessGuard = accessGuard;
         }
 
+        /**
+         * Admins get every account; other users get a list holding only their own.
+         */
         @GetMapping
         public ResponseEntity<List<AccountResponse>> getAllAccounts() {
-                List<Account> accounts = accountRepository.findAll();
+                List<Account> accounts = accessGuard.isAdmin()
+                                ? accountService.getAllAccounts()
+                                : accessGuard.currentAccountId()
+                                                .flatMap(accountService::findAccountById)
+                                                .map(List::of)
+                                                .orElse(List.of());
                 List<AccountResponse> responses = accounts.stream()
                                 .map(this::mapToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);
         }
 
+        /**
+         * Users get their account when they register with the auth service, so
+         * opening further accounts is an admin task.
+         */
         @PostMapping
+        @PreAuthorize("hasRole('ADMIN')")
         public ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
-                // Creates new account with provided details; Clock ensures consistent timestamp
-                Account account = new Account(request.accountNumber(), request.holderName(), request.cashBalance(),
-                                clock);
-                Account savedAccount = accountRepository.save(account);
+                Account savedAccount = accountService.createAccount(request.accountNumber(), request.holderName(),
+                                request.cashBalance());
                 return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(savedAccount));
         }
 
-        @SuppressWarnings("null")
         @PatchMapping("/{accountId}")
         public ResponseEntity<AccountResponse> updateAccount(@PathVariable @NotNull Long accountId,
                         @Valid @RequestBody UpdateAccountRequest request) {
-                // Retrieves existing account; throws exception if not found to maintain REST
-                // consistency
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-
-                // Updates only provided fields; supports partial updates via PATCH
-                if (request.holderName() != null && !request.holderName().trim().isEmpty()) {
-                        account.setHolderName(request.holderName());
-                }
-
-                Account updatedAccount = accountRepository.save(account);
+                accessGuard.checkAccess(accountId);
+                Account updatedAccount = accountService.updateHolderName(accountId, request.holderName());
                 return ResponseEntity.ok(mapToResponse(updatedAccount));
         }
 
-        @SuppressWarnings("null")
+        /**
+         * Closes the account (status CLOSED). The record is kept for the audit
+         * trail; closed accounts can no longer trade.
+         */
         @DeleteMapping("/{accountId}")
         public ResponseEntity<Void> deleteAccount(@PathVariable @NotNull Long accountId) {
-                // Validates account exists before deletion; prevents silently ignoring requests
-                // for non-existent accounts
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-
-                // Checks for active (NEW status) orders; prevents deletion of accounts with
-                // pending orders
-                List<Order> activeOrders = orderRepository.findByAccountId(accountId).stream()
-                                .filter(order -> order.getStatus() == OrderStatus.NEW)
-                                .collect(Collectors.toList());
-
-                if (!activeOrders.isEmpty()) {
-                        throw new AccountDeletionConflictException(
-                                        "Cannot delete account with " + activeOrders.size() + " active order(s)");
-                }
-
-                // Deletes account and returns no content
-                accountRepository.delete(account);
+                accessGuard.checkAccess(accountId);
+                accountService.closeAccount(accountId);
                 return ResponseEntity.noContent().build();
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}")
         public ResponseEntity<AccountResponse> getAccount(@PathVariable @NotNull Long accountId) {
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                return ResponseEntity.ok(mapToResponse(account));
+                accessGuard.checkAccess(accountId);
+                return ResponseEntity.ok(mapToResponse(accountService.getAccountById(accountId)));
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}/balance")
         public ResponseEntity<BalanceResponse> getAccountBalance(@PathVariable @NotNull Long accountId) {
-                // Validates account exists before returning balance; prevents exposing
-                // non-existent accounts
-                Account account = accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                return ResponseEntity.ok(new BalanceResponse(account.getCashBalance()));
+                accessGuard.checkAccess(accountId);
+                return ResponseEntity.ok(new BalanceResponse(accountService.getCashBalance(accountId)));
         }
 
-        @SuppressWarnings("null")
+        /**
+         * Credits cash to the account, e.g. to fund a new account before buying.
+         */
+        @PostMapping("/{accountId}/deposit")
+        public ResponseEntity<AccountResponse> deposit(@PathVariable @NotNull Long accountId,
+                        @Valid @RequestBody CashTransactionRequest request) {
+                accessGuard.checkAccess(accountId);
+                return ResponseEntity.ok(mapToResponse(accountService.deposit(accountId, request.amount())));
+        }
+
+        /**
+         * Debits cash from the account; fails with ORD-400 if the balance is too low.
+         */
+        @PostMapping("/{accountId}/withdraw")
+        public ResponseEntity<AccountResponse> withdraw(@PathVariable @NotNull Long accountId,
+                        @Valid @RequestBody CashTransactionRequest request) {
+                accessGuard.checkAccess(accountId);
+                return ResponseEntity.ok(mapToResponse(accountService.withdraw(accountId, request.amount())));
+        }
+
         @GetMapping("/{accountId}/positions")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
-                // Validates account exists; queries positions separately to enable flexible
-                // retrieval
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                List<Position> positions = positionRepository.findByAccountId(accountId);
-                List<PositionResponse> responses = positions.stream()
+                accessGuard.checkAccess(accountId);
+                List<PositionResponse> responses = accountService.getPositions(accountId).stream()
                                 .map(this::mapPositionToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}/orders")
         public ResponseEntity<List<OrderResponse>> getAccountOrders(@PathVariable @NotNull Long accountId) {
-                // Validates account exists; queries orders separately to enable filtering and
-                // pagination later
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-                List<Order> orders = orderRepository.findByAccountId(accountId);
-                List<OrderResponse> responses = orders.stream()
+                accessGuard.checkAccess(accountId);
+                List<OrderResponse> responses = accountService.getOrders(accountId).stream()
                                 .map(this::mapOrderToResponse)
                                 .collect(Collectors.toList());
                 return ResponseEntity.ok(responses);
@@ -158,7 +144,7 @@ public class AccountController {
                                 account.getHolderName(),
                                 account.getCashBalance(),
                                 account.getStatus(),
-                                account.getLastUpdated().toEpochMilli() // Convert Instant to Long (milliseconds)
+                                account.getLastUpdated()
                 );
         }
 
@@ -185,7 +171,8 @@ public class AccountController {
                                 order.getQuantity(),
                                 order.getPrice(),
                                 order.getStatus(),
-                                order.getCreatedOn());
+                                order.getCreatedOn(),
+                                OrderResponse.statusReasonFor(order.getStatus(), order.getStatusReason()));
         }
 
         /**

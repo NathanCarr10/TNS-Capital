@@ -47,4 +47,28 @@ class OrderResponseTest {
                 new BigDecimal("300.00"), OrderStatus.NEW, createdOn);
         assertEquals(OrderSide.SELL, response.side());
     }
+
+    @Test
+    void testOrderResponseStatusReasonDefaultsToNull() {
+        OrderResponse response = new OrderResponse(
+                UUID.randomUUID(), 1L, "AAPL", OrderSide.BUY, 100,
+                new BigDecimal("150.50"), OrderStatus.NEW, Instant.now());
+        assertNull(response.statusReason());
+    }
+
+    @Test
+    void testOrderResponseWithStatusReason() {
+        OrderResponse response = new OrderResponse(
+                UUID.randomUUID(), 1L, "AAPL", OrderSide.BUY, 100,
+                new BigDecimal("150.50"), OrderStatus.REJECTED, Instant.now(), "Insufficient funds");
+        assertEquals("Insufficient funds", response.statusReason());
+    }
+
+    @Test
+    void testStatusReasonForOnlyExposedForRejectedOrCancelled() {
+        assertEquals("Insufficient funds", OrderResponse.statusReasonFor(OrderStatus.REJECTED, "Insufficient funds"));
+        assertEquals("User cancelled", OrderResponse.statusReasonFor(OrderStatus.CANCELLED, "User cancelled"));
+        assertNull(OrderResponse.statusReasonFor(OrderStatus.NEW, "stale reason"));
+        assertNull(OrderResponse.statusReasonFor(OrderStatus.FILLED, "stale reason"));
+    }
 }

@@ -1,10 +1,21 @@
 package com.neueda.leap.services;
 
+import com.neueda.leap.enums.AccountStatus;
+import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Order;
+import com.neueda.leap.model.Position;
+import com.neueda.leap.exceptions.AccountAlreadyExistsException;
+import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
+import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.time.Clock;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -22,9 +33,71 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class AccountService {
     private final AccountRepository accountRepository;
+    private final PositionRepository positionRepository;
+    private final OrderRepository orderRepository;
+    private final Clock clock;
 
-    public AccountService(AccountRepository accountRepository) {
+    public AccountService(AccountRepository accountRepository, PositionRepository positionRepository,
+            OrderRepository orderRepository, Clock clock) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
+        this.positionRepository = Objects.requireNonNull(positionRepository);
+        this.orderRepository = Objects.requireNonNull(orderRepository);
+        this.clock = Objects.requireNonNull(clock);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Account> getAllAccounts() {
+        return accountRepository.findAll();
+    }
+
+    /**
+     * Opens a new ACTIVE account.
+     *
+     * @throws AccountAlreadyExistsException if the account number is taken
+     */
+    public Account createAccount(String accountNumber, String holderName, BigDecimal openingBalance) {
+        if (accountRepository.findByAccountNumber(accountNumber).isPresent()) {
+            throw new AccountAlreadyExistsException("Account number already exists: " + accountNumber);
+        }
+        return accountRepository.save(new Account(accountNumber, holderName, openingBalance, clock));
+    }
+
+    public Account updateHolderName(Long accountId, String holderName) {
+        Account account = getAccountById(accountId);
+        account.setHolderName(holderName);
+        return accountRepository.save(account);
+    }
+
+    /**
+     * Closes an account. The row is kept with status CLOSED rather than deleted,
+     * so its orders, positions and history stay valid for the audit trail;
+     * closed accounts cannot trade (business rule 2).
+     *
+     * @throws AccountDeletionConflictException if the account has working (NEW) orders
+     */
+    public Account closeAccount(Long accountId) {
+        Account account = getAccountById(accountId);
+        long workingOrders = orderRepository.findByAccountId(accountId).stream()
+                .filter(order -> order.getStatus() == OrderStatus.NEW)
+                .count();
+        if (workingOrders > 0) {
+            throw new AccountDeletionConflictException(
+                    "Cannot close account with " + workingOrders + " active order(s)");
+        }
+        account.setStatus(AccountStatus.CLOSED);
+        return accountRepository.save(account);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Position> getPositions(Long accountId) {
+        getAccountById(accountId);
+        return positionRepository.findByAccountId(accountId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Order> getOrders(Long accountId) {
+        getAccountById(accountId);
+        return orderRepository.findByAccountId(accountId);
     }
 
     /**
@@ -65,6 +138,39 @@ public class AccountService {
     public BigDecimal getCashBalance(Long accountId) {
         Account account = getAccountById(accountId);
         return account.getCashBalance();
+    }
+
+    /**
+     * Credits cash to an active account.
+     *
+     * @throws AccountNotFoundException  if account is not found
+     * @throws AccountNotActiveException if account is not active
+     */
+    public Account deposit(Long accountId, BigDecimal amount) {
+        Account account = getAccountById(accountId);
+        requireActive(account);
+        account.credit(amount);
+        return accountRepository.save(account);
+    }
+
+    /**
+     * Debits cash from an active account; the balance can never go negative.
+     *
+     * @throws AccountNotFoundException   if account is not found
+     * @throws AccountNotActiveException  if account is not active
+     * @throws InsufficientFundsException if the balance is less than the amount
+     */
+    public Account withdraw(Long accountId, BigDecimal amount) {
+        Account account = getAccountById(accountId);
+        requireActive(account);
+        account.debit(amount);
+        return accountRepository.save(account);
+    }
+
+    private void requireActive(Account account) {
+        if (!account.isActive()) {
+            throw new AccountNotActiveException("Account is not active: " + account.getId());
+        }
     }
 
     /**

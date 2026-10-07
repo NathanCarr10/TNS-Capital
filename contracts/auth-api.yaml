@@ -1,0 +1,258 @@
+openapi: 3.0.0
+info:
+  title: Authentication Service API
+  description: |
+    Authentication API contract for the TNS-Capital trading platform.
+    
+    This service is responsible for:
+    - Issuing JWT tokens for client authentication
+    - Validating credentials and returning stateless tokens
+    - Providing health checks for service availability
+    
+    **Authentication Flow:**
+    1. Client calls POST /login with username and password
+    2. Server validates credentials and returns JWT token (expires in 1 hour)
+    3. Client includes token in Authorization header for protected endpoints
+    4. Main API service validates token signature using shared HMAC-SHA256 secret
+    
+    **Note:** This is a stub service for demonstration purposes. In production, 
+    replace with a proper identity provider (Okta, Auth0, Cognito, etc.).
+  version: 1.0.0
+  contact:
+    name: Team Leap
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:4000
+    description: Development/Local Auth Server
+  - url: http://auth-service:4000
+    description: Docker Compose Auth Service
+
+paths:
+  /login:
+    post:
+      summary: Authenticate user and obtain JWT token
+      description: |
+        Validates user credentials against the user store and returns a 
+        signed JWT token if authentication succeeds.
+        
+        **Token Claims:**
+        - `sub`: Subject (username)
+        - `roles`: Array of role strings (e.g., ["MISSION_OPERATOR", "ADMIN"])
+        - `iat`: Issued at timestamp
+        - `exp`: Expiration timestamp (1 hour from issue)
+        
+        **Shared Secret:**
+        The token is signed with HMAC-SHA256 using a shared secret that must 
+        be configured in both this service and the main API service via the 
+        `JWT_SECRET` environment variable.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              alice_admin:
+                summary: Login as admin user
+                value:
+                  username: alice
+                  password: mission123
+              bob_guest:
+                summary: Login as guest user
+                value:
+                  username: bob
+                  password: wrongpermissions
+      responses:
+        '200':
+          description: Authentication successful - JWT token returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbGljZSIsInJvbGVzIjpbIk1JU1NJT05fT1BFUkFUT1IiLCJBRE1JTiJdLCJpYXQiOjE2OTUwMDAwMDAsImV4cCI6MTY5NTAwMzYwMH0.signature
+        '400':
+          description: Bad request - missing or invalid credentials format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: missing username or password
+        '401':
+          description: Unauthorized - invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: invalid username or password
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Internal server error
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns the health status of the authentication service.
+        Can be used for liveness/readiness probes in Kubernetes.
+      operationId: health
+      responses:
+        '200':
+          description: Service is healthy and ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: up
+        '503':
+          description: Service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: down
+
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      description: User credentials for authentication
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Username of the user
+          example: alice
+        password:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Password of the user
+          example: mission123
+      additionalProperties: false
+
+    LoginResponse:
+      type: object
+      description: Successful authentication response containing JWT token
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          format: jwt
+          description: |
+            JWT token signed with HMAC-SHA256 shared secret.
+            Format: Header.Payload.Signature
+            Expires in 1 hour from issue time.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbGljZSIsInJvbGVzIjpbIk1JU1NJT05fT1BFUkFUT1IiLCJBRE1JTiJdLCJpYXQiOjE2OTUwMDAwMDAsImV4cCI6MTY5NTAwMzYwMH0.signature
+      additionalProperties: false
+
+    ErrorResponse:
+      type: object
+      description: Error response body
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: invalid username or password
+      additionalProperties: false
+
+    HealthResponse:
+      type: object
+      description: Health check response
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - up
+            - down
+          description: Service status
+          example: up
+      additionalProperties: false
+
+  securitySchemes:
+    jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from /login endpoint.
+        Include in Authorization header: Bearer <token>
+
+  responses:
+    Unauthorized:
+      description: Invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Invalid or missing JWT token
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: Internal server error
+
+security: []  # No security required for /login and /health endpoints
+
+tags:
+  - name: Authentication
+    description: User authentication and token management
+  - name: Health
+    description: Service health monitoring
+
+x-internal-notes: |
+  Implementation Details:
+  
+  1. **Shared Secret Management:**
+     - Environment variable: JWT_SECRET
+     - Default: mission-control-shared-secret-key-32-bytes-minimum
+     - Must be >= 32 bytes for HMAC-SHA256
+     - Must match the secret in the main API service (SecurityConfig.java)
+  
+  2. **User Store (Stub):**
+     - alice/mission123 -> Roles: [MISSION_OPERATOR, ADMIN]
+     - bob/wrongpermissions -> Roles: [GUEST]
+     - In production, replace with proper user database/directory
+  
+  3. **Token Validation (in Main API):**
+     - Algorithm: HS256 (HMAC-SHA256)
+     - Expiration: 1 hour (3600 seconds)
+     - Validated on every request to protected endpoints
+     - See: src/main/java/com/neueda/leap/security/SecurityConfig.java
+  
+  4. **Deployment:**
+     - Docker image: node:20-alpine
+     - Dockerfile: shared/auth-service/Dockerfile
+     - Port: 4000 (configurable via PORT env var)
+     - User runs as unprivileged 'node' user
+  
+  5. **Integration Points:**
+     - Main API validates tokens using NimbusJwtDecoder
+     - OAuth2ResourceServerConfigurer in SecurityConfig
+     - OpenAPI config in OpenApiConfig.java (Spring Boot)

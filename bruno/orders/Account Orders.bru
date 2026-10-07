@@ -1,0 +1,15 @@
+meta {
+  name: Account Orders
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{apiUrl}}/api/v1/accounts/{{accountId}}/orders
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}

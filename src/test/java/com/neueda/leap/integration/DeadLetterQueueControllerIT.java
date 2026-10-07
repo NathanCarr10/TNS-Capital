@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -87,17 +88,27 @@ public class DeadLetterQueueControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should list pending DLQ messages by default")
+    @DisplayName("Should list DLQ messages of all statuses by default")
     @WithMockUser(roles = "ADMIN")
-    void testListPendingMessages() throws Exception {
+    void testListAllMessagesByDefault() throws Exception {
         mockMvc.perform(get("/api/v1/dlq/messages")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[*].status", containsInAnyOrder("PENDING", "RESOLVED", "IGNORED")));
+    }
+
+    @Test
+    @DisplayName("Should filter messages by failure type across all statuses")
+    @WithMockUser(roles = "ADMIN")
+    void testFilterByFailureTypeOnly() throws Exception {
+        mockMvc.perform(get("/api/v1/dlq/messages")
+                .param("failureType", "ResolvedTestException")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id", is(pendingMessage.getId().toString())))
-                .andExpect(jsonPath("$[0].status", is("PENDING")))
-                .andExpect(jsonPath("$[0].failureType", is("TestException")));
+                .andExpect(jsonPath("$[0].id", is(resolvedMessage.getId().toString())));
     }
 
     @Test
@@ -214,6 +225,7 @@ public class DeadLetterQueueControllerIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should return 401 when not authenticated")
+    @WithAnonymousUser
     void testAccessDeniedWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/dlq/messages"))
                 .andExpect(status().isUnauthorized());

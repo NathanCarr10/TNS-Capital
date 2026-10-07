@@ -123,7 +123,7 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
         List<DeadLetterMessage> dlqMessages = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
         DeadLetterMessage dlqMsg = dlqMessages.get(0);
 
-        assertThat(dlqMsg.getFailureReason()).contains("AccountNotFoundException");
+        assertThat(dlqMsg.getFailureReason()).contains("Account not found");
         assertThat(dlqMsg.getRetryCount()).isGreaterThanOrEqualTo(0);
 
         // Step 4: Admin dismisses as unfixable
@@ -231,8 +231,10 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
 
         List<DeadLetterMessage> dlqMessages = dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING);
 
-        // Resolve first message
-        deadLetterService.replayMessage(dlqMessages.get(0).getId(), orderService);
+        // Replay the first: the account still does not exist, so it stays PENDING
+        boolean replayed = deadLetterService.replayMessage(dlqMessages.get(0).getId(), orderService);
+        assertThat(replayed).isFalse();
+        assertThat(dlqRepository.findById(dlqMessages.get(0).getId()).get().getRetryCount()).isEqualTo(1);
 
         // Dismiss second message
         deadLetterService.dismissMessage(dlqMessages.get(1).getId(), "Duplicate order");
@@ -244,8 +246,8 @@ public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
         long resolved = dlqRepository.countByStatus(DLQStatus.RESOLVED);
         long ignored = dlqRepository.countByStatus(DLQStatus.IGNORED);
 
-        assertThat(pending).isEqualTo(1);
-        assertThat(resolved).isGreaterThanOrEqualTo(1);
+        assertThat(pending).isEqualTo(2);
+        assertThat(resolved).isZero();
         assertThat(ignored).isEqualTo(1);
     }
 

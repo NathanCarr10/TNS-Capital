@@ -10,7 +10,7 @@ import java.util.Optional;
  * Provides CRUD operations and custom query methods.
  * JpaRepository automatically provides: findById, save, findAll, delete, etc.
  */
-public interface InstrumentRepository extends JpaRepository<Instrument, Long> {
+public interface InstrumentRepository extends JpaRepository<Instrument, String> {
     /**
      * Finds an instrument by its symbol (typically normalized).
      *

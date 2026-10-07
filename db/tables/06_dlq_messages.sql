@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS dlq_messages (
     created_on          TIMESTAMP           NOT NULL DEFAULT NOW(),
     last_retry_on       TIMESTAMP,
     resolved_on         TIMESTAMP,
-    admin_notes         TEXT
+    admin_notes         TEXT,
+    is_retryable        BOOLEAN             NOT NULL DEFAULT TRUE
 );
 
 -- Indexes for efficient querying
@@ -23,6 +24,8 @@ CREATE INDEX IF NOT EXISTS idx_dlq_failure_type ON dlq_messages (failure_type);
 
 -- Combined index for common filtered queries
 CREATE INDEX IF NOT EXISTS idx_dlq_status_created ON dlq_messages (status, created_on DESC);
+CREATE INDEX IF NOT EXISTS idx_dlq_retryable ON dlq_messages (is_retryable);
+CREATE INDEX IF NOT EXISTS idx_dlq_status_retryable ON dlq_messages (status, is_retryable, created_on DESC);
 
 COMMENT ON TABLE dlq_messages IS 'Dead-Letter Queue for failed order messages requiring administrative review and replay';
 COMMENT ON COLUMN dlq_messages.id IS 'Unique identifier for this DLQ message';
@@ -35,4 +38,5 @@ COMMENT ON COLUMN dlq_messages.retry_count IS 'Number of replay attempts made by
 COMMENT ON COLUMN dlq_messages.created_on IS 'Timestamp when message was captured in DLQ';
 COMMENT ON COLUMN dlq_messages.last_retry_on IS 'Timestamp of last replay attempt';
 COMMENT ON COLUMN dlq_messages.resolved_on IS 'Timestamp when message status changed to RESOLVED or IGNORED';
+COMMENT ON COLUMN dlq_messages.is_retryable IS 'true = retryable (business logic error, can be safely replayed), false = non-retryable (not-found error, impossible scenario)';
 COMMENT ON COLUMN dlq_messages.admin_notes IS 'Administrative notes explaining dismissal or replay context';

@@ -1,0 +1,35 @@
+meta {
+  name: Login
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{authUrl}}/auth/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{username}}",
+    "password": "{{password}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("accessToken", res.body.accessToken);
+    bru.setEnvVar("refreshToken", res.body.refreshToken);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Saves accessToken and refreshToken into the environment.
+  Every other request sends the access token via the collection-level Bearer auth.
+  The access token expires after 1 hour; run Refresh or Login again on 401.
+}

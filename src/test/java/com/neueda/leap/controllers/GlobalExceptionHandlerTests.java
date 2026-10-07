@@ -45,7 +45,7 @@ class GlobalExceptionHandlerTests {
             ErrorResponse body = response.getBody();
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
             assertNotNull(body);
-            assertEquals("ACCOUNT_NOT_FOUND", body.errorCode());
+            assertEquals("ACC-404", body.errorCode());
             // Verify message is sanitized (doesn't expose specific account ID)
             assertEquals("The requested account could not be found", body.message());
             assertNotNull(body.timestamp());
@@ -57,10 +57,10 @@ class GlobalExceptionHandlerTests {
             AccountNotActiveException exception = new AccountNotActiveException("Account not active: 123");
             ResponseEntity<ErrorResponse> response = handler.handleAccountNotActive(exception);
 
-            assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+            assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("ACCOUNT_NOT_ACTIVE", body.errorCode());
+            assertEquals("ACC-403", body.errorCode());
             assertNotNull(body.message());
         }
 
@@ -73,7 +73,7 @@ class GlobalExceptionHandlerTests {
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("INSTRUMENT_NOT_FOUND", body.errorCode());
+            assertEquals("INS-404", body.errorCode());
             assertEquals("The requested instrument could not be found or is not tradable", body.message());
         }
 
@@ -86,7 +86,7 @@ class GlobalExceptionHandlerTests {
             assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("DUPLICATE_ORDER", body.errorCode());
+            assertEquals("ORD-409", body.errorCode());
             assertTrue(body.message().contains("idempotency key"));
         }
 
@@ -99,7 +99,7 @@ class GlobalExceptionHandlerTests {
             assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("INSUFFICIENT_FUNDS", body.errorCode());
+            assertEquals("ORD-400", body.errorCode());
             assertTrue(body.message().contains("sufficient funds"));
         }
 
@@ -109,10 +109,10 @@ class GlobalExceptionHandlerTests {
             InsufficientHoldingsException exception = new InsufficientHoldingsException("Insufficient holdings");
             ResponseEntity<ErrorResponse> response = handler.handleInsufficientHoldings(exception);
 
-            assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+            assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("INSUFFICIENT_HOLDINGS", body.errorCode());
+            assertEquals("ORD-409", body.errorCode());
             assertTrue(body.message().contains("sufficient holdings"));
         }
 
@@ -125,7 +125,7 @@ class GlobalExceptionHandlerTests {
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("ORDER_NOT_FOUND", body.errorCode());
+            assertEquals("ORD-404", body.errorCode());
         }
 
         @DisplayName("PositionNotFoundException returns 404")
@@ -137,7 +137,7 @@ class GlobalExceptionHandlerTests {
             assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals("POSITION_NOT_FOUND", body.errorCode());
+            assertEquals("POS-404", body.errorCode());
         }
     }
 
@@ -156,7 +156,7 @@ class GlobalExceptionHandlerTests {
             ErrorResponse body = response.getBody();
             assertNotNull(body);
             assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-            assertEquals("ACCESS_DENIED", body.errorCode());
+            assertEquals("AUTH-403", body.errorCode());
             assertEquals("You do not have permission to access this resource", body.message());
         }
 
@@ -167,8 +167,8 @@ class GlobalExceptionHandlerTests {
             ResponseEntity<ErrorResponse> response = handler.handleIllegalArgument(exception);
             ErrorResponse body = response.getBody();
             assertNotNull(body);
-            assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-            assertEquals("INVALID_REQUEST", body.errorCode());
+            assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, response.getStatusCode());
+            assertEquals("VAL-422", body.errorCode());
             assertEquals("The request contains invalid arguments", body.message());
         }
     }
@@ -211,7 +211,7 @@ class GlobalExceptionHandlerTests {
             assertNotNull(body);
 
             assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-            assertEquals("INTERNAL_SERVER_ERROR", body.errorCode());
+            assertEquals("SYS-500", body.errorCode());
             // Verify message does NOT expose the actual exception details
             assertNotEquals("Unexpected error with sensitive details", body.message());
             assertTrue(body.message().contains("unexpected error"));
@@ -314,8 +314,8 @@ class GlobalExceptionHandlerTests {
         @DisplayName("Error codes are predictable and documented")
         @Test
         void testErrorCodesAreStandard() {
-            // Error codes follow pattern: SCREAMING_SNAKE_CASE
-            // Examples: ACCOUNT_NOT_FOUND, VALIDATION_ERROR, INTERNAL_SERVER_ERROR
+            // Error codes follow the spec's error catalog (section 21): AREA-STATUS
+            // Examples: ACC-404, ORD-409, VAL-422, SYS-500
             assertTrue(true, "Error codes are standardized for client integration");
         }
     }

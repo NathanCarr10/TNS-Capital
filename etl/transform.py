@@ -8,6 +8,7 @@ Reporting tables produced:
     dim_instrument  one row per instrument
     dim_date        one row per day that has trades
     fact_trades     one row per order, with extra reporting columns
+    etl_rejected_orders  orders that failed validation, with the reason
 """
 
 import logging
@@ -21,8 +22,12 @@ VALID_SIDES = ["BUY", "SELL"]
 VALID_STATUSES = ["NEW", "FILLED", "REJECTED", "CANCELLED"]
 
 
-def clean_orders(orders, instruments):
-    """Tidy up the order values and remove any invalid orders."""
+REJECT_COLUMNS = ["order_id", "account_number", "symbol", "side", "quantity",
+                  "price", "status", "created_on", "reject_reason"]
+
+
+def _prepare_orders(orders):
+    """Make text consistent and turn numbers and dates into real numbers and dates."""
     df = orders.copy()
 
     # Make text consistent, e.g. " buy" -> "BUY"
@@ -36,18 +41,31 @@ def clean_orders(orders, instruments):
     df["price"] = pd.to_numeric(df["price"], errors="coerce")
     # Store all times in UTC
     df["created_on"] = pd.to_datetime(df["created_on"], errors="coerce", utc=True).dt.tz_localize(None)
+    return df
 
+
+def _quality_checks(df, instruments):
+    """Each data quality rule, as reason -> True for the rows that pass it."""
     known_symbols = instruments["symbol"].str.upper()
-    is_valid = (
-        df["order_id"].notna()
-        & df["account_number"].notna()
-        & df["symbol"].isin(known_symbols)
-        & df["side"].isin(VALID_SIDES)
-        & df["status"].isin(VALID_STATUSES)
-        & (df["quantity"] > 0)
-        & (df["price"] > 0)
-        & df["created_on"].notna()
-    )
+    return {
+        "missing order_id": df["order_id"].notna(),
+        "missing account_number": df["account_number"].notna(),
+        "unknown symbol": df["symbol"].isin(known_symbols),
+        "invalid side": df["side"].isin(VALID_SIDES),
+        "invalid status": df["status"].isin(VALID_STATUSES),
+        "quantity is not a positive number": df["quantity"] > 0,
+        "price is not a positive number": df["price"] > 0,
+        "created_on is missing or unreadable": df["created_on"].notna(),
+    }
+
+
+def clean_orders(orders, instruments):
+    """Tidy up the order values and remove any invalid orders."""
+    df = _prepare_orders(orders)
+
+    is_valid = pd.Series(True, index=df.index)
+    for passes in _quality_checks(df, instruments).values():
+        is_valid &= passes
 
     rejected = (~is_valid).sum()
     if rejected > 0:
@@ -56,6 +74,27 @@ def clean_orders(orders, instruments):
     clean = df[is_valid].drop_duplicates(subset="order_id", keep="last")
     clean["quantity"] = clean["quantity"].astype(int)
     return clean.reset_index(drop=True)
+
+
+def find_rejected_orders(orders, instruments):
+    """The orders clean_orders removes, as received, with the first rule each one broke.
+
+    This is the pipeline's dead-letter table: bad rows are kept for someone to
+    look at instead of disappearing. Values are kept as text because they are,
+    by definition, not valid numbers or dates.
+    """
+    df = _prepare_orders(orders)
+
+    reason = pd.Series(None, index=df.index, dtype=object)
+    # Go through the rules last to first so the first rule a row breaks wins
+    for text, passes in reversed(list(_quality_checks(df, instruments).items())):
+        reason[~passes] = text
+
+    failed = reason.notna()
+    rejected = orders.loc[failed, REJECT_COLUMNS[:-1]].astype(object)
+    rejected = rejected.where(rejected.notna(), None).map(lambda value: None if value is None else str(value))
+    rejected["reject_reason"] = reason[failed]
+    return rejected.reset_index(drop=True)
 
 
 def build_fact_trades(clean_orders):
@@ -108,6 +147,7 @@ def transform(accounts, instruments, orders):
         "dim_instrument": build_dim_instrument(instruments),
         "dim_date": build_dim_date(fact_trades),
         "fact_trades": fact_trades,
+        "etl_rejected_orders": find_rejected_orders(orders, instruments),
     }
     logger.info("Transformed %d orders into %d trades", len(orders), len(fact_trades))
     return tables

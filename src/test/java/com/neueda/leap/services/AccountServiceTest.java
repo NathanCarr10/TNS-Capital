@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -19,10 +20,17 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.neueda.leap.enums.AccountStatus;
+import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.exceptions.AccountAlreadyExistsException;
+import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.OrderRepository;
+import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.time.ClockTest;
 
 @DisplayName("AccountService Test Suite")
@@ -32,14 +40,20 @@ class AccountServiceTest {
     @Mock
     private AccountRepository accountRepository;
 
+    @Mock
+    private PositionRepository positionRepository;
+
+    @Mock
+    private OrderRepository orderRepository;
+
     private Account testAccount;
     private ClockTest testClock;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        accountService = new AccountService(accountRepository);
         testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+        accountService = new AccountService(accountRepository, positionRepository, orderRepository, testClock);
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("50000.00"), testClock);
         testAccount.setId(1L);
     }
@@ -319,6 +333,123 @@ class AccountServiceTest {
 
             verify(accountRepository, times(1)).save(testAccount);
             verify(accountRepository, never()).findById(anyLong());
+        }
+    }
+
+    @DisplayName("createAccount / closeAccount Tests")
+    @Nested
+    class CreateAndCloseTests {
+        @DisplayName("Should open a new ACTIVE account")
+        @Test
+        void testCreateAccount() {
+            when(accountRepository.findByAccountNumber("ACC-9")).thenReturn(Optional.empty());
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            Account created = accountService.createAccount("ACC-9", "New Holder", new BigDecimal("100.00"));
+
+            assertEquals("ACC-9", created.getAccountNumber());
+            assertEquals(AccountStatus.ACTIVE, created.getStatus());
+        }
+
+        @DisplayName("Should refuse a duplicate account number")
+        @Test
+        void testCreateAccountDuplicateNumber() {
+            when(accountRepository.findByAccountNumber("ACC-9")).thenReturn(Optional.of(testAccount));
+
+            BigDecimal openingBalance = new BigDecimal("100.00");
+
+            assertThrows(AccountAlreadyExistsException.class,
+                    () -> accountService.createAccount("ACC-9", "New Holder", openingBalance));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should close an account by setting CLOSED instead of deleting it")
+        @Test
+        void testCloseAccountKeepsRecord() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderRepository.findByAccountId(1L)).thenReturn(List.of());
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            Account closed = accountService.closeAccount(1L);
+
+            assertEquals(AccountStatus.CLOSED, closed.getStatus());
+            verify(accountRepository, never()).delete(any());
+        }
+
+        @DisplayName("Should refuse to close an account with working orders")
+        @Test
+        void testCloseAccountWithWorkingOrders() {
+            Order working = new Order(1L, "AAPL", OrderSide.BUY, 1, new BigDecimal("10.00"), "K1", testClock);
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderRepository.findByAccountId(1L)).thenReturn(List.of(working));
+
+            assertThrows(AccountDeletionConflictException.class, () -> accountService.closeAccount(1L));
+            assertEquals(AccountStatus.ACTIVE, testAccount.getStatus());
+        }
+    }
+
+    @DisplayName("deposit and withdraw Tests")
+    @Nested
+    class CashTransactionTests {
+        @BeforeEach
+        void stubRepository() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+        }
+
+        @DisplayName("Should credit a deposit to the balance")
+        @Test
+        void testDepositCreditsBalance() {
+            Account result = accountService.deposit(1L, new BigDecimal("250.50"));
+
+            assertEquals(new BigDecimal("50250.50"), result.getCashBalance());
+            verify(accountRepository).save(testAccount);
+        }
+
+        @DisplayName("Should debit a withdrawal from the balance")
+        @Test
+        void testWithdrawDebitsBalance() {
+            Account result = accountService.withdraw(1L, new BigDecimal("50000.00"));
+
+            assertEquals(0, result.getCashBalance().compareTo(BigDecimal.ZERO));
+            verify(accountRepository).save(testAccount);
+        }
+
+        @DisplayName("Should refuse a withdrawal larger than the balance")
+        @Test
+        void testWithdrawInsufficientFunds() {
+            BigDecimal amount = new BigDecimal("50000.01");
+            assertThrows(InsufficientFundsException.class,
+                    () -> accountService.withdraw(1L, amount));
+
+            assertEquals(new BigDecimal("50000.00"), testAccount.getCashBalance());
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should refuse cash movements on an account that is not ACTIVE")
+        @ParameterizedTest
+        @ValueSource(strings = { "SUSPENDED", "CLOSED" })
+        void testCashMovementsRequireActiveAccount(String status) {
+            testAccount.setStatus(AccountStatus.valueOf(status));
+
+            assertThrows(AccountNotActiveException.class, () -> accountService.deposit(1L, BigDecimal.TEN));
+            assertThrows(AccountNotActiveException.class, () -> accountService.withdraw(1L, BigDecimal.TEN));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should reject a non-positive amount")
+        @Test
+        void testDepositRejectsNonPositiveAmount() {
+            assertThrows(IllegalArgumentException.class, () -> accountService.deposit(1L, BigDecimal.ZERO));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should throw when the account does not exist")
+        @Test
+        void testDepositAccountNotFound() {
+            when(accountRepository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(AccountNotFoundException.class, () -> accountService.deposit(99L, BigDecimal.TEN));
         }
     }
 }

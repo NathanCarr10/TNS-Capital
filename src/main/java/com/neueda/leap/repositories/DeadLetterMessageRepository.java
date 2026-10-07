@@ -12,6 +12,10 @@ import java.util.UUID;
 
 public interface DeadLetterMessageRepository extends JpaRepository<DeadLetterMessage, UUID> {
 
+    List<DeadLetterMessage> findAllByOrderByCreatedOnDesc();
+
+    List<DeadLetterMessage> findByFailureTypeOrderByCreatedOnDesc(String failureType);
+
     List<DeadLetterMessage> findByStatusOrderByCreatedOnDesc(DLQStatus status);
 
     List<DeadLetterMessage> findByStatusAndFailureTypeOrderByCreatedOnDesc(DLQStatus status, String failureType);
@@ -19,6 +23,8 @@ public interface DeadLetterMessageRepository extends JpaRepository<DeadLetterMes
     @Query("SELECT m FROM DeadLetterMessage m WHERE m.status = :status AND m.createdOn >= :startDate ORDER BY m.createdOn DESC")
     List<DeadLetterMessage> findRecentMessages(@Param("status") DLQStatus status,
             @Param("startDate") Instant startDate);
+
+    List<DeadLetterMessage> findByStatusAndCreatedOnBefore(DLQStatus status, Instant cutoff);
 
     long countByStatus(DLQStatus status);
 

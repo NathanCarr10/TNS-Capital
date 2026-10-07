@@ -3,7 +3,7 @@ spring:
     name: tns-capital-api-dev
   
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false
     driver-class-name: org.h2.Driver
     username: sa
     password: 
@@ -12,9 +12,26 @@ spring:
     console:
       enabled: true
   
+  # In-memory H2 has no db/ image, so load the same SQL files at startup.
+  # Paths are relative to the repo root, where the app is run from.
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - file:db/tables/01_accounts.sql
+        - file:db/tables/02_instruments.sql
+        - file:db/tables/03_orders.sql
+        - file:db/tables/04_positions.sql
+        - file:db/tables/05_order_history.sql
+      data-locations:
+        - file:db/data/01_accounts.sql
+        - file:db/data/02_instruments.sql
+        - file:db/data/03_orders.sql
+        - file:db/data/04_positions.sql
+
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect

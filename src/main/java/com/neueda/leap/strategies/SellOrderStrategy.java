@@ -3,7 +3,6 @@ package com.neueda.leap.strategies;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.model.Account;
-import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.PositionRepository;
 
 import java.math.BigDecimal;
@@ -32,13 +31,11 @@ public class SellOrderStrategy implements OrderExecutionStrategy {
 
         try {
             // Phase 2: Update position
-            int remaining = currentPosition.getQuantity() - request.quantity();
-            if (remaining == 0) {
+            currentPosition.apply(-request.quantity(), request.price());
+            if (currentPosition.getQuantity() == 0) {
                 positionRepository.deleteByAccountIdAndSymbol(request.accountId(), symbol);
             } else {
-                Position updatedPosition = new Position(request.accountId(), symbol, remaining,
-                        currentPosition.getAverageCost());
-                positionRepository.save(updatedPosition);
+                positionRepository.save(currentPosition);
             }
         } catch (Exception ex) {
             // Phase 3: Rollback on exception
