@@ -1,64 +1,36 @@
-import { All, Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ApiException } from '../common/api.exception';
+import { All, Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { methodNotAllowed } from '../common/method-not-allowed';
-import { UsernameTakenError, UsersService } from '../users/users.service';
+import type { AuthenticatedUser, RegisteredUser } from '../users/users.service';
+import { AuthService, LoginResult } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 
-export interface RegisterResponse {
-  id: number;
-  username: string;
-  createdAt: Date;
-  accountId: number;
-  accountNumber: string;
-}
-
-@Controller()
+@Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly users: UsersService,
-    private readonly jwt: JwtService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   /**
-   * POST /register - Register a new user and open their trading account
+   * POST /auth/register - Register a new user and open their trading account
    *
    * The new account starts ACTIVE with a cash balance of 0. The response
    * carries its id, which the user passes to the trading API.
    *
-   * Satisfies AC#4: Duplicate username returns 409
    * Satisfies AC#5: Response never includes password or hash
    */
+  @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() body: RegisterDto): Promise<RegisterResponse> {
-    try {
-      const user = await this.users.register(body.username, body.password, body.holderName);
-      return {
-        id: user.id,
-        username: user.username,
-        createdAt: user.createdAt,
-        accountId: user.accountId,
-        accountNumber: user.accountNumber,
-      };
-    } catch (error) {
-      if (error instanceof UsernameTakenError) {
-        throw new ApiException(HttpStatus.CONFLICT, 'USR-409', 'User already exists');
-      }
-      throw error;
-    }
-  }
-
-  @All('register')
-  registerMethodNotAllowed(): never {
-    return methodNotAllowed();
+  register(@Body() body: RegisterDto): Promise<RegisteredUser> {
+    return this.authService.register(body.username, body.password, body.holderName);
   }
 
   /**
-   * POST /login - Authenticate user and issue JWT
+   * POST /auth/login - Authenticate user and issue an access and a refresh token
    *
-   * Token claims (contract): exactly sub, roles, iss, iat, exp
+   * Access token claims (contract): exactly sub, roles, iss, iat, exp
    * - sub: username; the trading API looks up the user's account by it
    * - roles: ["USER"] or ["ADMIN"], from users.role
    * - iss: urn:tns-capital:auth-stub
@@ -66,21 +38,39 @@ export class AuthController {
    *
    * Algorithm: HS256, pinned in AuthModule, never read from a token.
    */
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() body: LoginDto): Promise<{ token: string }> {
-    const user = await this.users.authenticate(body.username, body.password);
-    if (!user) {
-      // Don't reveal whether the user exists or the password is wrong
-      throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', 'invalid username or password');
-    }
-
-    const token = await this.jwt.signAsync({ sub: user.username, roles: user.roles });
-    return { token };
+  login(@Body() body: LoginDto): Promise<LoginResult> {
+    return this.authService.login(body.username, body.password);
   }
 
-  @All('login')
-  loginMethodNotAllowed(): never {
+  /** POST /auth/refresh - Exchange a refresh token for a new access token */
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  refresh(@Body() body: RefreshDto): Promise<{ accessToken: string }> {
+    return this.authService.refresh(body.refreshToken);
+  }
+
+  /** POST /auth/logout - Revoke a refresh token */
+  @Public()
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@Body() body: RefreshDto): Promise<{ loggedOut: true }> {
+    return this.authService.logout(body.refreshToken);
+  }
+
+  /** GET /auth/me - The user the access token belongs to */
+  @Get('me')
+  me(@CurrentUser() user: AuthenticatedUser): Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'> {
+    return { username: user.username, roles: user.roles, accountId: user.accountId };
+  }
+
+  // Declared after the real handlers, so only the wrong methods reach it
+  @Public()
+  @All(['register', 'login', 'refresh', 'logout', 'me'])
+  methodNotAllowed(): never {
     return methodNotAllowed();
   }
 }

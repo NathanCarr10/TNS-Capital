@@ -1,12 +1,13 @@
 import { IsDefined, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { MISSING_CREDENTIALS } from '../../common/validation';
 
 export class RegisterDto {
-  @IsDefined()
+  @IsDefined({ message: MISSING_CREDENTIALS })
   @IsString()
   @Length(3, 100)
   username: string;
 
-  @IsDefined()
+  @IsDefined({ message: MISSING_CREDENTIALS })
   @IsString()
   @Length(8, 256)
   password: string;

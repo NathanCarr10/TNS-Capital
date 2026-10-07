@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
-
-export const JWT_ISSUER = 'urn:tns-capital:auth-stub';
+import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { JWT_ISSUER, TokenService } from './token.service';
 
 @Module({
   imports: [
@@ -19,5 +22,13 @@ export const JWT_ISSUER = 'urn:tns-capital:auth-stub';
     }),
   ],
   controllers: [AuthController],
+  providers: [
+    AuthService,
+    TokenService,
+    // Global guards run in this order: authenticate, then check roles.
+    // Every route needs an access token unless marked @Public().
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AuthModule {}

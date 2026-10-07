@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
-import { hashPassword, verifyPassword } from './password-hasher';
 
 export type Role = 'USER' | 'ADMIN';
 
@@ -21,6 +20,11 @@ export interface AuthenticatedUser {
   accountId: number | null;
 }
 
+/** A user as stored, including the password hash. Never leaves the auth service. */
+export interface UserRecord extends AuthenticatedUser {
+  passwordHash: string;
+}
+
 export class UsernameTakenError extends Error {
   constructor() {
     super('Username already exists');
@@ -29,6 +33,8 @@ export class UsernameTakenError extends Error {
 
 // Postgres error code for a unique constraint violation
 const UNIQUE_VIOLATION = '23505';
+
+const USER_COLUMNS = 'id, username, password_hash, role, account_id';
 
 /**
  * Account numbers for self-registered users: "ACC-U" plus the zero-padded
@@ -39,31 +45,27 @@ export function accountNumberFor(userId: number): string {
   return `ACC-U${String(userId).padStart(6, '0')}`;
 }
 
+/**
+ * The users table. Stores what it is given: hashing passwords and refresh
+ * tokens is AuthService's job.
+ */
 @Injectable()
 export class UsersService {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   /**
-   * Registers a user and opens their trading account (ACTIVE, cash balance 0).
+   * Creates a user and opens their trading account (ACTIVE, cash balance 0).
    *
    * The user row, the account row and the link between them are written in
    * one transaction, so a user never exists without an account.
    *
+   * @param passwordHash Argon2id hash; the plaintext never reaches this layer
    * @param holderName account holder name; defaults to the username
    * @throws UsernameTakenError if the username is already registered
    *
-   * Satisfies AC#1: Plaintext never stored in database
    * Satisfies AC#4: Duplicate username throws, doesn't overwrite
    */
-  async register(username: string, password: string, holderName?: string): Promise<RegisteredUser> {
-    const existing = await this.pool.query('SELECT id FROM users WHERE username = $1', [username]);
-    if (existing.rows.length > 0) {
-      throw new UsernameTakenError();
-    }
-
-    // Hash password (never stored plaintext)
-    const passwordHash = await hashPassword(password);
-
+  async create(username: string, passwordHash: string, holderName?: string): Promise<RegisteredUser> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -93,7 +95,7 @@ export class UsersService {
       };
     } catch (error) {
       await client.query('ROLLBACK');
-      // Two registrations for the same username can both pass the check above
+      // Two registrations for the same username can both pass AuthService's check
       const pgError = error as { code?: string; constraint?: string };
       if (pgError.code === UNIQUE_VIOLATION && pgError.constraint === 'users_username_key') {
         throw new UsernameTakenError();
@@ -104,38 +106,56 @@ export class UsersService {
     }
   }
 
-  /**
-   * Checks a username and password against the stored Argon2id hash.
-   *
-   * @returns the user with their roles, or null if the credentials are wrong
-   *          (callers must not reveal which part was wrong)
-   *
-   * Satisfies AC#1: Compares plaintext input to stored hash only
-   * Satisfies AC#5: Result never includes the password hash
-   */
-  async authenticate(username: string, password: string): Promise<AuthenticatedUser | null> {
-    if (!username || !password) {
-      return null;
-    }
-
-    const result = await this.pool.query(
-      'SELECT id, username, password_hash, role, account_id FROM users WHERE username = $1',
-      [username],
-    );
-    if (result.rows.length === 0) {
-      return null;
-    }
-
-    const user = result.rows[0];
-    if (!(await verifyPassword(password, user.password_hash))) {
-      return null;
-    }
-
-    return {
-      id: Number(user.id),
-      username: user.username,
-      roles: [user.role],
-      accountId: user.account_id === null ? null : Number(user.account_id),
-    };
+  async findByUsername(username: string): Promise<UserRecord | null> {
+    const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE username = $1`, [username]);
+    return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
   }
+
+  /**
+   * Stores the hash of the user's new refresh token, replacing any previous
+   * one. The expiry is computed by Postgres, so it and the check in
+   * findByRefreshTokenHash use the same clock.
+   */
+  async setRefreshToken(userId: number, tokenHash: string, ttlSeconds: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE users
+          SET refresh_token_hash = $2,
+              refresh_token_expires_at = NOW() + make_interval(secs => $3),
+              updated_at = NOW()
+        WHERE id = $1`,
+      [userId, tokenHash, ttlSeconds],
+    );
+  }
+
+  /** @returns the user holding this refresh token, or null if none does or it has expired */
+  async findByRefreshTokenHash(tokenHash: string): Promise<UserRecord | null> {
+    const result = await this.pool.query(
+      `SELECT ${USER_COLUMNS} FROM users WHERE refresh_token_hash = $1 AND refresh_token_expires_at > NOW()`,
+      [tokenHash],
+    );
+    return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
+  }
+
+  async clearRefreshToken(userId: number): Promise<void> {
+    await this.pool.query(
+      'UPDATE users SET refresh_token_hash = NULL, refresh_token_expires_at = NULL, updated_at = NOW() WHERE id = $1',
+      [userId],
+    );
+  }
+}
+
+function toUserRecord(row: {
+  id: string | number;
+  username: string;
+  password_hash: string;
+  role: Role;
+  account_id: string | number | null;
+}): UserRecord {
+  return {
+    id: Number(row.id),
+    username: row.username,
+    passwordHash: row.password_hash,
+    roles: [row.role],
+    accountId: row.account_id === null ? null : Number(row.account_id),
+  };
 }

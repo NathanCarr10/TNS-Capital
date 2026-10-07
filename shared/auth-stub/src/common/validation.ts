@@ -21,8 +21,10 @@ function describe(errors: ValidationError[]): string {
   if (unexpected.length > 0) {
     return `Unexpected property: ${unexpected.join(', ')}`;
   }
-  if (errors.some((e) => e.constraints?.isDefined)) {
-    return MISSING_CREDENTIALS;
+  // Each DTO names its own missing-field message, e.g. MISSING_CREDENTIALS
+  const missing = errors.find((e) => e.constraints?.isDefined);
+  if (missing) {
+    return missing.constraints!.isDefined;
   }
   const first = errors.flatMap((e) => Object.values(e.constraints ?? {}))[0];
   return first ?? 'Request body is invalid';
