@@ -13,7 +13,7 @@ This document outlines the security measures implemented in the TNS Capital API 
 **Implementation:**
 - JWT tokens are signed using HMAC-SHA256 with a shared secret
 - Configured in [SecurityConfig.java](../../security/SecurityConfig.java)
-- Tokens are issued by the NestJS authentication service (`shared/auth-stub/`)
+- Tokens are issued by the NestJS authentication service (`shared/auth-service/`)
 
 **Best Practices:**
 - ✅ **Shared Secret Management**: The JWT secret is externalized via environment variable `jwt.shared-secret`
@@ -28,8 +28,8 @@ jwt:
 
 **Sample Token Flow:**
 ```
-1. Client requests token from auth-stub with credentials
-2. Auth-stub issues JWT signed with shared secret
+1. Client requests token from auth-service with credentials
+2. Auth-service issues JWT signed with shared secret
 3. Client includes token in Authorization header: "Bearer <token>"
 4. API validates token using shared secret
 5. Request proceeds if token is valid and not expired
@@ -147,7 +147,7 @@ public record CreateInstrumentRequest(
 
 ### Algorithm: Argon2id
 
-**Implementation:** Located in `shared/auth-stub/src/users/password-hasher.ts` (NestJS auth service)
+**Implementation:** Located in `shared/auth-service/src/users/password-hasher.ts` (NestJS auth service)
 
 **Choice Rationale:**
 - **Argon2id** selected over bcrypt because it is memory-hard and resistant to GPU/ASIC attacks
@@ -244,7 +244,7 @@ this service.
 
 ### Verification & Testing
 
-All password handling is tested in `shared/auth-stub/tests/`:
+All password handling is tested in `shared/auth-service/tests/`:
 
 **password-hasher.spec.ts** — Unit tests for hashing:
 - ✅ Hash always differs from input (random salt)
@@ -270,7 +270,7 @@ All password handling is tested in `shared/auth-stub/tests/`:
 
 **Run tests** (Node 20+; set `DB_*` to reach a Postgres with the `db/` schema):
 ```bash
-cd shared/auth-stub
+cd shared/auth-service
 npm install
 npm test
 ```

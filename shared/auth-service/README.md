@@ -6,11 +6,11 @@ an access token's *signature*; it never sees a password.
 
 ## Run it
 
-Normally it runs from the project's `docker-compose.yml` (service `auth-stub`, port 4000).
+Normally it runs from the project's `docker-compose.yml` (service `auth-service`, port 4000).
 To run it on its own (Node 20+):
 
 ```bash
-cd shared/auth-stub
+cd shared/auth-service
 npm install
 npm run build
 JWT_SECRET=<same value as in the project .env> DB_HOST=localhost DB_PASSWORD=... npm start
