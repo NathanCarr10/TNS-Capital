@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests HTTP endpoints for order placement and retrieval with a real database
  */
 @DisplayName("Order Controller Integration Tests")
-@WithMockUser(username = "testuser", roles = "USER")
+@WithMockUser(username = "testuser", roles = "ADMIN")
 public class OrderControllerIT extends AbstractIntegrationTest {
 
         @Autowired

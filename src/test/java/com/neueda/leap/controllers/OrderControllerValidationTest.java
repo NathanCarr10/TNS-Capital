@@ -28,6 +28,7 @@ import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
+import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.OrderService;
 import com.neueda.leap.time.ClockTest;
 
@@ -61,6 +62,10 @@ class OrderControllerValidationTest {
     @Mock
     private OrderEventPublisher orderEventPublisher;
 
+    // A mock's checkAccess does nothing, i.e. the caller may use every account
+    @Mock
+    private AccountAccessGuard accessGuard;
+
     private PlaceOrderRequest validRequest;
     private Long accountId = 1L;
     private String symbol = "AAPL";
@@ -78,7 +83,8 @@ class OrderControllerValidationTest {
                 instrumentRepository,
                 orderHistoryRepository,
                 orderService,
-                orderEventPublisher);
+                orderEventPublisher,
+                accessGuard);
 
         validRequest = new PlaceOrderRequest(
                 accountId,

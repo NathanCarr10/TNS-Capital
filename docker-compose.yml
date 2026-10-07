@@ -60,12 +60,17 @@ services:
       timeout: 5s
       retries: 5
 
-  auth-stub:
+  auth-service:
     build:
-      context: ./shared/auth-stub
+      context: ./shared/auth-service
     mem_limit: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tns_capital
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
     ports:
       - "4000:4000"
@@ -93,7 +98,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      auth-stub:
+      auth-service:
         condition: service_healthy
       kafka:
         condition: service_healthy

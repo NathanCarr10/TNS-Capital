@@ -13,7 +13,7 @@ This document outlines the security measures implemented in the TNS Capital API 
 **Implementation:**
 - JWT tokens are signed using HMAC-SHA256 with a shared secret
 - Configured in [SecurityConfig.java](../../security/SecurityConfig.java)
-- Tokens are issued by the authentication stub service (`shared/auth-stub/`)
+- Tokens are issued by the NestJS authentication service (`shared/auth-service/`)
 
 **Best Practices:**
 - ✅ **Shared Secret Management**: The JWT secret is externalized via environment variable `jwt.shared-secret`
@@ -28,12 +28,24 @@ jwt:
 
 **Sample Token Flow:**
 ```
-1. Client requests token from auth-stub with credentials
-2. Auth-stub issues JWT signed with shared secret
+1. Client requests token from auth-service with credentials
+2. Auth-service issues JWT signed with shared secret
 3. Client includes token in Authorization header: "Bearer <token>"
 4. API validates token using shared secret
 5. Request proceeds if token is valid and not expired
 ```
+
+### Roles and Account Ownership
+
+- `POST /register` on the auth service creates the user **and** opens their trading account
+  (ACTIVE, cash balance 0), linked by `users.account_id`. The token's `roles` claim comes from
+  `users.role`: `["USER"]` for registered users, `["ADMIN"]` for the seeded `admin` user.
+- **USER**: may only use the account linked to their username (the token's `sub`) — read it,
+  move cash, place/cancel orders on it, see its positions and orders. Anything else is
+  `403 AUTH-403`, including account IDs that do not exist (no probing for valid IDs).
+  `GET /api/v1/accounts` and `GET /api/v1/orders` return only the user's own rows.
+- **ADMIN**: may use every account, open accounts (`POST /api/v1/accounts`) and use the DLQ.
+- Enforced by [AccountAccessGuard.java](../src/main/java/com/neueda/leap/security/AccountAccessGuard.java).
 
 ---
 
@@ -131,7 +143,148 @@ public record CreateInstrumentRequest(
 
 ---
 
-## 3. 🛡️ Error Handling
+## 3. � Password Hashing (Auth Service)
+
+### Algorithm: Argon2id
+
+**Implementation:** Located in `shared/auth-service/src/users/password-hasher.ts` (NestJS auth service)
+
+**Choice Rationale:**
+- **Argon2id** selected over bcrypt because it is memory-hard and resistant to GPU/ASIC attacks
+- **Industry Standard**: RFC 9106, recommended by OWASP
+- **Future-Proof**: Parameters (memory, time, parallelism) can be upgraded in stored hash format without requiring password re-entry
+
+### Cost Parameters
+
+| Parameter | Value | Justification |
+|-----------|-------|----------------|
+| Algorithm | Argon2id | Memory-hard, GPU-resistant |
+| Memory | 65,540 KiB (~64 MiB) | Strong against brute force while maintaining reasonable hardware requirements |
+| Time | 3 iterations | ~50-100ms per hash on typical 2025 server hardware |
+| Parallelism | 4 threads | Balanced multi-core utilization without excessive overhead |
+
+**Timing Justification**: Hashing a password takes ~50-100ms on typical server hardware, making brute-force attacks computationally expensive (billions of attempts would take weeks) while keeping legitimate user registration/login responsive.
+
+### Hash Storage Format
+
+Passwords are stored using Argon2id's standard format:
+```
+$argon2id$v=19$m=65540,t=3,p=4$<salt>$<hash>
+```
+
+This format encodes:
+- **Algorithm**: `argon2id` (memory-hard variant)
+- **Version**: `19` (Argon2 version)
+- **Parameters**: `m=memory`, `t=iterations`, `p=parallelism`
+- **Salt**: Cryptographically random, prevents rainbow tables
+- **Hash**: Actual password verification hash
+
+**Stored in Database:**
+```sql
+-- Complete hash string stored in password_hash column
+password_hash VARCHAR(255) NOT NULL  -- e.g., $argon2id$v=19$m=65540,t=3,p=4$abc123$xyz789
+```
+
+**Upgrade Path**: Parameters can be increased in the future (e.g., `m=131080`) without requiring password re-entry — old and new hashes are verified using the same algorithm, and new passwords use updated parameters.
+
+### Password Policies
+
+- **Minimum Length**: 8 characters (enforced at registration)
+- **Maximum Length**: 256 characters (no artificial limit; passphrases welcome)
+- **No Character Restrictions**: User can use any printable characters
+- **Storage**: Only the Argon2id hash is stored; plaintext is never persisted
+
+### Plaintext Prevention
+
+✅ Passwords hashed immediately upon registration using `passwordHasher.hashPassword()`  
+✅ Hashes verified during login (plaintext input compared to stored hash via `verifyPassword()`)  
+✅ Error responses never include password or hash  
+✅ Response DTOs exclude passwordHash field  
+✅ Request/response logs redact password fields automatically  
+
+### Implementation Details
+
+**Registration Flow** (`POST /auth/register`):
+```
+1. Client sends {username, password} in request body
+2. Server validates username (3-100 chars) and password (8-256 chars)
+3. Server checks for duplicate username → 409 USR-409 if exists
+4. Server hashes password with Argon2id → passwordHash
+5. Server inserts (username, passwordHash) into database
+6. Server returns {id, username, createdAt} (NO password or hash)
+```
+
+**Login Flow** (`POST /auth/login`):
+```
+1. Client sends {username, password} in request body
+2. Server retrieves user record from database by username
+3. Server verifies plaintext password against stored hash
+4. If password matches: issue a 1-hour access token (JWT) and a 7-day refresh token,
+   store the refresh token's SHA-256 hash (replacing the user's previous one),
+   return {accessToken, refreshToken}
+5. If password doesn't match: Return 401 AUTH-401 (no hint about username validity)
+```
+
+**Refresh and Logout** (`POST /auth/refresh`, `POST /auth/logout`):
+```
+1. Client sends {refreshToken}
+2. Server hashes it with SHA-256 and looks for an unexpired match in users.refresh_token_hash
+3. No match: 401 AUTH-401 "invalid or expired refresh token"
+4. Refresh: return a new {accessToken}. Logout: clear the stored hash, return {loggedOut: true}
+```
+
+**Why SHA-256 for refresh tokens but Argon2id for passwords?** A refresh token is 256 random
+bits, so it cannot be guessed and needs no slow hash or salt; an unsalted hash lets the
+database find it directly. Storing only the hash means a database leak does not leak
+usable tokens. Logout revokes the refresh token only; an access token stays valid until
+it expires (at most 1 hour), because the trading API checks signatures without calling
+this service.
+
+**Why No Username Hint?**: Returning different errors for "user not found" vs "password wrong" reveals whether a username exists, enabling account enumeration attacks. Always return "invalid username or password" for both cases.
+
+### Verification & Testing
+
+All password handling is tested in `shared/auth-service/tests/`:
+
+**password-hasher.spec.ts** — Unit tests for hashing:
+- ✅ Hash always differs from input (random salt)
+- ✅ Same password produces different hashes (salt randomization)
+- ✅ Correct password verifies against stored hash
+- ✅ Incorrect password verification fails
+- ✅ Hash string includes algorithm, parameters, and salt
+- ✅ Invalid hash format returns false, not error
+
+**users.service.spec.ts** — Integration tests for the SQL (needs Postgres; skipped unless `DB_HOST` is set):
+- ✅ Registration opens an ACTIVE account with a 0 cash balance, linked via `users.account_id`
+- ✅ Duplicate username is rejected without opening a second account
+- ✅ A failed account insert rolls back the user
+- ✅ Refresh token hashes are found, replaced on the next login, expire, and clear on logout
+
+**auth.service.spec.ts** — Unit tests for the auth logic:
+- ✅ Password is Argon2id-hashed before it reaches the database layer
+- ✅ Login succeeds with valid credentials and fails identically for a wrong password or unknown user
+
+**guards.spec.ts**, **token.service.spec.ts** — Unit tests for `JwtAuthGuard`, `RolesGuard` and token handling.
+
+**auth-api.spec.ts** — HTTP tests (no database): claims, roles, refresh, logout, guards, error envelope, validation.
+
+**Run tests** (Node 20+; set `DB_*` to reach a Postgres with the `db/` schema):
+```bash
+cd shared/auth-service
+npm install
+npm test
+```
+
+### References
+
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [Argon2 RFC 9106](https://datatracker.ietf.org/doc/html/rfc9106)
+- [Argon2 GitHub](https://github.com/P-H-C/phc-winner-argon2)
+- [Memory-Hard Password Hashing](https://cheatsheetseries.owasp.org/cheatsheets/Nodejs_Security_Cheat_Sheet.html#use-a-library-for-password-hashing)
+
+---
+
+## 4. 🛡️ Error Handling
 
 ### GlobalExceptionHandler
 
@@ -195,7 +348,7 @@ public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundExcept
 
 ---
 
-## 4. 🔒 Security Headers
+## 5. 🔒 Security Headers
 
 ### Implemented Headers
 
@@ -235,7 +388,7 @@ Content-Type: application/json
 
 ---
 
-## 5. 🚫 CSRF Protection
+## 6. 🚫 CSRF Protection
 
 ### Why CSRF is Disabled
 
@@ -252,7 +405,7 @@ Content-Type: application/json
 
 ---
 
-## 6. 🔑 Idempotency
+## 7. 🔑 Idempotency
 
 ### Purpose
 
@@ -280,7 +433,7 @@ Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns 409 
 
 ---
 
-## 7. 🔐 Sensitive Data Protection
+## 8. 🔐 Sensitive Data Protection
 
 ### What's Protected
 
@@ -325,17 +478,19 @@ JWT_SECRET=<output of: openssl rand -hex 32>
 
 ---
 
-## 8. 📋 API Endpoint Security
+## 9. 📋 API Endpoint Security
 
 ### Protected Endpoints (Require JWT)
 
 ```
-POST   /api/v1/orders          - Place order (Authenticated)
-GET    /api/v1/orders          - List orders (Authenticated)
-GET    /api/v1/orders/{id}     - Get order (Authenticated)
-DELETE /api/v1/orders/{id}     - Cancel order (Authenticated)
-GET    /api/v1/accounts        - List accounts (Authenticated)
-GET    /api/v1/positions       - List positions (Authenticated)
+POST   /api/v1/orders          - Place order (owner of the order's account, or ADMIN)
+GET    /api/v1/orders          - List orders (own orders; ADMIN sees all)
+GET    /api/v1/orders/{id}     - Get order (owner or ADMIN)
+DELETE /api/v1/orders/{id}     - Cancel order (owner or ADMIN)
+GET    /api/v1/accounts        - List accounts (own account; ADMIN sees all)
+POST   /api/v1/accounts        - Open account (ADMIN)
+*      /api/v1/accounts/{id}/** - Account, balance, deposit, withdraw, positions, orders (owner or ADMIN)
+GET    /api/v1/positions/{id}  - List positions (owner or ADMIN)
 *      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
 ```
 
@@ -362,7 +517,7 @@ GET  /info                     - App info
 
 ---
 
-## 9. 🧪 Security Testing
+## 10. 🧪 Security Testing
 
 ### Test Suites
 

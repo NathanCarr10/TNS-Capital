@@ -26,7 +26,7 @@ info:
 servers:
   - url: http://localhost:4000
     description: Development/Local Auth Server
-  - url: http://auth-stub:4000
+  - url: http://auth-service:4000
     description: Docker Compose Auth Service
 
 paths:
@@ -392,7 +392,7 @@ x-internal-notes: |
   
   4. **Deployment:**
      - Docker image: node:20-alpine
-     - Dockerfile: shared/auth-stub/Dockerfile
+     - Dockerfile: shared/auth-service/Dockerfile
      - Port: 4000 (configurable via PORT env var)
      - User runs as unprivileged 'node' user
   

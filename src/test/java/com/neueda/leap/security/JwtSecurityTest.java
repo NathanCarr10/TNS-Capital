@@ -66,6 +66,9 @@ class JwtSecurityTest {
     private DeadLetterService deadLetterService;
     @MockitoBean
     private OrderService orderService;
+    // Ownership rules have their own tests; here every account is allowed
+    @MockitoBean
+    private AccountAccessGuard accessGuard;
 
     // @MapperScan registers the MyBatis mappers, which need a database in a web-layer test
     @MockitoBean

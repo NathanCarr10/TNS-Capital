@@ -143,7 +143,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     // Trivy checks libraries against known CVEs in two places:
-                    //   fs    — the manifests in the repo (pom.xml, auth-stub package-lock.json)
+                    //   fs    — the manifests in the repo (pom.xml, auth-service package-lock.json)
                     //   image — the built image: every jar inside the fat jar plus OS packages
                     // Reports include HIGH and CRITICAL. The gate fails only on CRITICAL
                     // findings that have a fixed version available (--ignore-unfixed).
