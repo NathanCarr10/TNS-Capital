@@ -1,30 +1,30 @@
-# A single-stage build - unlike the mission service, there's no separate
-# "compile" step for Node. npm install still gets its own layer, ordered
+# Two stages: "build" compiles the TypeScript, the runtime stage gets only the
+# compiled JS and production dependencies. npm ci gets its own layer, ordered
 # before the app code, for the same caching reason as Module 12's
 # COPY pom.xml first.
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json tsconfig.build.json ./
+COPY src/ src/
+RUN npm run build
+
 FROM node:20-alpine
 WORKDIR /app
 
-COPY package.json .
-RUN npm install --omit=dev
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
-COPY server.js .
-COPY src/ src/
+COPY --from=build /app/dist dist/
 
-# Accept build args and create .env file
-ARG DB_HOST
-ARG DB_PORT
-ARG DB_NAME
-ARG DB_USER
-ARG DB_PASSWORD
-ARG JWT_SECRET
-
-RUN printf "DB_HOST=%s\nDB_PORT=%s\nDB_NAME=%s\nDB_USER=%s\nDB_PASSWORD=%s\nJWT_SECRET=%s\n" \
-  "${DB_HOST:-postgres}" "${DB_PORT:-5432}" "${DB_NAME:-tns_capital}" \
-  "${DB_USER}" "${DB_PASSWORD}" "${JWT_SECRET}" > .env && chmod 644 .env
+# Configuration (DB_*, JWT_SECRET, PORT) comes from the environment;
+# docker-compose.yml passes it in, so no secrets are baked into the image.
 
 # Drop root: the node:alpine image ships an unprivileged "node" user.
 USER node
 
 EXPOSE 4000
-CMD ["node", "server.js"]
+CMD ["node", "dist/main.js"]
