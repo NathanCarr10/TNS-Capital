@@ -5,6 +5,7 @@ import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.PositionRepository;
+import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.utils.InputNormalizer;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,11 +20,13 @@ import java.util.stream.Collectors;
 public class PositionController {
         private final PositionRepository positionRepository;
         private final AccountRepository accountRepository;
+        private final AccountAccessGuard accessGuard;
 
         public PositionController(PositionRepository positionRepository,
-                        AccountRepository accountRepository) {
+                        AccountRepository accountRepository, AccountAccessGuard accessGuard) {
                 this.positionRepository = positionRepository;
                 this.accountRepository = accountRepository;
+                this.accessGuard = accessGuard;
         }
 
         @SuppressWarnings("null")
@@ -31,6 +34,7 @@ public class PositionController {
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 // Validates account exists before querying positions; prevents exposing
                 // holdings for non-existent accounts
+                accessGuard.checkAccess(accountId);
                 accountRepository.findById(accountId)
                                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
 
@@ -46,6 +50,7 @@ public class PositionController {
         public ResponseEntity<PositionResponse> getPosition(@PathVariable @NotNull Long accountId,
                         @PathVariable String symbol) {
                 // Validates account exists first; normalizes symbol for consistent lookup
+                accessGuard.checkAccess(accountId);
                 accountRepository.findById(accountId)
                                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
 
