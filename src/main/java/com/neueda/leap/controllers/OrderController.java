@@ -14,11 +14,13 @@ import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
+import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -40,6 +42,7 @@ public class OrderController {
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
     private final OrderEventPublisher orderEventPublisher;
+    private final AccountAccessGuard accessGuard;
 
     /**
      * Places an order asynchronously by publishing to Kafka.
@@ -59,11 +62,15 @@ public class OrderController {
      * 
      * @param request the order placement request with validation
      * @return 202 ACCEPTED with order ID for client tracking
+     * @throws AccessDeniedException       if the caller does not own the account
      * @throws AccountNotFoundException    if account does not exist
      * @throws InstrumentNotFoundException if instrument does not exist
      */
     @PostMapping
     public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+        // Checked first, so a non-owner cannot probe which account IDs exist
+        accessGuard.checkAccess(request.accountId());
+
         // FAIL-FAST VALIDATION: Check Account and Instrument existence before
         // publishing to Kafka
         // This prevents non-recoverable errors from triggering Kafka retries
@@ -113,9 +120,11 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getAllOrders() {
-        // Queries all orders; enables bulk retrieval and monitoring of system order
-        // flow
-        List<Order> orders = orderRepository.findAll();
+        // Admins see every order (monitoring of system order flow); other users
+        // see only the orders on their own account
+        List<Order> orders = accessGuard.isAdmin()
+                ? orderRepository.findAll()
+                : accessGuard.currentAccountId().map(orderRepository::findByAccountId).orElse(List.of());
         List<OrderResponse> responses = orders.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -130,6 +139,7 @@ public class OrderController {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(
                         () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
+        accessGuard.checkAccess(order.getAccountId());
         return ResponseEntity.ok(mapToResponse(order));
     }
 
@@ -137,9 +147,10 @@ public class OrderController {
     public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
         // Validates order exists before cancellation; prevents silently ignoring
         // requests for non-existent orders
-        orderRepository.findById(orderId)
+        Order order = orderRepository.findById(orderId)
                 .orElseThrow(
                         () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
+        accessGuard.checkAccess(order.getAccountId());
 
         // Delegates cancellation to service layer; service validates business rules
         // (status, timing)
@@ -153,6 +164,7 @@ public class OrderController {
         OrderHistory history = orderHistoryRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new com.neueda.leap.exceptions.OrderNotFoundException(
                         "Order history not found: " + orderId));
+        accessGuard.checkAccess(history.getAccountId());
         return ResponseEntity.ok(mapHistoryToResponse(history));
     }
 
@@ -160,6 +172,7 @@ public class OrderController {
     public ResponseEntity<List<OrderHistoryResponse>> getAccountOrderHistory(@PathVariable Long accountId) {
         // Retrieves all order history records for an account; enables audit trail
         // queries even for deleted accounts
+        accessGuard.checkAccess(accountId);
         List<OrderHistory> histories = orderHistoryRepository.findByAccountId(accountId);
         List<OrderHistoryResponse> responses = histories.stream()
                 .map(this::mapHistoryToResponse)

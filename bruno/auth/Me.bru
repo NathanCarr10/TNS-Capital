@@ -1,0 +1,25 @@
+meta {
+  name: Me
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{authUrl}}/auth/me
+  body: none
+  auth: inherit
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.accountId != null) {
+    bru.setEnvVar("accountId", res.body.accountId);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Also stores accountId, so the trading requests work for a user registered earlier.
+}

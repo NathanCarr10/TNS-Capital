@@ -9,6 +9,7 @@ import com.neueda.leap.exceptions.AccountAlreadyExistsException;
 import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
+import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
@@ -137,6 +138,39 @@ public class AccountService {
     public BigDecimal getCashBalance(Long accountId) {
         Account account = getAccountById(accountId);
         return account.getCashBalance();
+    }
+
+    /**
+     * Credits cash to an active account.
+     *
+     * @throws AccountNotFoundException  if account is not found
+     * @throws AccountNotActiveException if account is not active
+     */
+    public Account deposit(Long accountId, BigDecimal amount) {
+        Account account = getAccountById(accountId);
+        requireActive(account);
+        account.credit(amount);
+        return accountRepository.save(account);
+    }
+
+    /**
+     * Debits cash from an active account; the balance can never go negative.
+     *
+     * @throws AccountNotFoundException   if account is not found
+     * @throws AccountNotActiveException  if account is not active
+     * @throws InsufficientFundsException if the balance is less than the amount
+     */
+    public Account withdraw(Long accountId, BigDecimal amount) {
+        Account account = getAccountById(accountId);
+        requireActive(account);
+        account.debit(amount);
+        return accountRepository.save(account);
+    }
+
+    private void requireActive(Account account) {
+        if (!account.isActive()) {
+            throw new AccountNotActiveException("Account is not active: " + account.getId());
+        }
     }
 
     /**
