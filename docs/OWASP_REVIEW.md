@@ -11,7 +11,7 @@ and what the team decided to do about it. Built from [OWASP_REVIEW_TEMPLATE.md](
 | Deployment assumed | Local `docker compose` on a developer machine. Nothing is internet-facing. Findings marked Accepted on that basis say so and must be revisited before any shared deployment. |
 | Commit reviewed | `3c6b7eea` (Development, after PR #91) |
 | Review date | 2026-10-08 |
-| Reviewers | _add reviewer names_ |
+| Reviewers | Nokuvimba |
 | Standard | [OWASP Top 10 (2021)](https://owasp.org/Top10/) |
 
 ## Keeping this review current
