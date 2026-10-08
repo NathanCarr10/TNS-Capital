@@ -28,6 +28,9 @@ We follow **Git Flow** branching strategy:
 - **`main`** - Production-ready code (stable releases)
 - **`Development`** - Integration branch (staging/pre-release)
 
+A PR that fixes, changes or adds a security risk also updates
+[docs/OWASP_REVIEW.md](docs/OWASP_REVIEW.md) in the same PR.
+
 
 ---
 
