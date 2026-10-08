@@ -10,7 +10,7 @@ import {
   UsernameTakenError,
   UsersService,
 } from '../users/users.service';
-import { AccessTokenPayload, REFRESH_TOKEN_TTL_SECONDS, TokenService } from './token.service';
+import { AccessTokenPayload, INVALID_ACCESS_TOKEN, REFRESH_TOKEN_TTL_SECONDS, TokenService } from './token.service';
 
 export const INVALID_CREDENTIALS = 'invalid username or password';
 export const INVALID_REFRESH_TOKEN = 'invalid or expired refresh token';
@@ -112,14 +112,18 @@ export class AuthService {
   }
 
   /**
-   * Turns a verified access token into the current user. Roles are re-read
-   * from the database, so a role change applies before the token expires.
+   * The current user record for a verified access token, for GET /auth/me.
+   * Roles and account are read from the database, so a role change shows here
+   * before the token expires.
    *
-   * @returns null if the user no longer exists
+   * @throws ApiException 401 AUTH-401 if the user no longer exists
    */
-  async validate(payload: AccessTokenPayload): Promise<AuthenticatedUser | null> {
-    const user = await this.users.findByUsername(payload.sub);
-    return user ? withoutPasswordHash(user) : null;
+  async me(claims: AccessTokenPayload): Promise<AuthenticatedUser> {
+    const user = await this.users.findByUsername(claims.sub);
+    if (!user) {
+      throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_ACCESS_TOKEN);
+    }
+    return withoutPasswordHash(user);
   }
 }
 

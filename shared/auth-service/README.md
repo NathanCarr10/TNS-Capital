@@ -119,18 +119,29 @@ curl http://localhost:4000/auth/me -H "Authorization: Bearer <accessToken>"
 Every route needs an access token unless it is marked `@Public()`. Two global guards
 enforce this, in order:
 
-1. `JwtAuthGuard` checks the bearer token (HS256 signature, issuer, expiry, `typ` and `jti`), looks the user
-   up again and puts them on the request. Missing or invalid token: `401 AUTH-401`.
-2. `RolesGuard` enforces `@Roles('ADMIN')`. Missing role: `403 AUTH-403`.
+1. `JwtAuthGuard` requires exactly `Authorization: Bearer <access token>` and verifies it
+   locally: HS256 signature with the shared secret, issuer, expiry, `typ` and `jti`. It makes no
+   database lookup or network call, the same check the trading API makes. A missing header,
+   another scheme (for example `Basic`), or a malformed, expired, tampered, wrong-issuer or
+   refresh token all get the same `401 AUTH-401` "Unauthorised or invalid token"; only the
+   timestamp differs.
+2. `RolesGuard` enforces `@Roles('ADMIN')` using the token's `roles`. Missing role: `403 AUTH-403`.
 
-`@CurrentUser()` gives a handler the authenticated user.
+`@CurrentUser()` gives a handler the verified token claims. A handler that needs the current
+user record loads it itself: `GET /auth/me` reads the user by `sub`, so it shows the roles and
+account in the database and answers `401` if the user has been deleted.
+
+Because verification is local, an access token cannot be revoked: one belonging to a user who
+was deleted or demoted keeps working on other routes, and on the trading API, until it expires,
+at most 15 minutes later. Roles in the token are those at issue time; a role change applies at
+the next refresh.
 
 ## Code layout
 
 | Layer | File | Job |
 |---|---|---|
 | HTTP | `auth/auth.controller.ts` | routes and DTO validation only |
-| Service | `auth/auth.service.ts` | `register`, `login`, `refresh` (rotation, reuse detection), `logout`, `validate` |
+| Service | `auth/auth.service.ts` | `register`, `login`, `refresh` (rotation, reuse detection), `logout`, `me` |
 | Service | `auth/token.service.ts` | `issue`, `verify`, `decode`; generating and hashing refresh tokens |
 | Data | `users/users.service.ts` | SQL on the `users` and `accounts` tables; never sees a plaintext password |
 | Data | `users/refresh-tokens.service.ts` | SQL on the `refresh_tokens` table; rotation runs in one transaction |

@@ -270,7 +270,9 @@ All password handling is tested in `shared/auth-service/tests/`:
 - ✅ Password is Argon2id-hashed before it reaches the database layer
 - ✅ Login succeeds with valid credentials and fails identically for a wrong password or unknown user
 
-**guards.spec.ts**, **token.service.spec.ts** — Unit tests for `JwtAuthGuard`, `RolesGuard` and token handling.
+**guards.spec.ts**, **token.service.spec.ts** — Unit tests for `JwtAuthGuard`, `RolesGuard` and token handling:
+- ✅ `JwtAuthGuard` verifies locally (no database lookup or network call) and gives the handler the verified claims
+- ✅ Expired, wrong-signature, tampered, wrong-issuer, wrong-type and `alg: none` tokens, a missing header and a non-Bearer scheme all get the same 401 AUTH-401
 
 **auth-api.spec.ts** — HTTP tests (no database): claims, roles, refresh, logout, guards, error envelope, validation.
 
