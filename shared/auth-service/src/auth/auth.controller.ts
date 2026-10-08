@@ -7,6 +7,7 @@ import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import type { AccessTokenPayload } from './token.service';
 
 @Controller('auth')
 export class AuthController {
@@ -63,9 +64,12 @@ export class AuthController {
     return this.authService.logout(body.refreshToken);
   }
 
-  /** GET /auth/me - The user the access token belongs to */
+  /** GET /auth/me - The user the access token belongs to. JwtAuthGuard has verified the claims. */
   @Get('me')
-  me(@CurrentUser() user: AuthenticatedUser): Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'> {
+  async me(
+    @CurrentUser() claims: AccessTokenPayload,
+  ): Promise<Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'>> {
+    const user = await this.authService.me(claims);
     return { username: user.username, roles: user.roles, accountId: user.accountId };
   }
 

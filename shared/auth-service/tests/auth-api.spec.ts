@@ -514,6 +514,16 @@ describe('Auth API contract', () => {
       expect(response.body).toEqual({ username: 'admin', roles: ['ADMIN'], accountId: null });
     });
 
+    it('gives the handler the verified claims; the only lookup is the handler\'s own', async () => {
+      const token = await tokenFor(TRADER);
+      fakeUsers.findByUsername.mockClear();
+
+      await me(`Bearer ${token}`).expect(200);
+
+      expect(fakeUsers.findByUsername).toHaveBeenCalledTimes(1);
+      expect(fakeUsers.findByUsername).toHaveBeenCalledWith('trader');
+    });
+
     it('accepts an access token obtained through refresh', async () => {
       const { refreshToken } = await tokensFor(TRADER);
       const { accessToken } = (await refresh(refreshToken).expect(200)).body;

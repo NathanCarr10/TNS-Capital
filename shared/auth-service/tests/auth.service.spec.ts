@@ -163,18 +163,18 @@ describe('AuthService', () => {
     });
   });
 
-  describe('validate', () => {
-    const payload = { sub: 'trader', roles: ['ADMIN' as const], typ: 'access' as const, jti: 'j', iss: 'x', iat: 0, exp: 0 };
+  describe('me', () => {
+    const claims = { sub: 'trader', roles: ['ADMIN' as const], typ: 'access' as const, jti: 'j', iss: 'x', iat: 0, exp: 0 };
 
     it('returns the current user without the password hash', async () => {
       users.findByUsername.mockResolvedValue(trader);
 
-      expect(await auth.validate(payload)).toEqual({ id: 3, username: 'trader', roles: ['USER'], accountId: 7 });
+      expect(await auth.me(claims)).toEqual({ id: 3, username: 'trader', roles: ['USER'], accountId: 7 });
     });
 
-    it('returns null when the user no longer exists', async () => {
+    it('rejects with AUTH-401 when the user no longer exists', async () => {
       users.findByUsername.mockResolvedValue(null);
-      expect(await auth.validate(payload)).toBeNull();
+      await expect(auth.me(claims)).rejects.toMatchObject({ errorCode: 'AUTH-401' });
     });
   });
 });
