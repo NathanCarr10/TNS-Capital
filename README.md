@@ -92,6 +92,9 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 
 ---
 
+A PR that fixes, changes or adds a security risk also updates
+[docs/OWASP_REVIEW.md](docs/OWASP_REVIEW.md) in the same PR.
+
 ## Repository layout
 
 ```
