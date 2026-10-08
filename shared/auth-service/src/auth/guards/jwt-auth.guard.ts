@@ -45,9 +45,10 @@ export class JwtAuthGuard implements CanActivate {
   }
 }
 
+// The scheme is case-insensitive (RFC 7235); anything but exactly "Bearer <token>" is refused
 function bearerToken(request: Request): string | null {
-  const [scheme, token] = (request.headers.authorization ?? '').split(' ');
-  return scheme?.toLowerCase() === 'bearer' && token ? token : null;
+  const parts = (request.headers.authorization ?? '').split(' ');
+  return parts.length === 2 && parts[0].toLowerCase() === 'bearer' && parts[1] ? parts[1] : null;
 }
 
 function unauthorised(): ApiException {
