@@ -4,6 +4,8 @@
 
 This document outlines the security measures implemented in the TNS Capital API and provides guidelines for maintaining security posture.
 
+For the platform's OWASP Top 10 review, with a finding and disposition for every category, see [OWASP_REVIEW.md](OWASP_REVIEW.md).
+
 ---
 
 ## 1. 🔐 Authentication & Authorization
