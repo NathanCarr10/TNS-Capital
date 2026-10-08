@@ -1,6 +1,6 @@
 # TNS Capital — Enterprise Trading Platform
 
-A backend trading platform built for the Neueda Leap Program 2026. It manages trading
+A backend trading platform built for the Fidelity Leap Program 2026. It manages trading
 accounts, instruments, orders and positions, and processes orders asynchronously through
 Kafka with a dead-letter queue for failures. A separate auth service issues the JWTs the
 trading API trusts, and a scheduled ETL pipeline copies trade data into reporting tables.
