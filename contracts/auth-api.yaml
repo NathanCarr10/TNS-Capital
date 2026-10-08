@@ -2,22 +2,27 @@ openapi: 3.0.0
 info:
   title: Authentication Service API
   description: |
-    Authentication API contract for the TNS-Capital trading platform.
-    
+    Authentication API contract for the TNS-Capital trading platform, served by
+    the NestJS auth service in `shared/auth-service`.
+
     This service is responsible for:
-    - Issuing JWT tokens for client authentication
-    - Validating credentials and returning stateless tokens
+    - Registering users and opening their trading account
+    - Validating credentials and issuing access tokens (JWTs) and refresh tokens
+    - Rotating and revoking refresh tokens
     - Providing health checks for service availability
-    
+
     **Authentication Flow:**
-    1. Client calls POST /login with username and password
-    2. Server validates credentials and returns JWT token (expires in 1 hour)
-    3. Client includes token in Authorization header for protected endpoints
-    4. Main API service validates token signature using shared HMAC-SHA256 secret
-    
-    **Note:** This is a stub service for demonstration purposes. In production, 
-    replace with a proper identity provider (Okta, Auth0, Cognito, etc.).
-  version: 1.0.0
+    1. Client calls POST /auth/login with username and password
+    2. Server returns an access token (JWT, 15 minutes) and a refresh token (opaque, single use)
+    3. Client sends the access token as `Authorization: Bearer <accessToken>`
+    4. The trading API and this service verify the access token locally with the
+       shared HMAC-SHA256 secret; neither calls the other at request time
+    5. Before the access token expires, the client calls POST /auth/refresh with
+       its refresh token and gets a new access token and a new refresh token
+
+    **Errors:** every error body is the platform envelope
+    `{ errorCode, message, timestamp }` (PlatformErrorResponse).
+  version: 2.0.0
   contact:
     name: Team Leap
   license:
@@ -29,25 +34,64 @@ servers:
   - url: http://auth-service:4000
     description: Docker Compose Auth Service
 
+tags:
+  - name: Authentication
+    description: User authentication and token management
+  - name: Health
+    description: Service health monitoring
+
+security: []  # Only GET /auth/me needs an access token
+
 paths:
-  /login:
+  /auth/register:
     post:
-      summary: Authenticate user and obtain JWT token
+      summary: Register a user and open their trading account
       description: |
-        Validates user credentials against the user store and returns a 
-        signed JWT token if authentication succeeds.
-        
-        **Token Claims:**
-        - `sub`: Subject (username)
-        - `roles`: Array of role strings (e.g., ["MISSION_OPERATOR", "ADMIN"])
-        - `iat`: Issued at timestamp
-        - `exp`: Expiration timestamp (1 hour from issue)
-        
-        **Shared Secret:**
-        The token is signed with HMAC-SHA256 using a shared secret that must 
-        be configured in both this service and the main API service via the 
-        `JWT_SECRET` environment variable.
+        Creates the user (password stored only as an Argon2id hash) and an
+        ACTIVE trading account with a cash balance of 0, in one transaction.
+        New users get the role USER.
+      operationId: register
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered and account opened
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Username already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformErrorResponse'
+              example:
+                errorCode: USR-409
+                message: User already exists
+                timestamp: '2026-10-08T15:00:00.000Z'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      summary: Authenticate and obtain an access token and a refresh token
+      description: |
+        Validates the credentials and issues both tokens. Each login starts a
+        new session (refresh token family), so a user can be signed in on
+        several devices at once. A wrong username and a wrong password get the
+        same 401, so usernames cannot be probed.
       operationId: login
+      tags:
+        - Authentication
       requestBody:
         required: true
         content:
@@ -55,68 +99,50 @@ paths:
             schema:
               $ref: '#/components/schemas/LoginRequest'
             examples:
-              alice_admin:
-                summary: Login as admin user
+              admin:
+                summary: Login as the seeded admin
                 value:
-                  username: alice
-                  password: mission123
-              bob_guest:
-                summary: Login as guest user
-                value:
-                  username: bob
-                  password: wrongpermissions
+                  username: admin
+                  password: adminPassword
       responses:
         '200':
-          description: Authentication successful - JWT token returned
+          description: Authentication successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
-              example:
-                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbGljZSIsInJvbGVzIjpbIk1JU1NJT05fT1BFUkFUT1IiLCJBRE1JTiJdLCJpYXQiOjE2OTUwMDAwMDAsImV4cCI6MTY5NTAwMzYwMH0.signature
+                $ref: '#/components/schemas/TokenPair'
         '400':
-          description: Bad request - missing or invalid credentials format
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: missing username or password
+          $ref: '#/components/responses/ValidationError'
         '401':
-          description: Unauthorized - invalid credentials
+          description: Wrong username or password
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/PlatformErrorResponse'
               example:
-                error: invalid username or password
+                errorCode: AUTH-401
+                message: invalid username or password
+                timestamp: '2026-10-08T15:00:00.000Z'
         '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: Internal server error
+          $ref: '#/components/responses/InternalServerError'
 
-  /refresh:
+  /auth/refresh:
     post:
-      summary: Exchange a refresh token for a new token pair
+      summary: Exchange a refresh token for a new access token and refresh token
       description: |
-        Served by auth-service (the NestJS replacement for the stub); the stub
-        does not implement it.
-
         Every call rotates: the presented refresh token is spent and a new
-        access token and refresh token are returned. Presenting a spent refresh
-        token again answers AUTH-401 and revokes every token in that login
-        session.
+        access token and a new refresh token are returned, in the same session.
+        Of two requests racing with the same refresh token, only one succeeds.
 
-        **Lifetimes (auth-service):** access token 15 minutes, refresh token
-        7 days from issue. Refresh tokens are signed with a separate secret
-        (`JWT_REFRESH_SECRET`), so the trading API never accepts one.
+        Presenting a spent refresh token again means it was copied: the answer
+        is 401 AUTH-401 and the whole session is revoked, so the latest token
+        in it stops working too. The user's other sessions are not affected.
 
-        An expired, tampered, malformed, spent or unknown refresh token, or an
-        access token sent in its place, gets the same AUTH-401 body.
+        Each new refresh token is valid for 7 days, so an active user stays
+        signed in and a session left idle for 7 days ends.
+
+        An unknown, expired, logged-out, already-used or malformed refresh
+        token, or an access token sent in its place, gets the same 401.
       operationId: refresh
       tags:
         - Authentication
@@ -128,35 +154,63 @@ paths:
               $ref: '#/components/schemas/RefreshRequest'
       responses:
         '200':
-          description: New token pair issued; the presented refresh token can no longer be used
+          description: New tokens issued; the presented refresh token no longer works
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
+                $ref: '#/components/schemas/TokenPair'
         '400':
-          description: Request body missing, malformed or not matching RefreshRequest
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/InvalidRefreshToken'
+
+  /auth/logout:
+    post:
+      summary: End the session a refresh token belongs to
+      description: |
+        Revokes the whole session, including tokens rotated from the one
+        presented. Access tokens already issued keep working until they expire
+        (at most 15 minutes).
+      operationId: logout
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Refresh token revoked
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlatformErrorResponse'
-              example:
-                errorCode: VAL-422
-                message: refreshToken must be a string
-                timestamp: '2026-10-06T15:00:00.000Z'
+                type: object
+                required: [loggedOut]
+                properties:
+                  loggedOut:
+                    type: boolean
+                    enum: [true]
+                additionalProperties: false
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '401':
-          $ref: '#/components/responses/PlatformUnauthorized'
+          $ref: '#/components/responses/InvalidRefreshToken'
 
-  /me:
+  /auth/me:
     get:
-      summary: Return the caller's verified access-token claims
+      summary: The user the access token belongs to
       description: |
-        Served by auth-service. A protected route: requires
-        `Authorization: Bearer <access token>`. The token is verified locally
-        (signature, expiry, issuer and token type, HS256 only); there is no
-        network call or database lookup.
+        A protected route. The guard verifies the access token locally
+        (HS256 signature with the shared secret, issuer, expiry, typ and jti)
+        with no database lookup or network call, and hands the handler the
+        verified claims. The handler then reads the user by `sub`, so the roles and
+        account shown are the current ones.
 
-        A missing header, a scheme other than Bearer, or an expired, tampered,
-        malformed, wrong-issuer or refresh token all get the same AUTH-401 body.
+        A missing header, a scheme other than Bearer, or a malformed, expired,
+        tampered or wrong-issuer token, a refresh token, or a token for a
+        deleted user all get the same 401.
       operationId: me
       tags:
         - Authentication
@@ -164,21 +218,23 @@ paths:
         - jwt: []
       responses:
         '200':
-          description: The verified claims
+          description: The current user
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccessTokenClaims'
+                $ref: '#/components/schemas/CurrentUser'
         '401':
-          $ref: '#/components/responses/PlatformUnauthorized'
+          $ref: '#/components/responses/InvalidAccessToken'
 
   /health:
     get:
       summary: Health check endpoint
       description: |
         Returns the health status of the authentication service.
-        Can be used for liveness/readiness probes in Kubernetes.
+        Used by the docker-compose health check.
       operationId: health
+      tags:
+        - Health
       responses:
         '200':
           description: Service is healthy and ready
@@ -188,17 +244,61 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: up
-        '503':
-          description: Service is unavailable
+        '405':
+          description: Any method other than GET
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
-              example:
-                status: down
+                $ref: '#/components/schemas/PlatformErrorResponse'
 
 components:
   schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: trader1
+        password:
+          type: string
+          minLength: 8
+          maxLength: 256
+          description: Hashed with Argon2id before storage; never returned
+          example: password123
+        holderName:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Name on the trading account; defaults to the username
+          example: Ada Lovelace
+      additionalProperties: false
+
+    RegisterResponse:
+      type: object
+      required: [id, username, createdAt, accountId, accountNumber]
+      properties:
+        id:
+          type: integer
+          example: 4
+        username:
+          type: string
+          example: trader1
+        createdAt:
+          type: string
+          format: date-time
+        accountId:
+          type: integer
+          example: 11
+        accountNumber:
+          type: string
+          example: ACC-U000004
+      additionalProperties: false
+
     LoginRequest:
       type: object
       description: User credentials for authentication
@@ -211,35 +311,71 @@ components:
           minLength: 1
           maxLength: 100
           description: Username of the user
-          example: alice
+          example: admin
         password:
           type: string
           minLength: 1
           maxLength: 256
           description: Password of the user
-          example: mission123
+          example: adminPassword
       additionalProperties: false
 
-    LoginResponse:
+    TokenPair:
       type: object
-      description: Successful authentication response containing JWT token
+      description: Returned by login and by every refresh
       required:
-        - token
+        - accessToken
+        - refreshToken
       properties:
-        token:
+        accessToken:
           type: string
           format: jwt
           description: |
-            JWT token signed with HMAC-SHA256 shared secret.
-            Format: Header.Payload.Signature
-            Expires in 1 hour from issue time.
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbGljZSIsInJvbGVzIjpbIk1JU1NJT05fT1BFUkFUT1IiLCJBRE1JTiJdLCJpYXQiOjE2OTUwMDAwMDAsImV4cCI6MTY5NTAwMzYwMH0.signature
+            JWT signed with HMAC-SHA256 and the shared secret. Claims are
+            exactly those in AccessTokenClaims. Expires 15 minutes after issue.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0cmFkZXIxIiwicm9sZXMiOlsiVVNFUiJdLCJ0eXAiOiJhY2Nlc3MifQ.signature
         refreshToken:
           type: string
-          format: jwt
+          pattern: '^[A-Za-z0-9_-]{43}$'
           description: |
-            Returned by auth-service only (the stub omits it). Single use:
-            send it to POST /refresh for a new pair. Expires 7 days from issue.
+            Opaque, 256 random bits (base64url). Only its SHA-256 hash is
+            stored. Single use: send it to POST /auth/refresh and keep the new
+            one from the response. Expires 7 days after it is issued.
+          example: Xq3vR8wT0aZ1bC2dE3fG4hI5jK6lM7nO8pQ9rS0tU1v
+      additionalProperties: false
+
+    AccessTokenClaims:
+      type: object
+      description: The claims of an access token - exactly these seven
+      required: [sub, roles, typ, jti, iss, iat, exp]
+      properties:
+        sub:
+          type: string
+          description: Username; the trading API resolves the user's account from it
+          example: trader1
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [USER, ADMIN]
+          example: [USER]
+        typ:
+          type: string
+          enum: [access]
+          description: Marks an access token; the guard refuses any other type
+        jti:
+          type: string
+          format: uuid
+          description: Random id, unique per token
+        iss:
+          type: string
+          enum: ['urn:tns-capital:auth-service']
+        iat:
+          type: integer
+          description: Issued at (seconds since the epoch)
+        exp:
+          type: integer
+          description: Expiry, 900 seconds (15 minutes) after iat
       additionalProperties: false
 
     RefreshRequest:
@@ -249,36 +385,30 @@ components:
       properties:
         refreshToken:
           type: string
-          description: The refresh token from the last /login or /refresh response
+          minLength: 1
+          maxLength: 512
+          description: The refresh token from the last login or refresh response
       additionalProperties: false
 
-    AccessTokenClaims:
+    CurrentUser:
       type: object
-      description: Claims of an auth-service access token, as verified by the guard
-      required: [sub, roles, typ, iss, jti, iat, exp]
+      required: [username, roles, accountId]
       properties:
-        sub:
+        username:
           type: string
-          example: alice
+          example: trader1
         roles:
           type: array
           items:
             type: string
-          example: [MISSION_OPERATOR, ADMIN]
-        typ:
-          type: string
-          enum: [access]
-        iss:
-          type: string
-          example: tns-capital-auth
-        jti:
-          type: string
-          format: uuid
-        iat:
+            enum: [USER, ADMIN]
+          example: [USER]
+        accountId:
           type: integer
-        exp:
-          type: integer
-          description: 15 minutes after iat
+          nullable: true
+          description: The user's trading account; null for admins
+          example: 11
+      additionalProperties: false
 
     PlatformErrorResponse:
       type: object
@@ -287,6 +417,7 @@ components:
       properties:
         errorCode:
           type: string
+          description: VAL-422, AUTH-401, AUTH-403, USR-409, NOT-404, REQ-405 or SYS-500
           example: AUTH-401
         message:
           type: string
@@ -294,18 +425,6 @@ components:
         timestamp:
           type: string
           format: date-time
-      additionalProperties: false
-
-    ErrorResponse:
-      type: object
-      description: Error response body
-      required:
-        - error
-      properties:
-        error:
-          type: string
-          description: Human-readable error message
-          example: invalid username or password
       additionalProperties: false
 
     HealthResponse:
@@ -318,7 +437,6 @@ components:
           type: string
           enum:
             - up
-            - down
           description: Service status
           example: up
       additionalProperties: false
@@ -329,12 +447,23 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: |
-        JWT token obtained from /login endpoint.
-        Include in Authorization header: Bearer <token>
+        Access token from POST /auth/login or POST /auth/refresh.
+        Include in Authorization header: Bearer <accessToken>
 
   responses:
-    PlatformUnauthorized:
-      description: Missing, invalid, expired or wrong-type token (the body is the same whatever the reason)
+    ValidationError:
+      description: Body missing, not valid JSON, or not matching the request schema (including unknown properties)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlatformErrorResponse'
+          example:
+            errorCode: VAL-422
+            message: missing username or password
+            timestamp: '2026-10-08T15:00:00.000Z'
+
+    InvalidAccessToken:
+      description: Missing or invalid access token (the same body whatever the reason)
       content:
         application/json:
           schema:
@@ -342,60 +471,57 @@ components:
           example:
             errorCode: AUTH-401
             message: Unauthorised or invalid token
-            timestamp: '2026-10-06T15:00:00.000Z'
+            timestamp: '2026-10-08T15:00:00.000Z'
 
-    Unauthorized:
-      description: Invalid or missing JWT token
+    InvalidRefreshToken:
+      description: Unknown, expired, revoked or already-used refresh token (reuse also revokes the session)
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/PlatformErrorResponse'
           example:
-            error: Invalid or missing JWT token
+            errorCode: AUTH-401
+            message: invalid or expired refresh token
+            timestamp: '2026-10-08T15:00:00.000Z'
 
     InternalServerError:
-      description: Internal server error
+      description: Unexpected error; details are logged server-side, never returned
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: '#/components/schemas/PlatformErrorResponse'
           example:
-            error: Internal server error
-
-security: []  # No security required for /login and /health endpoints
-
-tags:
-  - name: Authentication
-    description: User authentication and token management
-  - name: Health
-    description: Service health monitoring
+            errorCode: SYS-500
+            message: Internal server error
+            timestamp: '2026-10-08T15:00:00.000Z'
 
 x-internal-notes: |
   Implementation Details:
-  
+
   1. **Shared Secret Management:**
-     - Environment variable: JWT_SECRET
-     - Default: mission-control-shared-secret-key-32-bytes-minimum
+     - Environment variable: JWT_SECRET (no default; the service refuses to start without it)
      - Must be >= 32 bytes for HMAC-SHA256
      - Must match the secret in the main API service (SecurityConfig.java)
-  
-  2. **User Store (Stub):**
-     - alice/mission123 -> Roles: [MISSION_OPERATOR, ADMIN]
-     - bob/wrongpermissions -> Roles: [GUEST]
-     - In production, replace with proper user database/directory
-  
-  3. **Token Validation (in Main API):**
-     - Algorithm: HS256 (HMAC-SHA256)
-     - Expiration: 1 hour (3600 seconds)
-     - Validated on every request to protected endpoints
+
+  2. **User Store:**
+     - Postgres `users` table (db/tables/08_users.sql); passwords as Argon2id hashes
+     - Refresh tokens as SHA-256 hashes in `refresh_tokens` (db/tables/09_refresh_tokens.sql),
+       one row per token, grouped into sessions by family_id
+     - Seeded admin: admin/adminPassword -> Roles: [ADMIN]
+
+  3. **Token Validation (here and in the Main API):**
+     - Algorithm: HS256 (HMAC-SHA256), pinned; never read from the token
+     - Issuer: urn:tns-capital:auth-service (checked by this service's guard)
+     - Expiration: 15 minutes (900 seconds)
+     - Local: no database lookup or network call
      - See: src/main/java/com/neueda/leap/security/SecurityConfig.java
-  
+
   4. **Deployment:**
      - Docker image: node:20-alpine
      - Dockerfile: shared/auth-service/Dockerfile
      - Port: 4000 (configurable via PORT env var)
      - User runs as unprivileged 'node' user
-  
+
   5. **Integration Points:**
      - Main API validates tokens using NimbusJwtDecoder
      - OAuth2ResourceServerConfigurer in SecurityConfig
