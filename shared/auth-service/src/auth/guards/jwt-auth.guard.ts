@@ -2,22 +2,24 @@ import { CanActivate, ExecutionContext, HttpStatus, Injectable } from '@nestjs/c
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { ApiException } from '../../common/api.exception';
-import type { AuthenticatedUser } from '../../users/users.service';
-import { AuthService } from '../auth.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-import { INVALID_ACCESS_TOKEN, TokenService } from '../token.service';
+import { AccessTokenPayload, INVALID_ACCESS_TOKEN, TokenService } from '../token.service';
 
 /**
  * Applied to every route (AuthModule registers it globally); routes marked
  * @Public() skip it. Requires "Authorization: Bearer <access token>" and puts
- * the authenticated user on request.user.
+ * the verified claims on request.user.
+ *
+ * Verification is local: signature, algorithm, issuer, expiry and token type
+ * are checked with the shared secret, with no database lookup or network call,
+ * the same check the trading API makes. A handler that needs the current user
+ * record (GET /auth/me) loads it itself.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly tokens: TokenService,
-    private readonly auth: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -29,18 +31,13 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
+    const request = context.switchToHttp().getRequest<Request & { user?: AccessTokenPayload }>();
     const token = bearerToken(request);
     if (!token) {
       throw unauthorised();
     }
 
-    const user = await this.auth.validate(await this.tokens.verify(token));
-    if (!user) {
-      // Validly signed, but the user has since been deleted
-      throw unauthorised();
-    }
-    request.user = user;
+    request.user = await this.tokens.verify(token);
     return true;
   }
 }
