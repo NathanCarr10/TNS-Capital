@@ -14,5 +14,9 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   if (secret.length < 32) {
     throw new Error('JWT_SECRET must be at least 32 bytes (256 bits) for HS256 security.');
   }
+  const rateLimit = config.AUTH_RATE_LIMIT;
+  if (rateLimit !== undefined && !(Number.isInteger(Number(rateLimit)) && Number(rateLimit) > 0)) {
+    throw new Error('AUTH_RATE_LIMIT must be a positive whole number.');
+  }
   return config;
 }

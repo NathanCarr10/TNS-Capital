@@ -152,7 +152,14 @@ the next refresh.
 
 Every error is `{ "errorCode", "message", "timestamp" }`: `VAL-422` (400, invalid body or
 unknown property), `AUTH-401` (wrong credentials, with no hint which part was wrong),
-`AUTH-403` (missing role), `USR-409` (username taken), `NOT-404`, `REQ-405` and `SYS-500`.
+`AUTH-403` (missing role), `AUTH-429` (rate limit), `USR-409` (username taken), `NOT-404`,
+`REQ-405` and `SYS-500`.
+
+## Rate limiting
+
+`POST /auth/register`, `/auth/login` and `/auth/refresh` allow `AUTH_RATE_LIMIT` requests
+(default 10) per client IP per minute, to slow down password guessing. Above that the
+service answers `429 AUTH-429` with a `Retry-After` header. The other routes are not limited.
 
 ## Tests
 
@@ -162,6 +169,7 @@ npm test
 
 - `tests/auth-api.spec.ts`: the HTTP endpoints end to end, including the guards, with the
   database replaced by a fake
+- `tests/rate-limit.spec.ts`: the 429 on the credential endpoints, with a limit of 3
 - `tests/auth.service.spec.ts`, `tests/token.service.spec.ts`, `tests/guards.spec.ts`: unit tests
 - `tests/password-hasher.spec.ts`: Argon2id hashing
 - `tests/users.service.spec.ts`: the SQL of `UsersService` and `RefreshTokensService` against a real Postgres with the `db/` schema. Skipped

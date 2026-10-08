@@ -72,6 +72,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
     ports:
       - "4000:4000"
     depends_on:

@@ -1,5 +1,6 @@
-import { All, Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { All, Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { methodNotAllowed } from '../common/method-not-allowed';
 import type { AuthenticatedUser, RegisteredUser } from '../users/users.service';
 import { AuthService, LoginResult } from './auth.service';
@@ -25,6 +26,8 @@ export class AuthController {
    */
   @Public()
   @Post('register')
+  @UseGuards(ThrottlerGuard)
+  @ApiResponse({ status: 429, description: 'Too many attempts from this client; retry after Retry-After seconds' })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a user and open their trading account' })
   @ApiResponse({ status: 201, description: 'User registered; the body carries the new accountId' })
@@ -48,6 +51,8 @@ export class AuthController {
    */
   @Public()
   @Post('login')
+  @UseGuards(ThrottlerGuard)
+  @ApiResponse({ status: 429, description: 'Too many attempts from this client; retry after Retry-After seconds' })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log in and receive an access token and a refresh token' })
   @ApiResponse({ status: 200, description: 'accessToken (15 min) and refreshToken (7 days)' })
@@ -59,6 +64,8 @@ export class AuthController {
   /** POST /auth/refresh - Spend a refresh token for a new access token and refresh token */
   @Public()
   @Post('refresh')
+  @UseGuards(ThrottlerGuard)
+  @ApiResponse({ status: 429, description: 'Too many attempts from this client; retry after Retry-After seconds' })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Spend a refresh token for a new token pair' })
   @ApiResponse({ status: 200, description: 'A new accessToken and refreshToken' })

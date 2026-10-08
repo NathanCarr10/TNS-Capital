@@ -165,7 +165,8 @@ Edit `.env` and set:
 | `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API to verify them. Must be at least 32 bytes. Generate one with `openssl rand -hex 32`. |
 | `JWT_REFRESH_SECRET` | Reserved for the auth service and never given to the API. Nothing reads it yet (refresh tokens are random values stored as hashes), but set it to a different random value with `openssl rand -hex 32`. |
 
-Optional: `ETL_SCHEDULE_TIME` (default `02:00`) and `KAFKA_UI_PORT` (default `8090`).
+Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`) and
+`AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute).
 
 ### 3. Start the stack
 

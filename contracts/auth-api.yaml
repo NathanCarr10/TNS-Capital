@@ -78,6 +78,8 @@ paths:
                 errorCode: USR-409
                 message: User already exists
                 timestamp: '2026-10-08T15:00:00.000Z'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -123,6 +125,8 @@ paths:
                 errorCode: AUTH-401
                 message: invalid username or password
                 timestamp: '2026-10-08T15:00:00.000Z'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -163,6 +167,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/InvalidRefreshToken'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /auth/logout:
     post:
@@ -417,7 +423,7 @@ components:
       properties:
         errorCode:
           type: string
-          description: VAL-422, AUTH-401, AUTH-403, USR-409, NOT-404, REQ-405 or SYS-500
+          description: VAL-422, AUTH-401, AUTH-403, AUTH-429, USR-409, NOT-404, REQ-405 or SYS-500
           example: AUTH-401
         message:
           type: string
@@ -482,6 +488,23 @@ components:
           example:
             errorCode: AUTH-401
             message: invalid or expired refresh token
+            timestamp: '2026-10-08T15:00:00.000Z'
+
+    TooManyRequests:
+      description: |
+        More than AUTH_RATE_LIMIT (default 10) register, login or refresh requests
+        from this client IP in a minute. Retry-After gives the seconds to wait.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlatformErrorResponse'
+          example:
+            errorCode: AUTH-429
+            message: Too many attempts. Try again later
             timestamp: '2026-10-08T15:00:00.000Z'
 
     InternalServerError:
