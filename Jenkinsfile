@@ -122,6 +122,19 @@ pipeline {
             }
         }
 
+        stage('Auth Service Tests') {
+            steps {
+                // The NestJS auth service's Jest suite, in the same Node image its
+                // container uses. The Postgres tests in users.service.spec.ts skip
+                // here (they need DB_HOST and a database).
+                sh '''
+                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:20-alpine \
+                        sh -c "npm ci --no-audit --no-fund && npm test"
+                '''
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {

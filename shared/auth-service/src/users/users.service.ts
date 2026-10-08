@@ -46,8 +46,8 @@ export function accountNumberFor(userId: number): string {
 }
 
 /**
- * The users table. Stores what it is given: hashing passwords and refresh
- * tokens is AuthService's job.
+ * The users table. Stores what it is given: hashing passwords is
+ * AuthService's job.
  */
 @Injectable()
 export class UsersService {
@@ -111,36 +111,9 @@ export class UsersService {
     return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
   }
 
-  /**
-   * Stores the hash of the user's new refresh token, replacing any previous
-   * one. The expiry is computed by Postgres, so it and the check in
-   * findByRefreshTokenHash use the same clock.
-   */
-  async setRefreshToken(userId: number, tokenHash: string, ttlSeconds: number): Promise<void> {
-    await this.pool.query(
-      `UPDATE users
-          SET refresh_token_hash = $2,
-              refresh_token_expires_at = NOW() + make_interval(secs => $3),
-              updated_at = NOW()
-        WHERE id = $1`,
-      [userId, tokenHash, ttlSeconds],
-    );
-  }
-
-  /** @returns the user holding this refresh token, or null if none does or it has expired */
-  async findByRefreshTokenHash(tokenHash: string): Promise<UserRecord | null> {
-    const result = await this.pool.query(
-      `SELECT ${USER_COLUMNS} FROM users WHERE refresh_token_hash = $1 AND refresh_token_expires_at > NOW()`,
-      [tokenHash],
-    );
+  async findById(id: number): Promise<UserRecord | null> {
+    const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [id]);
     return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
-  }
-
-  async clearRefreshToken(userId: number): Promise<void> {
-    await this.pool.query(
-      'UPDATE users SET refresh_token_hash = NULL, refresh_token_expires_at = NULL, updated_at = NOW() WHERE id = $1',
-      [userId],
-    );
   }
 }
 

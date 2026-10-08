@@ -1,10 +1,12 @@
 /**
- * UsersService against a real Postgres with the db/ schema (DB_HOST, DB_PORT,
+ * UsersService and RefreshTokensService against a real Postgres with the db/ schema (DB_HOST, DB_PORT,
  * DB_NAME, DB_USER, DB_PASSWORD from the environment). Skipped unless DB_HOST
  * is set. Rows created here are removed afterwards.
  */
 import { Pool } from 'pg';
+import { randomUUID } from 'crypto';
 import { hashPassword } from '../src/users/password-hasher';
+import { RefreshTokensService } from '../src/users/refresh-tokens.service';
 import { accountNumberFor, UsernameTakenError, UsersService } from '../src/users/users.service';
 
 const describeWithDb = process.env.DB_HOST ? describe : describe.skip;
@@ -17,6 +19,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
 });
 const service = new UsersService(pool);
+const refreshTokens = new RefreshTokensService(pool);
 
 const runId = Date.now();
 const created: string[] = [];
@@ -116,6 +119,14 @@ describeWithDb('UsersService.findByUsername', () => {
     expect(await service.findByUsername('nonexistent_user')).toBeNull();
   });
 
+  it('finds the same user by id', async () => {
+    const username = uniqueName('findbyid');
+    const { id } = await service.create(username, passwordHash);
+
+    expect(await service.findById(id)).toEqual(await service.findByUsername(username));
+    expect(await service.findById(-1)).toBeNull();
+  });
+
   it('finds the seeded admin with ADMIN and no account', async () => {
     const admin = await service.findByUsername('admin');
 
@@ -123,45 +134,90 @@ describeWithDb('UsersService.findByUsername', () => {
   });
 });
 
-describeWithDb('UsersService refresh tokens', () => {
-  const hashA = 'a'.repeat(64);
-  const hashB = 'b'.repeat(64);
+describeWithDb('RefreshTokensService', () => {
   let userId: number;
-  let username: string;
+  let n = 0;
+  // A fresh 64-character hex hash per call
+  const hash = () => (runId.toString(16) + (n++).toString(16).padStart(8, '0')).padEnd(64, 'f');
+  const row = async (tokenHash: string) =>
+    (await pool.query('SELECT user_id, family_id, used_at FROM refresh_tokens WHERE token_hash = $1', [tokenHash]))
+      .rows[0];
 
   beforeAll(async () => {
-    username = uniqueName('refreshtest');
-    userId = (await service.create(username, passwordHash)).id;
+    userId = (await service.create(uniqueName('refreshtest'), passwordHash)).id;
   });
 
-  it('finds the user by the stored hash', async () => {
-    await service.setRefreshToken(userId, hashA, 3600);
+  it('rotates a token: spends it and stores its successor in the same family', async () => {
+    const [first, second, family] = [hash(), hash(), randomUUID()];
+    await refreshTokens.create(userId, first, family, 3600);
 
-    expect(await service.findByRefreshTokenHash(hashA)).toMatchObject({ id: userId, username });
+    expect(await refreshTokens.rotate(first, second, 3600)).toEqual({ status: 'rotated', userId });
+    expect((await row(first)).used_at).not.toBeNull();
+    expect(await row(second)).toMatchObject({ family_id: family, used_at: null });
   });
 
-  it('replaces the previous hash on the next login', async () => {
-    await service.setRefreshToken(userId, hashA, 3600);
-    await service.setRefreshToken(userId, hashB, 3600);
+  it('revokes the whole family when a spent token is presented again', async () => {
+    const [first, second, third] = [hash(), hash(), hash()];
+    await refreshTokens.create(userId, first, randomUUID(), 3600);
+    await refreshTokens.rotate(first, second, 3600);
 
-    expect(await service.findByRefreshTokenHash(hashA)).toBeNull();
-    expect(await service.findByRefreshTokenHash(hashB)).toMatchObject({ id: userId });
+    expect(await refreshTokens.rotate(first, third, 3600)).toEqual({ status: 'reused', userId });
+    expect(await row(first)).toBeUndefined();
+    expect(await row(second)).toBeUndefined();
+    expect(await row(third)).toBeUndefined();
   });
 
-  it('does not find an expired token', async () => {
-    await service.setRefreshToken(userId, hashA, -1);
+  it('lets only one of two concurrent refreshes with the same token win', async () => {
+    const first = hash();
+    await refreshTokens.create(userId, first, randomUUID(), 3600);
 
-    expect(await service.findByRefreshTokenHash(hashA)).toBeNull();
+    const results = await Promise.all([refreshTokens.rotate(first, hash(), 3600), refreshTokens.rotate(first, hash(), 3600)]);
+    expect(results.map((r) => r.status).sort()).toEqual(['reused', 'rotated']);
   });
 
-  it('clears the token', async () => {
-    await service.setRefreshToken(userId, hashA, 3600);
-    await service.clearRefreshToken(userId);
+  it.each([
+    ['an unknown token', async () => hash()],
+    [
+      'an expired token',
+      async () => {
+        const expired = hash();
+        await refreshTokens.create(userId, expired, randomUUID(), -1);
+        return expired;
+      },
+    ],
+  ])('does not rotate %s', async (_case, makeToken) => {
+    const next = hash();
+    expect(await refreshTokens.rotate(await makeToken(), next, 3600)).toEqual({ status: 'invalid' });
+    expect(await row(next)).toBeUndefined();
+  });
 
-    expect(await service.findByRefreshTokenHash(hashA)).toBeNull();
-    const row = (
-      await pool.query('SELECT refresh_token_hash, refresh_token_expires_at FROM users WHERE id = $1', [userId])
-    ).rows[0];
-    expect(row).toEqual({ refresh_token_hash: null, refresh_token_expires_at: null });
+  it('revokes a family on logout, leaving other families alone', async () => {
+    const [mine, other] = [hash(), hash()];
+    await refreshTokens.create(userId, mine, randomUUID(), 3600);
+    await refreshTokens.create(userId, other, randomUUID(), 3600);
+
+    expect(await refreshTokens.revokeFamily(mine)).toBe(true);
+    expect(await row(mine)).toBeUndefined();
+    expect(await row(other)).toBeDefined();
+    expect(await refreshTokens.revokeFamily(mine)).toBe(false);
+  });
+
+  it("removes the user's expired tokens when a new one is created", async () => {
+    const expired = hash();
+    await refreshTokens.create(userId, expired, randomUUID(), -1);
+    await refreshTokens.create(userId, hash(), randomUUID(), 3600);
+
+    expect(await row(expired)).toBeUndefined();
+  });
+
+  it("deletes the user's tokens along with the user", async () => {
+    const username = uniqueName('cascade');
+    const { id, accountId } = await service.create(username, passwordHash);
+    const token = hash();
+    await refreshTokens.create(id, token, randomUUID(), 3600);
+
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    await pool.query('DELETE FROM accounts WHERE id = $1', [accountId]);
+    expect(await row(token)).toBeUndefined();
   });
 });

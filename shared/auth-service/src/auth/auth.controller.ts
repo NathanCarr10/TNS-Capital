@@ -7,6 +7,7 @@ import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import type { AccessTokenPayload } from './token.service';
 
 @Controller('auth')
 export class AuthController {
@@ -30,11 +31,13 @@ export class AuthController {
   /**
    * POST /auth/login - Authenticate user and issue an access and a refresh token
    *
-   * Access token claims (contract): exactly sub, roles, iss, iat, exp
+   * Access token claims: exactly sub, roles, typ, jti, iss, iat, exp
    * - sub: username; the trading API looks up the user's account by it
    * - roles: ["USER"] or ["ADMIN"], from users.role
-   * - iss: urn:tns-capital:auth-stub
-   * - exp: 1 hour after iat
+   * - typ: "access"
+   * - jti: a random UUID
+   * - iss: urn:tns-capital:auth-service
+   * - exp: 15 minutes after iat
    *
    * Algorithm: HS256, pinned in AuthModule, never read from a token.
    */
@@ -45,15 +48,15 @@ export class AuthController {
     return this.authService.login(body.username, body.password);
   }
 
-  /** POST /auth/refresh - Exchange a refresh token for a new access token */
+  /** POST /auth/refresh - Spend a refresh token for a new access token and refresh token */
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  refresh(@Body() body: RefreshDto): Promise<{ accessToken: string }> {
+  refresh(@Body() body: RefreshDto): Promise<LoginResult> {
     return this.authService.refresh(body.refreshToken);
   }
 
-  /** POST /auth/logout - Revoke a refresh token */
+  /** POST /auth/logout - Revoke the session a refresh token belongs to */
   @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
@@ -61,9 +64,12 @@ export class AuthController {
     return this.authService.logout(body.refreshToken);
   }
 
-  /** GET /auth/me - The user the access token belongs to */
+  /** GET /auth/me - The user the access token belongs to. JwtAuthGuard has verified the claims. */
   @Get('me')
-  me(@CurrentUser() user: AuthenticatedUser): Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'> {
+  async me(
+    @CurrentUser() claims: AccessTokenPayload,
+  ): Promise<Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'>> {
+    const user = await this.authService.me(claims);
     return { username: user.username, roles: user.roles, accountId: user.accountId };
   }
 
