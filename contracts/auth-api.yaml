@@ -99,6 +99,79 @@ paths:
               example:
                 error: Internal server error
 
+  /refresh:
+    post:
+      summary: Exchange a refresh token for a new token pair
+      description: |
+        Served by auth-service (the NestJS replacement for the stub); the stub
+        does not implement it.
+
+        Every call rotates: the presented refresh token is spent and a new
+        access token and refresh token are returned. Presenting a spent refresh
+        token again answers AUTH-401 and revokes every token in that login
+        session.
+
+        **Lifetimes (auth-service):** access token 15 minutes, refresh token
+        7 days from issue. Refresh tokens are signed with a separate secret
+        (`JWT_REFRESH_SECRET`), so the trading API never accepts one.
+
+        An expired, tampered, malformed, spent or unknown refresh token, or an
+        access token sent in its place, gets the same AUTH-401 body.
+      operationId: refresh
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New token pair issued; the presented refresh token can no longer be used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Request body missing, malformed or not matching RefreshRequest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformErrorResponse'
+              example:
+                errorCode: VAL-422
+                message: refreshToken must be a string
+                timestamp: '2026-10-06T15:00:00.000Z'
+        '401':
+          $ref: '#/components/responses/PlatformUnauthorized'
+
+  /me:
+    get:
+      summary: Return the caller's verified access-token claims
+      description: |
+        Served by auth-service. A protected route: requires
+        `Authorization: Bearer <access token>`. The token is verified locally
+        (signature, expiry, issuer and token type, HS256 only); there is no
+        network call or database lookup.
+
+        A missing header, a scheme other than Bearer, or an expired, tampered,
+        malformed, wrong-issuer or refresh token all get the same AUTH-401 body.
+      operationId: me
+      tags:
+        - Authentication
+      security:
+        - jwt: []
+      responses:
+        '200':
+          description: The verified claims
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessTokenClaims'
+        '401':
+          $ref: '#/components/responses/PlatformUnauthorized'
+
   /health:
     get:
       summary: Health check endpoint
@@ -161,6 +234,66 @@ components:
             Format: Header.Payload.Signature
             Expires in 1 hour from issue time.
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbGljZSIsInJvbGVzIjpbIk1JU1NJT05fT1BFUkFUT1IiLCJBRE1JTiJdLCJpYXQiOjE2OTUwMDAwMDAsImV4cCI6MTY5NTAwMzYwMH0.signature
+        refreshToken:
+          type: string
+          format: jwt
+          description: |
+            Returned by auth-service only (the stub omits it). Single use:
+            send it to POST /refresh for a new pair. Expires 7 days from issue.
+      additionalProperties: false
+
+    RefreshRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: The refresh token from the last /login or /refresh response
+      additionalProperties: false
+
+    AccessTokenClaims:
+      type: object
+      description: Claims of an auth-service access token, as verified by the guard
+      required: [sub, roles, typ, iss, jti, iat, exp]
+      properties:
+        sub:
+          type: string
+          example: alice
+        roles:
+          type: array
+          items:
+            type: string
+          example: [MISSION_OPERATOR, ADMIN]
+        typ:
+          type: string
+          enum: [access]
+        iss:
+          type: string
+          example: tns-capital-auth
+        jti:
+          type: string
+          format: uuid
+        iat:
+          type: integer
+        exp:
+          type: integer
+          description: 15 minutes after iat
+
+    PlatformErrorResponse:
+      type: object
+      description: Platform error envelope, shared with the trading API
+      required: [errorCode, message, timestamp]
+      properties:
+        errorCode:
+          type: string
+          example: AUTH-401
+        message:
+          type: string
+          example: Unauthorised or invalid token
+        timestamp:
+          type: string
+          format: date-time
       additionalProperties: false
 
     ErrorResponse:
@@ -200,6 +333,17 @@ components:
         Include in Authorization header: Bearer <token>
 
   responses:
+    PlatformUnauthorized:
+      description: Missing, invalid, expired or wrong-type token (the body is the same whatever the reason)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlatformErrorResponse'
+          example:
+            errorCode: AUTH-401
+            message: Unauthorised or invalid token
+            timestamp: '2026-10-06T15:00:00.000Z'
+
     Unauthorized:
       description: Invalid or missing JWT token
       content:
