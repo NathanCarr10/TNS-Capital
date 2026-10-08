@@ -13,7 +13,8 @@ To run it on its own (Node 20+):
 cd shared/auth-service
 npm install
 npm run build
-JWT_SECRET=<same value as in the project .env> DB_HOST=localhost DB_PASSWORD=... npm start
+JWT_SECRET=<same value as in the project .env> DB_HOST=localhost DB_PASSWORD=... 
+npm start
 ```
 
 Listens on `http://localhost:4000`. It refuses to start without a `JWT_SECRET` of at least 32 bytes.
