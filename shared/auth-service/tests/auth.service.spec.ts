@@ -1,28 +1,39 @@
 /**
- * AuthService with UsersService and TokenService mocked: the decisions it
- * makes, independent of HTTP and the database.
+ * AuthService with UsersService, RefreshTokensService and TokenService
+ * mocked: the decisions it makes, independent of HTTP and the database.
  */
+import { Logger } from '@nestjs/common';
 import { AuthService } from '../src/auth/auth.service';
 import { TokenService } from '../src/auth/token.service';
 import { ApiException } from '../src/common/api.exception';
 import { hashPassword } from '../src/users/password-hasher';
+import { RefreshTokensService } from '../src/users/refresh-tokens.service';
 import { UserRecord, UsernameTakenError, UsersService } from '../src/users/users.service';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe('AuthService', () => {
   let trader: UserRecord;
   const users = {
     findByUsername: jest.fn(),
+    findById: jest.fn(),
     create: jest.fn(),
-    setRefreshToken: jest.fn(),
-    findByRefreshTokenHash: jest.fn(),
-    clearRefreshToken: jest.fn(),
+  };
+  const refreshTokens = {
+    create: jest.fn(),
+    rotate: jest.fn(),
+    revokeFamily: jest.fn(),
   };
   const tokens = {
     issue: jest.fn(async () => 'access-token'),
     generateRefreshToken: jest.fn(() => ({ token: 'refresh-token', hash: 'refresh-hash' })),
     hashRefreshToken: jest.fn((token: string) => `hash-of-${token}`),
   };
-  const auth = new AuthService(users as unknown as UsersService, tokens as unknown as TokenService);
+  const auth = new AuthService(
+    users as unknown as UsersService,
+    tokens as unknown as TokenService,
+    refreshTokens as unknown as RefreshTokensService,
+  );
 
   beforeAll(async () => {
     trader = { id: 3, username: 'trader', roles: ['USER'], accountId: 7, passwordHash: await hashPassword('password123') };
@@ -60,14 +71,24 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('issues both tokens and stores the refresh token hash', async () => {
+    it('issues both tokens and stores the refresh token hash in a new session family', async () => {
       users.findByUsername.mockResolvedValue(trader);
 
       expect(await auth.login('trader', 'password123')).toEqual({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
-      expect(users.setRefreshToken).toHaveBeenCalledWith(3, 'refresh-hash', 604800);
+      expect(refreshTokens.create).toHaveBeenCalledWith(3, 'refresh-hash', expect.stringMatching(UUID), 604800);
+    });
+
+    it('starts a different session family on every login', async () => {
+      users.findByUsername.mockResolvedValue(trader);
+
+      await auth.login('trader', 'password123');
+      await auth.login('trader', 'password123');
+
+      const [first, second] = refreshTokens.create.mock.calls.map((call) => call[2]);
+      expect(first).not.toBe(second);
     });
 
     it.each([
@@ -79,38 +100,71 @@ describe('AuthService', () => {
       const error = (await auth.login('trader', password).catch((e) => e)) as ApiException;
       expect(error.errorCode).toBe('AUTH-401');
       expect(error.message).toBe('invalid username or password');
-      expect(users.setRefreshToken).not.toHaveBeenCalled();
+      expect(refreshTokens.create).not.toHaveBeenCalled();
     });
   });
 
-  describe('refresh and logout', () => {
-    it('looks the refresh token up by its hash', async () => {
-      users.findByRefreshTokenHash.mockResolvedValue(trader);
+  describe('refresh', () => {
+    it('spends the presented token and returns a new pair with roles from the database', async () => {
+      refreshTokens.rotate.mockResolvedValue({ status: 'rotated', userId: 3 });
+      users.findById.mockResolvedValue(trader);
 
-      expect(await auth.refresh('refresh-token')).toEqual({ accessToken: 'access-token' });
-      expect(users.findByRefreshTokenHash).toHaveBeenCalledWith('hash-of-refresh-token');
+      expect(await auth.refresh('old-token')).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
+      expect(refreshTokens.rotate).toHaveBeenCalledWith('hash-of-old-token', 'refresh-hash', 604800);
+      expect(users.findById).toHaveBeenCalledWith(3);
+      expect(tokens.issue).toHaveBeenCalledWith(trader);
     });
 
-    it('clears the stored refresh token on logout', async () => {
-      users.findByRefreshTokenHash.mockResolvedValue(trader);
+    it('rejects a reused token with AUTH-401 and logs the reuse', async () => {
+      refreshTokens.rotate.mockResolvedValue({ status: 'reused', userId: 3 });
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
-      expect(await auth.logout('refresh-token')).toEqual({ loggedOut: true });
-      expect(users.clearRefreshToken).toHaveBeenCalledWith(3);
-    });
-
-    it.each(['refresh', 'logout'] as const)('%s rejects an unknown token with AUTH-401', async (method) => {
-      users.findByRefreshTokenHash.mockResolvedValue(null);
-
-      await expect(auth[method]('unknown')).rejects.toMatchObject({
+      await expect(auth.refresh('spent-token')).rejects.toMatchObject({
         errorCode: 'AUTH-401',
         message: 'invalid or expired refresh token',
       });
-      expect(users.clearRefreshToken).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('reuse detected for user id=3'));
+      expect(warn.mock.calls[0][0]).not.toContain('spent-token');
+      expect(tokens.issue).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('rejects an unknown or expired token with AUTH-401', async () => {
+      refreshTokens.rotate.mockResolvedValue({ status: 'invalid' });
+
+      await expect(auth.refresh('unknown')).rejects.toMatchObject({ errorCode: 'AUTH-401' });
+      expect(users.findById).not.toHaveBeenCalled();
+    });
+
+    it('rejects the token when its user no longer exists', async () => {
+      refreshTokens.rotate.mockResolvedValue({ status: 'rotated', userId: 3 });
+      users.findById.mockResolvedValue(null);
+
+      await expect(auth.refresh('old-token')).rejects.toMatchObject({ errorCode: 'AUTH-401' });
+      expect(tokens.issue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('logout', () => {
+    it('revokes the session the token belongs to', async () => {
+      refreshTokens.revokeFamily.mockResolvedValue(true);
+
+      expect(await auth.logout('refresh-token')).toEqual({ loggedOut: true });
+      expect(refreshTokens.revokeFamily).toHaveBeenCalledWith('hash-of-refresh-token');
+    });
+
+    it('rejects an unknown token with AUTH-401', async () => {
+      refreshTokens.revokeFamily.mockResolvedValue(false);
+
+      await expect(auth.logout('unknown')).rejects.toMatchObject({
+        errorCode: 'AUTH-401',
+        message: 'invalid or expired refresh token',
+      });
     });
   });
 
   describe('validate', () => {
-    const payload = { sub: 'trader', roles: ['ADMIN' as const], iss: 'x', iat: 0, exp: 0 };
+    const payload = { sub: 'trader', roles: ['ADMIN' as const], typ: 'access' as const, jti: 'j', iss: 'x', iat: 0, exp: 0 };
 
     it('returns the current user without the password hash', async () => {
       users.findByUsername.mockResolvedValue(trader);

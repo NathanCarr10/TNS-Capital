@@ -66,7 +66,15 @@ async function errorFrom(promise: Promise<unknown> | (() => unknown)): Promise<A
 }
 
 describe('JwtAuthGuard', () => {
-  const payload: AccessTokenPayload = { sub: 'trader', roles: ['USER'], iss: 'x', iat: 0, exp: 0 };
+  const payload: AccessTokenPayload = {
+    sub: 'trader',
+    roles: ['USER'],
+    typ: 'access',
+    jti: 'j',
+    iss: 'x',
+    iat: 0,
+    exp: 0,
+  };
   const tokens = { verify: jest.fn() };
   const auth = { validate: jest.fn() };
   const guard = new JwtAuthGuard(new Reflector(), tokens as unknown as TokenService, auth as unknown as AuthService);
@@ -102,6 +110,7 @@ describe('JwtAuthGuard', () => {
     ['no Authorization header', {}],
     ['a non-Bearer scheme', { authorization: 'Basic abc' }],
     ['a Bearer scheme with no token', { authorization: 'Bearer' }],
+    ['a Bearer header with extra parts', { authorization: 'Bearer abc.def.ghi extra' }],
   ])('rejects %s with AUTH-401 without verifying anything', async (_case, headers) => {
     const { context } = contextFor(SampleController, 'anyUser', { headers });
 
