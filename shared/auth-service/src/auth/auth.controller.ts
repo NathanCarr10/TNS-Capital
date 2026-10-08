@@ -1,4 +1,5 @@
 import { All, Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { methodNotAllowed } from '../common/method-not-allowed';
 import type { AuthenticatedUser, RegisteredUser } from '../users/users.service';
 import { AuthService, LoginResult } from './auth.service';
@@ -9,6 +10,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 import type { AccessTokenPayload } from './token.service';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -24,6 +26,9 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a user and open their trading account' })
+  @ApiResponse({ status: 201, description: 'User registered; the body carries the new accountId' })
+  @ApiResponse({ status: 409, description: 'Username already taken' })
   register(@Body() body: RegisterDto): Promise<RegisteredUser> {
     return this.authService.register(body.username, body.password, body.holderName);
   }
@@ -44,6 +49,9 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Log in and receive an access token and a refresh token' })
+  @ApiResponse({ status: 200, description: 'accessToken (15 min) and refreshToken (7 days)' })
+  @ApiResponse({ status: 401, description: 'Invalid username or password' })
   login(@Body() body: LoginDto): Promise<LoginResult> {
     return this.authService.login(body.username, body.password);
   }
@@ -52,6 +60,9 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Spend a refresh token for a new token pair' })
+  @ApiResponse({ status: 200, description: 'A new accessToken and refreshToken' })
+  @ApiResponse({ status: 401, description: 'Refresh token unknown, expired or already used' })
   refresh(@Body() body: RefreshDto): Promise<LoginResult> {
     return this.authService.refresh(body.refreshToken);
   }
@@ -60,12 +71,16 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revoke the login session a refresh token belongs to' })
   logout(@Body() body: RefreshDto): Promise<{ loggedOut: true }> {
     return this.authService.logout(body.refreshToken);
   }
 
   /** GET /auth/me - The user the access token belongs to. JwtAuthGuard has verified the claims. */
   @Get('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'The user the access token belongs to' })
+  @ApiResponse({ status: 401, description: 'Missing, invalid or expired access token' })
   async me(
     @CurrentUser() claims: AccessTokenPayload,
   ): Promise<Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'>> {
@@ -76,6 +91,7 @@ export class AuthController {
   // Declared after the real handlers, so only the wrong methods reach it
   @Public()
   @All(['register', 'login', 'refresh', 'logout', 'me'])
+  @ApiExcludeEndpoint()
   methodNotAllowed(): never {
     return methodNotAllowed();
   }

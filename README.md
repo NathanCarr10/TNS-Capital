@@ -194,6 +194,7 @@ API's startup with `docker compose logs -f app`.
 | Swagger UI | http://localhost:3000/swagger-ui.html | Public. Click **Authorize** and paste an access token |
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
 | Auth service | http://localhost:4000 | `GET /health` is public |
+| Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
 | Kafka UI | http://localhost:8090 | Browse topics and messages |
 | PostgreSQL | `localhost:5432`, database `tns_capital` | Credentials from `.env` |
 | Kafka | `kafka:9092` | Reachable from inside the Compose network (see [Troubleshooting](#troubleshooting)) |

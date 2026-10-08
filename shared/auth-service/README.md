@@ -31,6 +31,7 @@ yours with `db/recreate_db.sh`.
 | `POST /auth/logout` | no (takes the refresh token) | end the session the refresh token belongs to |
 | `GET /auth/me` | **yes** | the user the access token belongs to |
 | `GET /health` | no | liveness |
+| `GET /docs` | no | live Swagger UI, generated from the controllers (JSON at `/docs-json`) |
 
 ## Register
 
