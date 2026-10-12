@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.security.SecureRandom;
 import java.util.Random;
 
 /**
@@ -55,7 +56,8 @@ public class SimulatedPriceFeed {
             Clock clock,
             @Value("${trading.kafka.topics.market-data:market-data}") String marketDataTopic,
             @Value("${pricing.feed.volatility:0.01}") double volatility) {
-        this(instrumentRepository, kafkaTemplate, objectMapper, clock, new Random(), marketDataTopic, volatility);
+        // SecureRandom, so the generator needs no security review even though prices are only simulated
+        this(instrumentRepository, kafkaTemplate, objectMapper, clock, new SecureRandom(), marketDataTopic, volatility);
     }
 
     SimulatedPriceFeed(InstrumentRepository instrumentRepository, KafkaTemplate<String, String> kafkaTemplate,
