@@ -84,58 +84,6 @@ public class OrderService {
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    @SuppressWarnings("null")
-    public Order placeOrder(PlaceOrderRequest request) {
-        Objects.requireNonNull(request);
-
-        validator.validate(request);
-        String symbol = InputNormalizer.normalize(request.symbol());
-        Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
-                request.price(), request.idempotencyKey(), clock);
-
-        // Track previous status for lifecycle events
-        OrderStatus previousStatus = null;
-        String rejectionReason = null;
-
-        try {
-            // Retrieve account with null-safety
-            Account account = accountRepository.findById(request.accountId())
-                    .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
-
-            // Retrieve strategy with null-safety
-            OrderExecutionStrategy strategy = strategies.get(request.side());
-            if (strategy == null) {
-                throw new IllegalStateException("No strategy registered for order side: " + request.side());
-            }
-
-            strategy.execute(account, request, symbol);
-            previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.FILLED);
-        } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
-            previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.REJECTED);
-            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
-            rejectionReason = ex.getMessage();
-            throw ex;
-        } catch (Exception ex) {
-            previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.REJECTED);
-            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
-            rejectionReason = ex.getMessage();
-            throw new IllegalStateException("Unexpected error during order execution", ex);
-        } finally {
-            orderRepository.save(order);
-
-            // Publish lifecycle event to Kafka for all status changes
-            tradeEventPublisher.publish(order, previousStatus, rejectionReason);
-        }
-
-        // Publish order event to Kafka (when order is placed)
-        orderEventPublisher.publish(order);
-
-        return order;
-    }
-
     /**
      * Stores an order as NEW before it is published for execution, so it can be
      * looked up and cancelled while it waits.
@@ -162,6 +110,75 @@ public class OrderService {
         Order order = new Order(request.accountId(), request.symbol(), request.side(), request.quantity(),
                 request.price(), request.idempotencyKey(), clock);
         return orderRepository.saveAndFlush(order);
+    }
+
+    /**
+     * Places an order: checks the account and instrument exist, stores the
+     * order as NEW (see {@link #acceptOrder}) and publishes it to the orders
+     * topic for the Trade Executor.
+     * 
+     * Runs without a surrounding transaction so the NEW order is committed
+     * before its event is published; the consumer can then always find it.
+     *
+     * @param request the validated order request
+     * @return the stored NEW order
+     * @throws AccountNotFoundException    if the account does not exist
+     * @throws InstrumentNotFoundException if the instrument does not exist
+     * @throws DuplicateOrderException     if the idempotency key was already used
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Order submitOrder(PlaceOrderRequest request) {
+        Objects.requireNonNull(request);
+
+        // Fail fast: these cannot succeed later, so don't store or queue the order
+        accountRepository.findById(request.accountId())
+                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
+        String symbol = InputNormalizer.normalize(request.symbol());
+        instrumentRepository.findBySymbol(symbol)
+                .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
+
+        Order order = transactionTemplate.execute(status -> acceptOrder(request));
+        orderEventPublisher.publish(order);
+        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
+                order.getId(), order.getAccountId(), order.getSymbol());
+        return order;
+    }
+
+    /**
+     * @return every order (admin view)
+     */
+    @Transactional(readOnly = true)
+    public List<Order> findAllOrders() {
+        return orderRepository.findAll();
+    }
+
+    /**
+     * @throws OrderNotFoundException if there is no such order
+     */
+    @Transactional(readOnly = true)
+    public Order getOrder(UUID orderId) {
+        Objects.requireNonNull(orderId, "Order ID cannot be null");
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+    }
+
+    /**
+     * The archived copy of a cancelled order.
+     *
+     * @throws OrderNotFoundException if the order has no history record
+     */
+    @Transactional(readOnly = true)
+    public OrderHistory getOrderHistory(UUID orderId) {
+        return orderHistoryRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order history not found: " + orderId));
+    }
+
+    /**
+     * Archived cancelled orders for an account; works even for closed accounts.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderHistory> getAccountOrderHistory(Long accountId) {
+        return orderHistoryRepository.findByAccountId(accountId);
     }
 
     /**

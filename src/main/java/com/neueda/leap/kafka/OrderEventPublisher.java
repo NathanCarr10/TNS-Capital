@@ -40,9 +40,7 @@ public class OrderEventPublisher {
     }
 
     /**
-     * Publishes an order event to the orders topic from a persisted Order entity.
-     * 
-     * Used when an order has already been created (e.g., in synchronous flows).
+     * Publishes a stored NEW order to the orders topic.
      * 
      * @param order the order to publish
      */
@@ -68,40 +66,6 @@ public class OrderEventPublisher {
         } catch (JsonProcessingException ex) {
             log.error("Could not serialize order {}: {}", order.getId(), ex.getMessage(), ex);
             throw new IllegalStateException("Failed to serialize order event for order: " + order.getId(), ex);
-        }
-    }
-
-    /**
-     * Publishes an OrderEvent directly to the orders topic.
-     * 
-     * Used in async flows where the REST endpoint publishes an event for later
-     * processing
-     * without creating an Order entity first.
-     * 
-     * @param event     the order event to publish
-     * @param accountId the account ID (used as partition key)
-     */
-    public void publishEvent(OrderEvent event, Long accountId) {
-        try {
-            MessageEnvelope<OrderEvent> envelope = buildEnvelope(event);
-            String json = objectMapper.writeValueAsString(envelope);
-
-            String partitionKey = accountId.toString();
-            kafkaTemplate.send(ordersTopic, partitionKey, json)
-                    .whenComplete((result, error) -> {
-                        if (error != null) {
-                            log.warn("Failed to publish order event {} to {}; error: {}",
-                                    event.orderId(), ordersTopic, error.getMessage());
-                        } else {
-                            log.info("Published order event {} to {}-{}@{}",
-                                    event.orderId(), ordersTopic,
-                                    result.getRecordMetadata().partition(),
-                                    result.getRecordMetadata().offset());
-                        }
-                    });
-        } catch (JsonProcessingException ex) {
-            log.error("Could not serialize order event {}: {}", event.orderId(), ex.getMessage(), ex);
-            throw new IllegalStateException("Failed to serialize order event: " + event.orderId(), ex);
         }
     }
 
