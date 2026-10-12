@@ -139,6 +139,20 @@ public class AccountControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Should move lastUpdated when the balance changes")
+    void testDepositUpdatesLastUpdated() throws Exception {
+        java.time.Instant created = accountRepository.findById(testAccount.getId()).orElseThrow().getLastUpdated();
+
+        mockMvc.perform(post("/api/v1/accounts/{accountId}/deposit", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"amount\": 5.00}"))
+                .andExpect(status().isOk());
+
+        java.time.Instant updated = accountRepository.findById(testAccount.getId()).orElseThrow().getLastUpdated();
+        org.junit.jupiter.api.Assertions.assertTrue(updated.isAfter(created),
+                "lastUpdated should move from " + created + " but was " + updated);
+    }
+
+    @Test
     @DisplayName("Should return empty orders list for new account")
     @SuppressWarnings("null")
     void testGetAccountOrders() throws Exception {
