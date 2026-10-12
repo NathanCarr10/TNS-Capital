@@ -142,6 +142,13 @@ public class GlobalExceptionHandler {
                 "No live price is available for this instrument; include a price in the order");
     }
 
+    @ExceptionHandler(MarketDataUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleMarketDataUnavailable(MarketDataUnavailableException e) {
+        logger.warn("Market data unavailable: {}", e.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "MKT-503",
+                "Market data is unavailable right now; try again later");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationError(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
