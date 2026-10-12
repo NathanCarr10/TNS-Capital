@@ -10,6 +10,8 @@ erDiagram
     INSTRUMENTS ||--o{ ORDERS : "traded in"
     INSTRUMENTS ||--o{ POSITIONS : "held as"
     ORDERS ||--o| EXECUTIONS : "filled by"
+    ACCOUNTS |o--o| USERS : "owned by"
+    USERS ||--o{ REFRESH_TOKENS : "signed in with"
 
     ACCOUNTS {
         BIGINT id PK "generated identity"
@@ -88,6 +90,26 @@ erDiagram
         TEXT admin_notes
         BOOLEAN is_retryable "false = cannot succeed on replay"
     }
+
+    USERS {
+        BIGINT id PK
+        VARCHAR(255) username UK
+        VARCHAR(255) password_hash "Argon2id; plaintext never stored"
+        VARCHAR(20) role "USER | ADMIN"
+        BIGINT account_id FK, UK "opened at registration; NULL for admins"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    REFRESH_TOKENS {
+        BIGINT id PK
+        BIGINT user_id FK "ON DELETE CASCADE"
+        CHAR(64) token_hash UK "SHA-256 of the token"
+        UUID family_id "one login session"
+        TIMESTAMP expires_at
+        TIMESTAMP used_at "NULL until spent"
+        TIMESTAMP created_at
+    }
 ```
 
 ## Notes
@@ -106,6 +128,10 @@ erDiagram
 - **Failed messages.** `dlq_messages` is independent of the trading tables: it
   stores Kafka order messages that could not be processed, for an admin to
   replay or dismiss.
+- **Users and sessions.** The auth service owns `users` and `refresh_tokens`.
+  Registering creates a user and opens their trading account (`users.account_id`).
+  Each refresh token is single use and stored only as a hash; tokens from one
+  login share a `family_id`, so reusing a spent token revokes the whole session.
 - **Reporting.** The views in `db/views` (`v_positions_detail`,
   `v_order_history`, `v_account_summary`) join these tables for dashboards. The
   ETL pipeline loads a star schema into the separate `analytics` schema
