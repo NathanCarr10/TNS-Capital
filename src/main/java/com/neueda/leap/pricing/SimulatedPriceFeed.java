@@ -7,6 +7,7 @@ import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.time.Clock;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -46,6 +47,7 @@ public class SimulatedPriceFeed {
     private final String marketDataTopic;
     private final double volatility;
 
+    @Autowired
     public SimulatedPriceFeed(
             InstrumentRepository instrumentRepository,
             KafkaTemplate<String, String> kafkaTemplate,

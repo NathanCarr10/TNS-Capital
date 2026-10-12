@@ -1,5 +1,6 @@
 package com.neueda.leap.pricing;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -15,12 +16,14 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.InstrumentRepository;
+import com.neueda.leap.time.Clock;
 import com.neueda.leap.time.ClockTest;
 
 @DisplayName("SimulatedPriceFeed")
@@ -92,5 +95,21 @@ class SimulatedPriceFeedTest {
             assertEquals(2, next.scale());
         }
         assertTrue(feed.nextPrice(new BigDecimal("0.01")).compareTo(new BigDecimal("0.01")) >= 0);
+    }
+
+    @Test
+    @DisplayName("is created by Spring when enabled, and not when disabled")
+    void springCreatesFeedOnlyWhenEnabled() {
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withBean(InstrumentRepository.class, () -> instrumentRepository)
+                .withBean(KafkaTemplate.class, () -> kafkaTemplate)
+                .withBean(ObjectMapper.class, () -> objectMapper)
+                .withBean(Clock.class, () -> new ClockTest(NOW))
+                .withUserConfiguration(SimulatedPriceFeed.class);
+
+        runner.run(context -> assertThat(context).hasSingleBean(SimulatedPriceFeed.class)
+                .hasBean("marketDataTopic"));
+        runner.withPropertyValues("pricing.feed.enabled=false")
+                .run(context -> assertThat(context).doesNotHaveBean(SimulatedPriceFeed.class));
     }
 }
