@@ -277,7 +277,7 @@ and logout.
 
 | User | Password | Role | Access |
 |---|---|---|---|
-| `admin` (seeded) | `adminPassword` | `ADMIN` | Every account, opening accounts, the DLQ |
+| `admin` (seeded) | `adminPassword` | `ADMIN` | Every account, opening accounts, adding and changing instruments, the DLQ |
 | A user you register | your own | `USER` | Only the account opened at registration |
 
 The seeded users `alice` and `bob` have placeholder password hashes and cannot log in.
@@ -328,7 +328,7 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 | Accounts | `GET /accounts` · `POST /accounts` (ADMIN) · `GET/PATCH/DELETE /accounts/{id}` · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
 | Orders | `POST /orders` · `GET /orders` · `GET /orders/{orderId}` · `DELETE /orders/{orderId}` (cancel) · `GET /orders/history/{orderId}` · `GET /orders/{accountId}/history` |
 | Positions | `GET /positions/{accountId}` · `GET /positions/{accountId}/{symbol}` |
-| Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` · `PUT /instruments/{symbol}` |
+| Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (ADMIN) · `PUT /instruments/{symbol}` (ADMIN) |
 | Dead-letter queue (ADMIN) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:
