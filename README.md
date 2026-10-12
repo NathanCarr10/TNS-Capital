@@ -461,6 +461,7 @@ for the quality gate.
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |
 | Order stays `NEW` | Check the consumer with `docker compose logs app`, and the `orders` topic in Kafka UI. |
+| `503 SYS-503` when placing an order | Kafka did not acknowledge the order within 5 seconds, so it was stored as `REJECTED` and not executed. Check `docker compose ps kafka`, then place it again with a new `idempotencyKey`. |
 
 ---
 

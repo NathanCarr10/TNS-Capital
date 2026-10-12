@@ -31,6 +31,9 @@ spring:
       properties:
         linger.ms: 10
         batch.size: 32768
+        # Fail a send within 5 s when Kafka is unreachable (default 60 s), so
+        # placing an order cannot hang
+        max.block.ms: 5000
     consumer:
       bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       group-id: tns-capital-orders
@@ -44,6 +47,8 @@ trading:
       orders: orders
       trade-events: trade-events
       market-data: market-data
+    # How long placing an order waits for Kafka to acknowledge it
+    send-timeout-ms: 5000
 
 pricing:
   feed:

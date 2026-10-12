@@ -32,6 +32,7 @@ import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
+import com.neueda.leap.exceptions.OrderPublishException;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
@@ -151,6 +152,22 @@ class OrderServiceTest {
             assertThrows(InstrumentNotFoundException.class, () -> orderService.submitOrder(placeOrderRequest));
             verify(orderRepository, never()).saveAndFlush(any());
             verifyNoInteractions(orderEventPublisher);
+        }
+
+        @DisplayName("Should store the order as REJECTED when Kafka cannot take it")
+        @Test
+        void testSubmitRejectsUnqueuedOrder() {
+            OrderPublishException failure = new OrderPublishException("Could not queue order", new RuntimeException("down"));
+            doThrow(failure).when(orderEventPublisher).publish(any(Order.class));
+            when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            assertThrows(OrderPublishException.class, () -> orderService.submitOrder(placeOrderRequest));
+
+            ArgumentCaptor<Order> saved = ArgumentCaptor.forClass(Order.class);
+            verify(orderRepository).save(saved.capture());
+            assertEquals(OrderStatus.REJECTED, saved.getValue().getStatus());
+            assertTrue(saved.getValue().getStatusReason().startsWith("Could not be queued for execution"));
+            verify(tradeEventPublisher).publish(eq(saved.getValue()), eq(OrderStatus.NEW), anyString());
         }
 
         @DisplayName("Should not publish an order whose idempotency key was already used")

@@ -18,6 +18,7 @@ import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.NonRetryableOrderException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
+import com.neueda.leap.exceptions.OrderPublishException;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
@@ -125,6 +126,8 @@ public class OrderService {
      * @throws AccountNotFoundException    if the account does not exist
      * @throws InstrumentNotFoundException if the instrument does not exist
      * @throws DuplicateOrderException     if the idempotency key was already used
+     * @throws OrderPublishException       if Kafka could not take the order; it
+     *                                     is then stored as REJECTED
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Order submitOrder(PlaceOrderRequest request) {
@@ -138,10 +141,35 @@ public class OrderService {
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
         Order order = transactionTemplate.execute(status -> acceptOrder(request));
-        orderEventPublisher.publish(order);
+        try {
+            orderEventPublisher.publish(order);
+        } catch (OrderPublishException ex) {
+            // Never left at NEW: an order that could not be queued will not be executed
+            rejectUnqueuedOrder(order, ex);
+            throw ex;
+        }
         log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
                 order.getId(), order.getAccountId(), order.getSymbol());
         return order;
+    }
+
+    private void rejectUnqueuedOrder(Order order, OrderPublishException cause) {
+        try {
+            Order rejected = transactionTemplate.execute(status -> {
+                Order stored = orderRepository.findWithLockById(order.getId()).orElse(order);
+                if (stored.getStatus() != OrderStatus.NEW) {
+                    return null;
+                }
+                stored.setStatus(OrderStatus.REJECTED);
+                stored.setStatusReason("Could not be queued for execution: " + cause.getMessage());
+                return orderRepository.save(stored);
+            });
+            if (rejected != null) {
+                tradeEventPublisher.publish(rejected, OrderStatus.NEW, rejected.getStatusReason());
+            }
+        } catch (RuntimeException ex) {
+            log.error("Failed to mark unqueued order REJECTED: orderId={}, error={}", order.getId(), ex.getMessage());
+        }
     }
 
     /**
