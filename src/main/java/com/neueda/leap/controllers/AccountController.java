@@ -11,7 +11,7 @@ import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.AccountService;
-import com.neueda.leap.services.PositionValuation;
+import com.neueda.leap.services.PositionValuationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,13 +32,13 @@ import java.util.List;
 public class AccountController {
         private final AccountService accountService;
         private final AccountAccessGuard accessGuard;
-        private final PositionValuation positionValuation;
+        private final PositionValuationService valuationService;
 
         public AccountController(AccountService accountService, AccountAccessGuard accessGuard,
-                        PositionValuation positionValuation) {
+                        PositionValuationService valuationService) {
                 this.accountService = accountService;
                 this.accessGuard = accessGuard;
-                this.positionValuation = positionValuation;
+                this.valuationService = valuationService;
         }
 
         /**
@@ -124,7 +124,7 @@ public class AccountController {
         @GetMapping("/{accountId}/positions")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 accessGuard.checkAccess(accountId);
-                return ResponseEntity.ok(positionValuation.toResponses(accountService.getPositions(accountId)));
+                return ResponseEntity.ok(valuationService.toResponses(accountService.getPositions(accountId)));
         }
 
         @GetMapping("/{accountId}/orders")

@@ -260,8 +260,9 @@ Live prices and price history both come from the [Alpaca market data API](https:
 - **Live price pool** (`marketdata/`): `AlpacaPriceStream` subscribes to live trades for the tradable instruments over a WebSocket, and `LivePriceService` keeps the latest price of each one in memory. A price not updated for 60 seconds (or one the stream does not cover) is refreshed from Alpaca's REST API when it is next needed.
 - **Orders:** `price` is optional in `POST /api/v1/orders`. Without it, the order is priced at the live price (rounded to the cent) when it is accepted, and the price is returned in the response. If no live price is available, the API returns `503 PRC-503`.
 - **`GET /api/v1/prices/{symbol}`** returns the latest price of an instrument.
-- **Positions** are valued at the live price: `marketValue` in the position endpoints is
-  `quantity × live price`, or `null` when there is no live price (e.g. without keys).
+- **`GET /api/v1/prices?symbols=AAPL,MSFT`** returns dashboard quotes for up to 50 instruments: the latest price plus the previous close, daily change and percentage change. Previous closes come from Alpaca snapshots and are cached for 15 minutes. A symbol with no live price is returned with null price fields.
+- **`GET /api/v1/prices/{symbol}/bars?timeframe=1Day&limit=100`** returns the most recent OHLC bars (oldest first) for the candlestick chart. `timeframe` is `15Min`, `1Hour` or `1Day`; `limit` is 1 to 1000. If no bars are available, the API returns `503 MKT-503`.
+- **Positions:** `marketValue` in the position endpoints is the quantity at the latest live price, or `null` when no live price is available.
 - **Setup:** create free API keys at [alpaca.markets](https://alpaca.markets) and set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `.env`. Without keys, the pool is off and orders must include a price.
 - **Free plan limits:** the live feed is IEX only (about 2.5% of US volume), up to 30 streamed symbols, and one stream connection per account, so only one app instance can stream at a time. Set `ALPACA_FEED=sip` on a paid plan for all exchanges.
 

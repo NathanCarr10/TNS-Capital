@@ -1,0 +1,26 @@
+meta {
+  name: Get Quotes
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{apiUrl}}/api/v1/prices?symbols=AAPL,MSFT
+  body: none
+  auth: inherit
+}
+
+params:query {
+  symbols: AAPL,MSFT
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Dashboard quotes for up to 50 symbols: price, previousClose, change,
+  changePercent and tradedAt. A symbol with no live price (for example when
+  the API runs without Alpaca keys) is still returned, with null price fields.
+  Returns 404 (INS-404) for an unknown symbol.
+}

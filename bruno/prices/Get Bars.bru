@@ -1,0 +1,27 @@
+meta {
+  name: Get Bars
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{apiUrl}}/api/v1/prices/AAPL/bars?timeframe=1Day&limit=100
+  body: none
+  auth: inherit
+}
+
+params:query {
+  timeframe: 1Day
+  limit: 100
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  The most recent OHLC bars (time, open, high, low, close, volume), oldest
+  first, for the candlestick chart. timeframe is 15Min, 1Hour or 1Day;
+  limit is 1 to 1000. Returns 503 (MKT-503) when no bars are available,
+  for example when the API runs without Alpaca keys.
+}

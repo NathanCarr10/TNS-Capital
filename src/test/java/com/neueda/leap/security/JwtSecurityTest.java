@@ -12,7 +12,7 @@ import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.services.AccountService;
 import com.neueda.leap.services.DeadLetterService;
 import com.neueda.leap.services.OrderService;
-import com.neueda.leap.services.PositionValuation;
+import com.neueda.leap.services.PositionValuationService;
 import com.neueda.leap.time.FixedClock;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -67,13 +67,14 @@ class JwtSecurityTest {
     private DeadLetterService deadLetterService;
     @MockitoBean
     private OrderService orderService;
-    @MockitoBean
-    private PositionValuation positionValuation;
     // Ownership rules have their own tests; here every account is allowed
     @MockitoBean
     private AccountAccessGuard accessGuard;
+    @MockitoBean
+    private PositionValuationService valuationService;
 
-    // @MapperScan registers the MyBatis mappers, which need a database in a web-layer test
+    // @MapperScan registers the MyBatis mappers, which need a database in a
+    // web-layer test
     @MockitoBean
     private AccountMapper accountMapper;
     @MockitoBean
@@ -219,7 +220,8 @@ class JwtSecurityTest {
     @Test
     @DisplayName("The token's roles claim grants ADMIN access to the DLQ")
     void dlqAllowsAdminRoleFromToken() throws Exception {
-        mockMvc.perform(get(DLQ_URL).header("Authorization", "Bearer " + validToken(List.of("MISSION_OPERATOR", "ADMIN"))))
+        mockMvc.perform(
+                get(DLQ_URL).header("Authorization", "Bearer " + validToken(List.of("MISSION_OPERATOR", "ADMIN"))))
                 .andExpect(status().isOk());
     }
 }

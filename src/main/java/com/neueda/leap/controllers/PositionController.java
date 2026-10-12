@@ -3,7 +3,7 @@ package com.neueda.leap.controllers;
 import com.neueda.leap.dtos.PositionResponse;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.AccountService;
-import com.neueda.leap.services.PositionValuation;
+import com.neueda.leap.services.PositionValuationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.constraints.NotNull;
@@ -19,26 +19,26 @@ import java.util.List;
 public class PositionController {
         private final AccountService accountService;
         private final AccountAccessGuard accessGuard;
-        private final PositionValuation positionValuation;
+        private final PositionValuationService valuationService;
 
         public PositionController(AccountService accountService, AccountAccessGuard accessGuard,
-                        PositionValuation positionValuation) {
+                        PositionValuationService valuationService) {
                 this.accountService = accountService;
                 this.accessGuard = accessGuard;
-                this.positionValuation = positionValuation;
+                this.valuationService = valuationService;
         }
 
         @GetMapping("/{accountId}")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 // Ownership first, so a non-owner cannot probe which account IDs exist
                 accessGuard.checkAccess(accountId);
-                return ResponseEntity.ok(positionValuation.toResponses(accountService.getPositions(accountId)));
+                return ResponseEntity.ok(valuationService.toResponses(accountService.getPositions(accountId)));
         }
 
         @GetMapping("/{accountId}/{symbol}")
         public ResponseEntity<PositionResponse> getPosition(@PathVariable @NotNull Long accountId,
                         @PathVariable String symbol) {
                 accessGuard.checkAccess(accountId);
-                return ResponseEntity.ok(positionValuation.toResponse(accountService.getPosition(accountId, symbol)));
+                return ResponseEntity.ok(valuationService.toResponse(accountService.getPosition(accountId, symbol)));
         }
 }
