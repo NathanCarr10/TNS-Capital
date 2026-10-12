@@ -100,7 +100,7 @@ Settings: `pricing.feed.enabled` (default `true`), `pricing.feed.interval-ms` (`
 
 | Area | Technology |
 |---|---|
-| Trading API | Java 17+ (built and run on JDK 21), Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
+| Trading API | Java 21, Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
 | Auth service | Node.js 20, NestJS 11, TypeScript, Argon2, `pg` |
 | Messaging | Apache Kafka 7.5 (Confluent) with ZooKeeper, Kafka UI |
 | Database | PostgreSQL 16 |
@@ -152,7 +152,7 @@ These steps take a fresh clone to a running stack.
 |---|---|---|
 | [Git](https://git-scm.com/) | any recent | cloning the repo |
 | [Docker](https://docs.docker.com/get-docker/) with Docker Compose | Docker 24+ | running the stack and the integration tests |
-| JDK | 21 (17 minimum) | building and testing the API outside Docker (optional) |
+| JDK | 21 | building and testing the API outside Docker (optional) |
 | Maven | 3.8+ | as above (optional) |
 | Node.js | 20+ | developing the auth service (optional) |
 | Python | 3.12 | developing the ETL pipeline (optional) |
