@@ -91,6 +91,20 @@ erDiagram
         BOOLEAN is_retryable "false = cannot succeed on replay"
     }
 
+    TRADE_EVENT_LOG {
+        VARCHAR(64) event_id PK "the event's correlationId"
+        UUID order_id "no FK: survives the order"
+        BIGINT account_id "no FK"
+        VARCHAR(20) symbol
+        VARCHAR(4) side
+        INT quantity
+        NUMERIC(18-2) price
+        VARCHAR(20) previous_status
+        VARCHAR(20) new_status
+        TEXT reason
+        TIMESTAMP received_on
+    }
+
     USERS {
         BIGINT id PK
         VARCHAR(255) username UK
@@ -128,6 +142,9 @@ erDiagram
 - **Failed messages.** `dlq_messages` is independent of the trading tables: it
   stores Kafka order messages that could not be processed, for an admin to
   replay or dismiss.
+- **Lifecycle audit.** `trade_event_log` holds every event from the `trade-events`
+  Kafka topic (each status change of each order), written by the API's audit consumer;
+  `GET /api/v1/orders/{id}/events` reads it.
 - **Users and sessions.** The auth service owns `users` and `refresh_tokens`.
   Registering creates a user and opens their trading account (`users.account_id`).
   Each refresh token is single use and stored only as a hash; tokens from one

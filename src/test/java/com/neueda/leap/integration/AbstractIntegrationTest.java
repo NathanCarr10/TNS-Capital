@@ -86,7 +86,7 @@ public abstract class AbstractIntegrationTest {
     void clearTables() throws InterruptedException {
         for (int attempt = 1;; attempt++) {
             try {
-                jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
+                jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log RESTART IDENTITY CASCADE");
                 return;
             } catch (PessimisticLockingFailureException ex) {
                 if (attempt == 5) {

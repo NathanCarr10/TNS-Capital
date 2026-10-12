@@ -212,6 +212,19 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should record the order's lifecycle in the audit trail")
+        void testOrderEventsAreAudited() throws Exception {
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"), "IDEM-AUDIT"));
+
+                await().pollInSameThread().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
+                                .perform(get("/api/v1/orders/{orderId}/events", orderId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[*].newStatus", contains("FILLED")))
+                                .andExpect(jsonPath("$[0].previousStatus", equalTo("NEW"))));
+        }
+
+        @Test
         @DisplayName("Should store an unaffordable order as REJECTED")
         void testPlaceOrderInsufficientFundsRejected() throws Exception {
                 PlaceOrderRequest request = new PlaceOrderRequest(

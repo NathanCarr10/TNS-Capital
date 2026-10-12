@@ -4,6 +4,7 @@ import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.dtos.PlaceOrderResponse;
+import com.neueda.leap.dtos.TradeEventResponse;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
@@ -11,6 +12,7 @@ import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.OrderService;
+import com.neueda.leap.services.TradeEventAuditService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class OrderController {
     private final OrderService orderService;
     private final AccountAccessGuard accessGuard;
+    private final TradeEventAuditService auditService;
 
     /**
      * Places an order asynchronously.
@@ -82,6 +85,19 @@ public class OrderController {
         accessGuard.checkAccess(orderService.getOrder(orderId).getAccountId());
         Order cancelled = orderService.cancelOrder(orderId);
         return ResponseEntity.ok(mapToResponse(cancelled));
+    }
+
+    /**
+     * The order's lifecycle (e.g. NEW -> FILLED), from the audit trail of the
+     * trade-events topic, oldest first.
+     */
+    @GetMapping("/{orderId}/events")
+    public ResponseEntity<List<TradeEventResponse>> getOrderEvents(@PathVariable UUID orderId) {
+        accessGuard.checkAccess(orderService.getOrder(orderId).getAccountId());
+        return ResponseEntity.ok(auditService.eventsForOrder(orderId).stream()
+                .map(event -> new TradeEventResponse(event.getEventId(), event.getPreviousStatus(),
+                        event.getNewStatus(), event.getReason(), event.getReceivedOn()))
+                .toList());
     }
 
     /** The archived copy of a cancelled order */
