@@ -105,15 +105,9 @@ pipeline {
 
         stage('ETL Tests') {
             steps {
-                // The Python ETL pipeline's pytest suite, run in the same Python image
-                // the ETL container uses. The Postgres integration tests skip here
-                // (they need ETL_IT=1 and a database).
-                sh '''
-                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/etl python:3.12-slim \
-                        sh -c "pip install --quiet --user -r requirements-dev.txt && \
-                               python -m pytest -p no:cacheprovider --junitxml=test-results.xml"
-                '''
+                // The ETL pytest suite, including its Postgres integration tests against a
+                // throwaway database, with coverage for SonarQube (see ci/python-tests.sh)
+                sh 'ci/python-tests.sh etl'
             }
             post {
                 always {
@@ -124,13 +118,9 @@ pipeline {
 
         stage('Dashboard Tests') {
             steps {
-                // The analytics dashboard's insight tests (pandas only, no database)
-                sh '''
-                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/dashboard python:3.12-slim \
-                        sh -c "pip install --quiet --user -r requirements-dev.txt && \
-                               python -m pytest -p no:cacheprovider --junitxml=test-results.xml"
-                '''
+                // The dashboard's tests: insights, the Streamlit page (headless) and data.py
+                // against a throwaway database, with coverage for SonarQube
+                sh 'ci/python-tests.sh dashboard'
             }
             post {
                 always {

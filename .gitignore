@@ -13,3 +13,5 @@ __pycache__/
 .pytest_cache/
 etl/test-results.xml
 dashboard/test-results.xml
+.coverage
+coverage.xml

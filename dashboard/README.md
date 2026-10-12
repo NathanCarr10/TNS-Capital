@@ -58,9 +58,16 @@ The page caches the data for 30 seconds; reload after that to see new orders.
 
 ```bash
 cd dashboard
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest
 ```
 
-The tests use small hand-made DataFrames, so they need no database. Jenkins runs them in
-the **Dashboard Tests** stage.
+- `tests/test_insights.py`: every insight function, on small hand-made DataFrames
+- `tests/test_app.py`: the Streamlit page rendered headlessly (`AppTest`) with fake data
+- `tests/integration/test_data_postgres.py`: `data.py` against a real database. Skipped
+  unless `DASHBOARD_IT=1`; it drops and recreates tables, so only point it at a throwaway
+  database (see the file for a one-line setup)
+
+`ci/python-tests.sh dashboard` (from the repo root) runs everything, database tests
+included, against a throwaway Postgres in Docker. Jenkins runs it in the **Dashboard Tests**
+stage and SonarQube picks up the coverage.

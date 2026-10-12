@@ -422,7 +422,8 @@ See [etl/README.md](etl/README.md) for settings and the reporting schema.
 | API unit and integration tests | `mvn verify` | `*IT` tests start PostgreSQL and Kafka with Testcontainers, so Docker must be running. JaCoCo writes a coverage report to `target/site/jacoco/` |
 | Auth service | `cd shared/auth-service && npm ci && npm test` | `users.service.spec.ts` also runs against a real database when `DB_HOST` is set |
 | ETL | `cd etl && pip install -r requirements-dev.txt && python -m pytest` | Database integration tests run only with `ETL_IT=1`; see [etl/README.md](etl/README.md) |
-| Dashboard | `cd dashboard && pip install -r requirements-dev.txt && python -m pytest` | No database needed |
+| Dashboard | `cd dashboard && pip install -r requirements.txt -r requirements-dev.txt && python -m pytest` | The `data.py` database tests run only with `DASHBOARD_IT=1` |
+| ETL and dashboard, with their database tests | `ci/python-tests.sh etl` / `ci/python-tests.sh dashboard` | Needs only Docker: starts a throwaway Postgres and removes it afterwards. Writes `coverage.xml` |
 
 ---
 
@@ -437,10 +438,10 @@ Jenkins runs the [`Jenkinsfile`](Jenkinsfile) on every branch and pull request:
 | SAST | Semgrep with the Java and OWASP Top 10 rule packs. Fails on ERROR-severity findings |
 | Build Image | Packages the jar and builds the Docker image, tagged with the build number |
 | Test | `mvn verify` (unit and integration tests); results published as JUnit reports |
-| ETL Tests | The ETL pytest suite in a `python:3.12-slim` container |
-| Dashboard Tests | The dashboard's pytest suite in a `python:3.12-slim` container |
+| ETL Tests | The ETL pytest suite, including its Postgres integration tests against a throwaway database, with coverage (`ci/python-tests.sh etl`) |
+| Dashboard Tests | The dashboard's tests (insights, the headless Streamlit page, `data.py` against a throwaway database), with coverage |
 | Auth Service Tests | The auth service's Jest suite in a `node:20-alpine` container |
-| SonarQube Analysis | Uploads analysis and coverage and waits for the quality gate |
+| SonarQube Analysis | Analyses the Java API and the Python ETL and dashboard, uploads their coverage and waits for the quality gate |
 | Dependency Scan | Trivy scans the manifests and the built image. Fails on fixable CRITICAL CVEs. Accepted risks go in `.trivyignore` |
 
 Security reports (SARIF) are archived with every build. See [docs/SONARQUBE.md](docs/SONARQUBE.md)
