@@ -1,13 +1,16 @@
 import { JwtService } from '@nestjs/jwt';
 import * as jwt from 'jsonwebtoken';
-import { JWT_ISSUER, TokenService } from '../src/auth/token.service';
+import { ACCESS_TOKEN_TTL_SECONDS, JWT_ISSUER, TokenService } from '../src/auth/token.service';
 import { ApiException } from '../src/common/api.exception';
 
 const SECRET = 'token-service-test-secret-at-least-32-bytes';
 
 describe('TokenService', () => {
   const tokens = new TokenService(
-    new JwtService({ secret: SECRET, signOptions: { algorithm: 'HS256', expiresIn: '1h', issuer: JWT_ISSUER } }),
+    new JwtService({
+      secret: SECRET,
+      signOptions: { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS, issuer: JWT_ISSUER },
+    }),
   );
   const user = { username: 'trader', roles: ['USER' as const] };
 
@@ -15,8 +18,20 @@ describe('TokenService', () => {
     it('verifies a token it issued', async () => {
       const payload = await tokens.verify(await tokens.issue(user));
 
-      expect(payload).toMatchObject({ sub: 'trader', roles: ['USER'], iss: JWT_ISSUER });
-      expect(payload.exp - payload.iat).toBe(3600);
+      expect(payload).toMatchObject({ sub: 'trader', roles: ['USER'], typ: 'access', iss: JWT_ISSUER });
+      expect(payload.exp - payload.iat).toBe(15 * 60);
+    });
+
+    it('uses the auth service as the issuer', () => {
+      expect(JWT_ISSUER).toBe('urn:tns-capital:auth-service');
+    });
+
+    it('gives every token a unique jti', async () => {
+      const first = await tokens.verify(await tokens.issue(user));
+      const second = await tokens.verify(await tokens.issue(user));
+
+      expect(first.jti).toMatch(/^[0-9a-f-]{36}$/);
+      expect(first.jti).not.toBe(second.jti);
     });
 
     it.each([
@@ -37,9 +52,20 @@ describe('TokenService', () => {
       expect((error as ApiException).errorCode).toBe('AUTH-401');
     });
 
-    it('rejects a correctly signed token with a non-string subject', async () => {
-      const token = jwt.sign({ sub: 42, roles: ['USER'] } as object, SECRET, { issuer: JWT_ISSUER });
-      await expect(tokens.verify(token)).rejects.toBeInstanceOf(ApiException);
+    const signed = (claims: object) => jwt.sign(claims, SECRET, { issuer: JWT_ISSUER, expiresIn: 60 });
+    const valid = { sub: 'trader', roles: ['USER'], typ: 'access', jti: 'some-id' };
+
+    it.each([
+      ['a non-string subject', { ...valid, sub: 42 }],
+      ['no typ claim', { ...valid, typ: undefined }],
+      ['a typ other than access', { ...valid, typ: 'refresh' }],
+      ['no jti claim', { ...valid, jti: undefined }],
+    ])('rejects a correctly signed token with %s', async (_case, claims) => {
+      await expect(tokens.verify(signed(claims))).rejects.toBeInstanceOf(ApiException);
+    });
+
+    it('accepts a correctly signed token with every required claim', async () => {
+      await expect(tokens.verify(signed(valid))).resolves.toMatchObject({ sub: 'trader' });
     });
   });
 

@@ -1,8 +1,8 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { AuthenticatedUser } from '../../users/users.service';
+import type { AccessTokenPayload } from '../token.service';
 
-/** The user JwtAuthGuard authenticated for this request. */
+/** The verified access-token claims JwtAuthGuard put on this request. */
 export const CurrentUser = createParamDecorator(
-  (_data: unknown, ctx: ExecutionContext): AuthenticatedUser | undefined =>
-    ctx.switchToHttp().getRequest<{ user?: AuthenticatedUser }>().user,
+  (_data: unknown, ctx: ExecutionContext): AccessTokenPayload | undefined =>
+    ctx.switchToHttp().getRequest<{ user?: AccessTokenPayload }>().user,
 );

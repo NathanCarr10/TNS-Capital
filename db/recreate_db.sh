@@ -34,6 +34,7 @@ psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < "$(dirname "$0")/
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < "$(dirname "$0")/tables/04_positions.sql"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < "$(dirname "$0")/tables/05_executions.sql"
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < "$(dirname "$0")/tables/08_users.sql"
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" < "$(dirname "$0")/tables/09_refresh_tokens.sql"
 
 # Populate with seed data
 echo "Populating data..."

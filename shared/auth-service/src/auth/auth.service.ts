@@ -1,6 +1,8 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { ApiException } from '../common/api.exception';
 import { hashPassword, verifyPassword } from '../users/password-hasher';
+import { RefreshTokensService } from '../users/refresh-tokens.service';
 import {
   AuthenticatedUser,
   RegisteredUser,
@@ -8,7 +10,7 @@ import {
   UsernameTakenError,
   UsersService,
 } from '../users/users.service';
-import { AccessTokenPayload, REFRESH_TOKEN_TTL_SECONDS, TokenService } from './token.service';
+import { AccessTokenPayload, INVALID_ACCESS_TOKEN, REFRESH_TOKEN_TTL_SECONDS, TokenService } from './token.service';
 
 export const INVALID_CREDENTIALS = 'invalid username or password';
 export const INVALID_REFRESH_TOKEN = 'invalid or expired refresh token';
@@ -20,9 +22,12 @@ export interface LoginResult {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly users: UsersService,
     private readonly tokens: TokenService,
+    private readonly refreshTokens: RefreshTokensService,
   ) {}
 
   /**
@@ -49,7 +54,8 @@ export class AuthService {
 
   /**
    * Checks the credentials and issues an access token and a refresh token.
-   * The new refresh token replaces the user's previous one.
+   * Each login starts a new session (refresh token family), so a user can be
+   * signed in on several devices.
    *
    * Wrong username and wrong password get the same 401, so usernames cannot be probed.
    */
@@ -59,46 +65,70 @@ export class AuthService {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
 
-    const accessToken = await this.tokens.issue(user);
     const refreshToken = this.tokens.generateRefreshToken();
-    await this.users.setRefreshToken(user.id, refreshToken.hash, REFRESH_TOKEN_TTL_SECONDS);
-    return { accessToken, refreshToken: refreshToken.token };
-  }
-
-  /** Issues a new access token. The refresh token itself stays the same until it expires. */
-  async refresh(refreshToken: string): Promise<{ accessToken: string }> {
-    const user = await this.findByRefreshToken(refreshToken);
-    return { accessToken: await this.tokens.issue(user) };
+    await this.refreshTokens.create(user.id, refreshToken.hash, randomUUID(), REFRESH_TOKEN_TTL_SECONDS);
+    return { accessToken: await this.tokens.issue(user), refreshToken: refreshToken.token };
   }
 
   /**
-   * Revokes the refresh token so it can never be used again. Access tokens
-   * already issued stay valid until they expire (at most 1 hour).
+   * Rotates: the presented refresh token is spent and a new access token and
+   * refresh token are issued in the same session.
+   *
+   * A spent token presented again means it was copied. The service cannot
+   * tell the thief from the user, so the whole session is revoked and both
+   * have to log in again.
+   */
+  async refresh(refreshToken: string): Promise<LoginResult> {
+    const next = this.tokens.generateRefreshToken();
+    const result = await this.refreshTokens.rotate(
+      this.tokens.hashRefreshToken(refreshToken),
+      next.hash,
+      REFRESH_TOKEN_TTL_SECONDS,
+    );
+    if (result.status === 'reused') {
+      this.logger.warn(`Refresh token reuse detected for user id=${result.userId}; session revoked`);
+    }
+    if (result.status !== 'rotated') {
+      throw invalidRefreshToken();
+    }
+
+    // Roles come from the database, so a role change applies at the next refresh
+    const user = await this.users.findById(result.userId);
+    if (!user) {
+      throw invalidRefreshToken();
+    }
+    return { accessToken: await this.tokens.issue(user), refreshToken: next.token };
+  }
+
+  /**
+   * Revokes the session the refresh token belongs to. Access tokens already
+   * issued stay valid until they expire (at most 15 minutes).
    */
   async logout(refreshToken: string): Promise<{ loggedOut: true }> {
-    const user = await this.findByRefreshToken(refreshToken);
-    await this.users.clearRefreshToken(user.id);
+    if (!(await this.refreshTokens.revokeFamily(this.tokens.hashRefreshToken(refreshToken)))) {
+      throw invalidRefreshToken();
+    }
     return { loggedOut: true };
   }
 
   /**
-   * Turns a verified access token into the current user. Roles are re-read
-   * from the database, so a role change applies before the token expires.
+   * The current user record for a verified access token, for GET /auth/me.
+   * Roles and account are read from the database, so a role change shows here
+   * before the token expires.
    *
-   * @returns null if the user no longer exists
+   * @throws ApiException 401 AUTH-401 if the user no longer exists
    */
-  async validate(payload: AccessTokenPayload): Promise<AuthenticatedUser | null> {
-    const user = await this.users.findByUsername(payload.sub);
-    return user ? withoutPasswordHash(user) : null;
-  }
-
-  private async findByRefreshToken(refreshToken: string): Promise<UserRecord> {
-    const user = await this.users.findByRefreshTokenHash(this.tokens.hashRefreshToken(refreshToken));
+  async me(claims: AccessTokenPayload): Promise<AuthenticatedUser> {
+    const user = await this.users.findByUsername(claims.sub);
     if (!user) {
-      throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_REFRESH_TOKEN);
+      throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_ACCESS_TOKEN);
     }
-    return user;
+    return withoutPasswordHash(user);
   }
+}
+
+function invalidRefreshToken(): ApiException {
+  return new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_REFRESH_TOKEN);
 }
 
 function usernameTaken(): ApiException {

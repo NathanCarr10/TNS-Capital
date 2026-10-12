@@ -1,18 +1,25 @@
 /**
  * JwtAuthGuard and RolesGuard on their own, with hand-built execution
- * contexts. The HTTP tests (auth-api.spec.ts) run JwtAuthGuard end to end;
- * no route uses @Roles() yet, so RolesGuard is only exercised here.
+ * contexts. JwtAuthGuard runs with the real TokenService and real tokens. The
+ * HTTP tests (auth-api.spec.ts) run it end to end; no route uses @Roles() yet,
+ * so RolesGuard is only exercised here.
  */
 import { Controller, ExecutionContext, Get } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AuthService } from '../src/auth/auth.service';
+import { JwtService } from '@nestjs/jwt';
+import http from 'http';
+import https from 'https';
+import * as jwt from 'jsonwebtoken';
+import net from 'net';
 import { Public } from '../src/auth/decorators/public.decorator';
 import { Roles } from '../src/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../src/auth/guards/roles.guard';
-import { AccessTokenPayload, TokenService } from '../src/auth/token.service';
+import { ACCESS_TOKEN_TTL_SECONDS, JWT_ISSUER, TokenService } from '../src/auth/token.service';
 import { ApiException } from '../src/common/api.exception';
 import { AuthenticatedUser } from '../src/users/users.service';
+
+const SECRET = 'guard-test-shared-secret-at-least-32-bytes';
 
 const TRADER: AuthenticatedUser = { id: 3, username: 'trader', roles: ['USER'], accountId: 7 };
 const ADMIN: AuthenticatedUser = { id: 1, username: 'admin', roles: ['ADMIN'], accountId: null };
@@ -66,16 +73,26 @@ async function errorFrom(promise: Promise<unknown> | (() => unknown)): Promise<A
 }
 
 describe('JwtAuthGuard', () => {
-  const payload: AccessTokenPayload = { sub: 'trader', roles: ['USER'], iss: 'x', iat: 0, exp: 0 };
-  const tokens = { verify: jest.fn() };
-  const auth = { validate: jest.fn() };
-  const guard = new JwtAuthGuard(new Reflector(), tokens as unknown as TokenService, auth as unknown as AuthService);
+  const tokens = new TokenService(
+    new JwtService({
+      secret: SECRET,
+      signOptions: { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS, issuer: JWT_ISSUER },
+    }),
+  );
+  const guard = new JwtAuthGuard(new Reflector(), tokens);
+  const issue = () => tokens.issue({ username: 'trader', roles: ['USER'] });
 
-  beforeEach(() => {
-    jest.resetAllMocks();
-    tokens.verify.mockResolvedValue(payload);
-    auth.validate.mockResolvedValue(TRADER);
-  });
+  /** A token with the service's claims, then overrides; signed with SECRET unless told otherwise */
+  const sign = (claims: object = {}, options: jwt.SignOptions = {}, secret = SECRET) =>
+    jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', ...claims }, secret, {
+      algorithm: 'HS256',
+      issuer: JWT_ISSUER,
+      expiresIn: '15m',
+      jwtid: 'jti-1',
+      ...options,
+    });
+  const withToken = (authorization?: string) =>
+    contextFor(SampleController, 'anyUser', { headers: authorization === undefined ? {} : { authorization } });
 
   it.each([
     ['a handler', SampleController, 'open'],
@@ -84,51 +101,125 @@ describe('JwtAuthGuard', () => {
     const { context } = contextFor(controller, handler);
 
     expect(await guard.canActivate(context)).toBe(true);
-    expect(tokens.verify).not.toHaveBeenCalled();
   });
 
-  it('verifies the bearer token and puts the user on the request', async () => {
-    const { context, request } = contextFor(SampleController, 'anyUser', {
-      headers: { authorization: 'Bearer abc.def.ghi' },
-    });
+  it('lets a valid token through and gives the handler the verified claims', async () => {
+    const { context, request } = withToken(`Bearer ${await issue()}`);
 
     expect(await guard.canActivate(context)).toBe(true);
-    expect(tokens.verify).toHaveBeenCalledWith('abc.def.ghi');
-    expect(auth.validate).toHaveBeenCalledWith(payload);
-    expect(request.user).toEqual(TRADER);
+    expect(request.user).toEqual({
+      sub: 'trader',
+      roles: ['USER'],
+      typ: 'access',
+      jti: expect.any(String),
+      iss: JWT_ISSUER,
+      iat: expect.any(Number),
+      exp: expect.any(Number),
+    });
+  });
+
+  it('accepts the Bearer scheme in any case', async () => {
+    expect(await guard.canActivate(withToken(`bearer ${await issue()}`).context)).toBe(true);
+  });
+
+  it('rejects an expired token with AUTH-401', async () => {
+    const error = await errorFrom(guard.canActivate(withToken(`Bearer ${sign({}, { expiresIn: -10 })}`).context));
+
+    expect(error.getStatus()).toBe(401);
+    expect(error.errorCode).toBe('AUTH-401');
+  });
+
+  it('rejects a token signed with the wrong secret with AUTH-401', async () => {
+    const forged = sign({}, {}, 'another-secret-that-is-at-least-32-bytes-long');
+    const error = await errorFrom(guard.canActivate(withToken(`Bearer ${forged}`).context));
+
+    expect(error.getStatus()).toBe(401);
+    expect(error.errorCode).toBe('AUTH-401');
+  });
+
+  it('rejects a token whose payload was tampered with', async () => {
+    const [header, , signature] = (await issue()).split('.');
+    const escalated = Buffer.from(
+      JSON.stringify({ sub: 'trader', roles: ['ADMIN'], typ: 'access', jti: 'x', iss: JWT_ISSUER }),
+    ).toString('base64url');
+
+    const error = await errorFrom(guard.canActivate(withToken(`Bearer ${header}.${escalated}.${signature}`).context));
+    expect(error.errorCode).toBe('AUTH-401');
   });
 
   it.each([
-    ['no Authorization header', {}],
-    ['a non-Bearer scheme', { authorization: 'Basic abc' }],
-    ['a Bearer scheme with no token', { authorization: 'Bearer' }],
-  ])('rejects %s with AUTH-401 without verifying anything', async (_case, headers) => {
-    const { context } = contextFor(SampleController, 'anyUser', { headers });
+    ['has another issuer', () => sign({}, { issuer: 'urn:someone-else' })],
+    ['is not typed as an access token', () => sign({ typ: 'refresh' })],
+    [
+      'uses alg "none"',
+      () => jwt.sign({ sub: 'trader', roles: ['ADMIN'], typ: 'access', jti: 'x', iss: JWT_ISSUER }, '', { algorithm: 'none' }),
+    ],
+    ['is not a JWT', () => 'not-a-jwt'],
+    ['has only two segments', () => 'abc.def'],
+  ])('rejects a token that %s', async (_case, makeToken) => {
+    const error = await errorFrom(guard.canActivate(withToken(`Bearer ${makeToken()}`).context));
+    expect(error.errorCode).toBe('AUTH-401');
+  });
+
+  it.each([
+    ['no Authorization header', undefined],
+    ['a non-Bearer scheme', 'Basic dHJhZGVyOnBhc3M='],
+    ['a Bearer scheme with no token', 'Bearer'],
+    ['an empty Bearer token', 'Bearer '],
+    ['a Bearer header with extra parts', 'Bearer abc.def.ghi extra'],
+  ])('rejects %s with AUTH-401', async (_case, authorization) => {
+    const { context, request } = withToken(authorization);
 
     const error = await errorFrom(guard.canActivate(context));
     expect(error.getStatus()).toBe(401);
     expect(error.errorCode).toBe('AUTH-401');
-    expect(tokens.verify).not.toHaveBeenCalled();
+    expect(request.user).toBeUndefined();
   });
 
-  it('passes on the error when the token fails verification', async () => {
-    const invalid = new ApiException(401, 'AUTH-401', 'Unauthorised or invalid token');
-    tokens.verify.mockRejectedValue(invalid);
-    const { context } = contextFor(SampleController, 'anyUser', { headers: { authorization: 'Bearer bad' } });
+  it('gives the same status, code and message whatever the reason', async () => {
+    const reasons = [
+      undefined,
+      'Basic abc',
+      'Bearer not-a-jwt',
+      `Bearer ${sign({}, { expiresIn: -10 })}`,
+      `Bearer ${sign({}, {}, 'another-secret-that-is-at-least-32-bytes-long')}`,
+      `Bearer ${sign({}, { issuer: 'urn:someone-else' })}`,
+    ];
 
-    expect(await errorFrom(guard.canActivate(context))).toBe(invalid);
-    expect(auth.validate).not.toHaveBeenCalled();
+    for (const authorization of reasons) {
+      const error = await errorFrom(guard.canActivate(withToken(authorization).context));
+      expect([error.getStatus(), error.errorCode, error.message]).toEqual([
+        401,
+        'AUTH-401',
+        'Unauthorised or invalid token',
+      ]);
+    }
   });
 
-  it('rejects a valid token whose user no longer exists', async () => {
-    auth.validate.mockResolvedValue(null);
-    const { context, request } = contextFor(SampleController, 'anyUser', {
-      headers: { authorization: 'Bearer abc.def.ghi' },
+  describe('verification is local', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('depends only on the token service: no users service, database or HTTP client', () => {
+      expect(Reflect.getMetadata('design:paramtypes', JwtAuthGuard)).toEqual([Reflector, TokenService]);
+      expect(Reflect.getMetadata('design:paramtypes', TokenService)).toEqual([JwtService]);
     });
 
-    const error = await errorFrom(guard.canActivate(context));
-    expect(error.errorCode).toBe('AUTH-401');
-    expect(request.user).toBeUndefined();
+    it('makes no network call while checking good and bad tokens', async () => {
+      const spies = [
+        jest.spyOn(http, 'request'),
+        jest.spyOn(https, 'request'),
+        jest.spyOn(net, 'connect'),
+        jest.spyOn(net, 'createConnection'),
+        jest.spyOn(globalThis, 'fetch'),
+      ];
+
+      await guard.canActivate(withToken(`Bearer ${await issue()}`).context);
+      await errorFrom(guard.canActivate(withToken(`Bearer ${sign({}, { expiresIn: -10 })}`).context));
+
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    });
   });
 });
 

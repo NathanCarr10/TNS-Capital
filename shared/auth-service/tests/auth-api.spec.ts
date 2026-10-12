@@ -2,8 +2,8 @@
  * HTTP contract tests for the auth service (contracts/auth-api.yaml).
  *
  * Runs the real Nest application - validation, guards, error envelope, JWT
- * signing - with UsersService replaced by an in-memory fake, so no database
- * is needed.
+ * signing - with UsersService and RefreshTokensService replaced by in-memory
+ * fakes, so no database is needed.
  */
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -13,19 +13,22 @@ import request from 'supertest';
 import { AppModule, configureApp } from '../src/app.module';
 import { validateEnv } from '../src/config/env.validation';
 import { hashPassword } from '../src/users/password-hasher';
+import { RefreshTokensService } from '../src/users/refresh-tokens.service';
 import { RegisteredUser, UserRecord, UsernameTakenError, UsersService } from '../src/users/users.service';
 
 const SECRET = process.env.JWT_SECRET as string;
+const ISSUER = 'urn:tns-capital:auth-service';
 const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 const TRADER = { username: 'trader', password: 'traderPass123' };
 const ADMIN = { username: 'admin', password: 'adminPassword' };
 
-/** The users table, in memory. Refresh tokens are stored by hash, as in Postgres. */
-const store = new Map<string, UserRecord & { refreshTokenHash: string | null; refreshTokenExpiresAt: number }>();
+/** The users table, in memory */
+const store = new Map<string, UserRecord>();
 
 const fakeUsers = {
   findByUsername: jest.fn(async (username: string) => store.get(username) ?? null),
+  findById: jest.fn(async (id: number) => [...store.values()].find((u) => u.id === id) ?? null),
   create: jest.fn(async (username: string): Promise<RegisteredUser> => {
     if (username === 'taken') {
       throw new UsernameTakenError();
@@ -35,18 +38,45 @@ const fakeUsers = {
     }
     return { id: 9, username, createdAt: new Date(), accountId: 42, accountNumber: 'ACC-U000009' };
   }),
-  setRefreshToken: jest.fn(async (userId: number, hash: string, ttlSeconds: number) => {
-    const user = [...store.values()].find((u) => u.id === userId)!;
-    user.refreshTokenHash = hash;
-    user.refreshTokenExpiresAt = Date.now() + ttlSeconds * 1000;
+};
+
+/** The refresh_tokens table, in memory, keyed by token hash as in Postgres */
+const tokenRows = new Map<string, { userId: number; familyId: string; expiresAt: number; usedAt: number | null }>();
+const live = (hash: string) => {
+  const row = tokenRows.get(hash);
+  return row && row.expiresAt > Date.now() ? row : undefined;
+};
+const revoke = (familyId: string) => {
+  for (const [hash, row] of tokenRows) {
+    if (row.familyId === familyId) {
+      tokenRows.delete(hash);
+    }
+  }
+};
+
+const fakeRefreshTokens = {
+  create: jest.fn(async (userId: number, hash: string, familyId: string, ttlSeconds: number) => {
+    tokenRows.set(hash, { userId, familyId, expiresAt: Date.now() + ttlSeconds * 1000, usedAt: null });
   }),
-  findByRefreshTokenHash: jest.fn(
-    async (hash: string) =>
-      [...store.values()].find((u) => u.refreshTokenHash === hash && u.refreshTokenExpiresAt > Date.now()) ?? null,
-  ),
-  clearRefreshToken: jest.fn(async (userId: number) => {
-    const user = [...store.values()].find((u) => u.id === userId)!;
-    user.refreshTokenHash = null;
+  rotate: jest.fn(async (presented: string, next: string, ttlSeconds: number) => {
+    const row = live(presented);
+    if (!row) {
+      return { status: 'invalid' };
+    }
+    if (row.usedAt !== null) {
+      revoke(row.familyId);
+      return { status: 'reused', userId: row.userId };
+    }
+    row.usedAt = Date.now();
+    tokenRows.set(next, { ...row, expiresAt: Date.now() + ttlSeconds * 1000, usedAt: null });
+    return { status: 'rotated', userId: row.userId };
+  }),
+  revokeFamily: jest.fn(async (hash: string) => {
+    const row = live(hash);
+    if (row) {
+      revoke(row.familyId);
+    }
+    return row !== undefined;
   }),
 };
 
@@ -62,8 +92,6 @@ describe('Auth API contract', () => {
       passwordHash: await hashPassword(TRADER.password),
       roles: ['USER'],
       accountId: 7,
-      refreshTokenHash: null,
-      refreshTokenExpiresAt: 0,
     });
     store.set('admin', {
       id: 1,
@@ -71,13 +99,13 @@ describe('Auth API contract', () => {
       passwordHash: await hashPassword(ADMIN.password),
       roles: ['ADMIN'],
       accountId: null,
-      refreshTokenHash: null,
-      refreshTokenExpiresAt: 0,
     });
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(UsersService)
       .useValue(fakeUsers)
+      .overrideProvider(RefreshTokensService)
+      .useValue(fakeRefreshTokens)
       .compile();
     app = configureApp(moduleRef.createNestApplication({ logger: false }));
     await app.init();
@@ -114,15 +142,16 @@ describe('Auth API contract', () => {
     it('stores only the hash of the refresh token, valid for 7 days', async () => {
       const { refreshToken } = await tokensFor(TRADER);
 
-      expect(fakeUsers.setRefreshToken).toHaveBeenCalledWith(3, sha256(refreshToken), 7 * 24 * 60 * 60);
+      expect(fakeRefreshTokens.create).toHaveBeenCalledWith(3, sha256(refreshToken), expect.any(String), 7 * 24 * 60 * 60);
     });
 
-    it('signs exactly the contract claims: sub, roles, iss, iat, exp', async () => {
+    it('signs exactly the claims sub, roles, typ, jti, iss, iat, exp', async () => {
       const decoded = jwt.decode(await tokenFor(TRADER)) as jwt.JwtPayload;
 
-      expect(Object.keys(decoded).sort()).toEqual(['exp', 'iat', 'iss', 'roles', 'sub']);
+      expect(Object.keys(decoded).sort()).toEqual(['exp', 'iat', 'iss', 'jti', 'roles', 'sub', 'typ']);
       expect(decoded.sub).toBe('trader');
-      expect(decoded.iss).toBe('urn:tns-capital:auth-stub');
+      expect(decoded.typ).toBe('access');
+      expect(decoded.iss).toBe(ISSUER);
     });
 
     it('gives a registered user the USER role', async () => {
@@ -135,11 +164,11 @@ describe('Auth API contract', () => {
       expect(decoded.roles).toEqual(['ADMIN']);
     });
 
-    it('expires the token 1 hour after it is issued', async () => {
+    it('expires the token 15 minutes after it is issued', async () => {
       const decoded = jwt.decode(await tokenFor(TRADER)) as jwt.JwtPayload;
 
       expect(typeof decoded.iat).toBe('number');
-      expect(decoded.exp! - decoded.iat!).toBe(3600);
+      expect(decoded.exp! - decoded.iat!).toBe(15 * 60);
       expect(decoded.exp!).toBeGreaterThan(Math.floor(Date.now() / 1000));
     });
 
@@ -318,22 +347,58 @@ describe('Auth API contract', () => {
   });
 
   describe('POST /auth/refresh', () => {
-    it('issues a new access token for a valid refresh token', async () => {
+    it('returns a new access token and a new refresh token', async () => {
       const { refreshToken } = await tokensFor(TRADER);
 
       const response = await refresh(refreshToken).expect(200);
 
-      expect(Object.keys(response.body)).toEqual(['accessToken']);
+      expect(Object.keys(response.body).sort()).toEqual(['accessToken', 'refreshToken']);
+      expect(response.body.refreshToken).not.toBe(refreshToken);
       const decoded = jwt.verify(response.body.accessToken, SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
       expect(decoded.sub).toBe('trader');
       expect(decoded.roles).toEqual(['USER']);
     });
 
-    it('keeps the refresh token usable until it expires', async () => {
+    it('lets each refresh token be used only once', async () => {
       const { refreshToken } = await tokensFor(TRADER);
 
       await refresh(refreshToken).expect(200);
-      await refresh(refreshToken).expect(200);
+      const response = await refresh(refreshToken).expect(401);
+      expect(response.body.message).toBe('invalid or expired refresh token');
+    });
+
+    it('keeps a session going through successive rotations', async () => {
+      let { refreshToken } = await tokensFor(TRADER);
+
+      for (let i = 0; i < 3; i++) {
+        refreshToken = (await refresh(refreshToken).expect(200)).body.refreshToken;
+      }
+    });
+
+    it('revokes the whole session when a spent refresh token is reused', async () => {
+      const { refreshToken: spent } = await tokensFor(TRADER);
+      const { refreshToken: latest } = (await refresh(spent).expect(200)).body;
+
+      // Someone replays the spent token: the latest token of that session stops working too
+      await refresh(spent).expect(401);
+      await refresh(latest).expect(401);
+    });
+
+    it('leaves the user\'s other sessions alone when one is revoked for reuse', async () => {
+      const phone = await tokensFor(TRADER);
+      const laptop = await tokensFor(TRADER);
+      await refresh(phone.refreshToken).expect(200);
+      await refresh(phone.refreshToken).expect(401);
+
+      await refresh(laptop.refreshToken).expect(200);
+    });
+
+    it('keeps the previous session working when the user logs in again', async () => {
+      const first = await tokensFor(TRADER);
+      const second = await tokensFor(TRADER);
+
+      await refresh(first.refreshToken).expect(200);
+      await refresh(second.refreshToken).expect(200);
     });
 
     it('rejects an unknown refresh token with AUTH-401', async () => {
@@ -348,7 +413,7 @@ describe('Auth API contract', () => {
 
     it('rejects an expired refresh token', async () => {
       const { refreshToken } = await tokensFor(TRADER);
-      store.get('trader')!.refreshTokenExpiresAt = Date.now() - 1;
+      tokenRows.get(sha256(refreshToken))!.expiresAt = Date.now() - 1;
 
       const response = await refresh(refreshToken).expect(401);
       expect(response.body.message).toBe('invalid or expired refresh token');
@@ -356,14 +421,6 @@ describe('Auth API contract', () => {
 
     it('rejects an access token used as a refresh token', async () => {
       await refresh(await tokenFor(TRADER)).expect(401);
-    });
-
-    it('invalidates the previous refresh token when the user logs in again', async () => {
-      const first = await tokensFor(TRADER);
-      const second = await tokensFor(TRADER);
-
-      await refresh(first.refreshToken).expect(401);
-      await refresh(second.refreshToken).expect(200);
     });
 
     it.each([
@@ -378,19 +435,35 @@ describe('Auth API contract', () => {
       if (message) {
         expect(response.body.message).toBe(message);
       }
-      expect(fakeUsers.findByRefreshTokenHash).not.toHaveBeenCalled();
+      expect(fakeRefreshTokens.rotate).not.toHaveBeenCalled();
     });
   });
 
   describe('POST /auth/logout', () => {
-    it('revokes the refresh token', async () => {
+    it('revokes the session', async () => {
       const { refreshToken } = await tokensFor(TRADER);
 
       const response = await logout(refreshToken).expect(200);
 
       expect(response.body).toEqual({ loggedOut: true });
-      expect(fakeUsers.clearRefreshToken).toHaveBeenCalledWith(3);
+      expect(fakeRefreshTokens.revokeFamily).toHaveBeenCalledWith(sha256(refreshToken));
       await refresh(refreshToken).expect(401);
+    });
+
+    it('revokes the later tokens of the session too', async () => {
+      const { refreshToken: first } = await tokensFor(TRADER);
+      const { refreshToken: latest } = (await refresh(first).expect(200)).body;
+
+      await logout(first).expect(200);
+      await refresh(latest).expect(401);
+    });
+
+    it('leaves the user\'s other sessions alone', async () => {
+      const phone = await tokensFor(TRADER);
+      const laptop = await tokensFor(TRADER);
+
+      await logout(phone.refreshToken).expect(200);
+      await refresh(laptop.refreshToken).expect(200);
     });
 
     it('rejects logging out twice with the same token', async () => {
@@ -407,7 +480,6 @@ describe('Auth API contract', () => {
 
     it('rejects an unknown refresh token', async () => {
       await logout('not-a-real-token').expect(401);
-      expect(fakeUsers.clearRefreshToken).not.toHaveBeenCalled();
     });
 
     it('rejects a missing refresh token with VAL-422', async () => {
@@ -423,10 +495,10 @@ describe('Auth API contract', () => {
       timestamp: expect.stringMatching(ISO_8601),
     };
     const sign = (claims: object, options: jwt.SignOptions = {}, secret = SECRET) =>
-      jwt.sign({ sub: 'trader', roles: ['USER'], ...claims }, secret, {
+      jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', jti: 'test-jti', ...claims }, secret, {
         algorithm: 'HS256',
-        issuer: 'urn:tns-capital:auth-stub',
-        expiresIn: '1h',
+        issuer: ISSUER,
+        expiresIn: '15m',
         ...options,
       });
 
@@ -442,6 +514,16 @@ describe('Auth API contract', () => {
       expect(response.body).toEqual({ username: 'admin', roles: ['ADMIN'], accountId: null });
     });
 
+    it('gives the handler the verified claims; the only lookup is the handler\'s own', async () => {
+      const token = await tokenFor(TRADER);
+      fakeUsers.findByUsername.mockClear();
+
+      await me(`Bearer ${token}`).expect(200);
+
+      expect(fakeUsers.findByUsername).toHaveBeenCalledTimes(1);
+      expect(fakeUsers.findByUsername).toHaveBeenCalledWith('trader');
+    });
+
     it('accepts an access token obtained through refresh', async () => {
       const { refreshToken } = await tokensFor(TRADER);
       const { accessToken } = (await refresh(refreshToken).expect(200)).body;
@@ -453,6 +535,7 @@ describe('Auth API contract', () => {
       ['there is no Authorization header', undefined],
       ['the scheme is not Bearer', 'Basic dHJhZGVyOnBhc3M='],
       ['the Bearer token is empty', 'Bearer '],
+      ['the header has extra parts', 'Bearer a.b.c extra'],
       ['the token is not a JWT', 'Bearer not-a-jwt'],
     ])('rejects the request when %s', async (_case, authorization) => {
       const response = await me(authorization).expect(401);
@@ -463,9 +546,13 @@ describe('Auth API contract', () => {
       ['has expired', () => sign({}, { expiresIn: -10 })],
       ['is signed with another secret', () => sign({}, {}, 'another-secret-that-is-at-least-32-bytes')],
       ['has another issuer', () => sign({}, { issuer: 'urn:someone-else' })],
-      ['has no issuer', () => jwt.sign({ sub: 'trader', roles: ['USER'] }, SECRET, { algorithm: 'HS256' })],
-      ['uses alg "none"', () => jwt.sign({ sub: 'trader', roles: ['USER'], iss: 'urn:tns-capital:auth-stub' }, '', { algorithm: 'none' })],
+      ['has the old stub issuer', () => sign({}, { issuer: 'urn:tns-capital:auth-stub' })],
+      ['has no issuer', () => jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', jti: 'x' }, SECRET, { algorithm: 'HS256' })],
+      ['uses alg "none"', () => jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', jti: 'x', iss: ISSUER }, '', { algorithm: 'none' })],
       ['has no roles claim', () => sign({ roles: undefined })],
+      ['has no typ claim', () => sign({ typ: undefined })],
+      ['is not typ access', () => sign({ typ: 'refresh' })],
+      ['has no jti claim', () => sign({ jti: undefined })],
       ['belongs to a user who no longer exists', () => sign({ sub: 'deleted-user' })],
     ])('rejects a token that %s', async (_case, makeToken) => {
       const response = await me(`Bearer ${makeToken()}`).expect(401);

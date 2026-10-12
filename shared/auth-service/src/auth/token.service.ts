@@ -1,20 +1,31 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 import { ApiException } from '../common/api.exception';
 import type { Role } from '../users/users.service';
 
-export const JWT_ISSUER = 'urn:tns-capital:auth-stub';
+export const JWT_ISSUER = 'urn:tns-capital:auth-service';
 
-/** Refresh tokens stop working 7 days after login */
+/**
+ * Access tokens are short-lived: the trading API verifies them locally and
+ * cannot revoke one, so this is the longest a stolen access token works.
+ */
+export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
+
+/**
+ * Refresh tokens stop working 7 days after they are issued. Each refresh
+ * issues a new one, so this only ends a session left idle for 7 days.
+ */
 export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export const INVALID_ACCESS_TOKEN = 'Unauthorised or invalid token';
 
-/** Claims of an access token (contract): exactly sub, roles, iss, iat, exp */
+/** Claims of an access token: exactly sub, roles, typ, jti, iss, iat, exp */
 export interface AccessTokenPayload {
   sub: string;
   roles: Role[];
+  typ: 'access';
+  jti: string;
   iss: string;
   iat: number;
   exp: number;
@@ -29,7 +40,7 @@ export interface RefreshToken {
 
 /**
  * Access tokens are JWTs: HS256 with the secret shared with the trading API,
- * valid for 1 hour (configured in AuthModule). Refresh tokens are opaque
+ * valid for 15 minutes (configured in AuthModule). Refresh tokens are opaque
  * random values; only their hash is stored.
  */
 @Injectable()
@@ -37,11 +48,11 @@ export class TokenService {
   constructor(private readonly jwt: JwtService) {}
 
   issue(user: { username: string; roles: Role[] }): Promise<string> {
-    return this.jwt.signAsync({ sub: user.username, roles: user.roles });
+    return this.jwt.signAsync({ sub: user.username, roles: user.roles, typ: 'access' }, { jwtid: randomUUID() });
   }
 
   /**
-   * Checks the signature, algorithm, issuer and expiry.
+   * Checks the signature, algorithm, issuer, expiry and token type.
    *
    * @throws ApiException 401 AUTH-401 if any check fails
    */
@@ -53,7 +64,12 @@ export class TokenService {
     } catch {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_ACCESS_TOKEN);
     }
-    if (typeof payload.sub !== 'string' || !Array.isArray(payload.roles)) {
+    if (
+      typeof payload.sub !== 'string' ||
+      !Array.isArray(payload.roles) ||
+      payload.typ !== 'access' ||
+      typeof payload.jti !== 'string'
+    ) {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_ACCESS_TOKEN);
     }
     return payload as AccessTokenPayload;

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -76,9 +77,33 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    // CASCADE also clears orders, positions, executions and users, which reference these tables
+    // CASCADE also clears orders, positions, executions and users, which reference these tables.
+    // A Kafka listener can still be writing rows from the previous test, and Postgres may pick
+    // the TRUNCATE as the deadlock victim. The retry then waits for the listener's transaction
+    // to finish, so no pause between attempts is needed.
+    private static final int CLEAR_ATTEMPTS = 5;
+
     @BeforeEach
     void clearTables() {
+        for (int attempt = 1; attempt < CLEAR_ATTEMPTS; attempt++) {
+            if (tryTruncate()) {
+                return;
+            }
+        }
+        // Last attempt outside the catch so a persistent failure still fails the test
+        truncate();
+    }
+
+    private boolean tryTruncate() {
+        try {
+            truncate();
+            return true;
+        } catch (PessimisticLockingFailureException e) {
+            return false;
+        }
+    }
+
+    private void truncate() {
         jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
     }
 }
