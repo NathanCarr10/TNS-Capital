@@ -9,12 +9,13 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
 
-# The column that uniquely identifies a row in each table
+# The columns that uniquely identify a row in each table
 PRIMARY_KEYS = {
-    "dim_account": "account_number",
-    "dim_instrument": "symbol",
-    "dim_date": "date_key",
-    "fact_trades": "order_id",
+    "dim_account": ["account_number"],
+    "dim_instrument": ["symbol"],
+    "dim_date": ["date_key"],
+    "fact_trades": ["order_id"],
+    "fact_daily_prices": ["symbol", "trade_date"],
 }
 
 
@@ -28,12 +29,12 @@ def upsert(cur, table, df):
         return
     key = PRIMARY_KEYS[table]
     columns = list(df.columns)
-    updates = ", ".join(f"{col} = EXCLUDED.{col}" for col in columns if col != key)
+    updates = ", ".join(f"{col} = EXCLUDED.{col}" for col in columns if col not in key)
 
     sql = f"""
         INSERT INTO analytics.{table} ({", ".join(columns)})
         VALUES %s
-        ON CONFLICT ({key}) DO UPDATE SET {updates}
+        ON CONFLICT ({", ".join(key)}) DO UPDATE SET {updates}
     """
     # Convert pandas/numpy values to plain Python values (and NaN to None)
     rows = df.astype(object).where(df.notna(), None).values.tolist()
@@ -67,3 +68,12 @@ def replace_rejects(cur, rejects):
     rows = rejects.astype(object).where(rejects.notna(), None).values.tolist()
     execute_values(cur, f"INSERT INTO analytics.etl_rejected_orders ({', '.join(columns)}) VALUES %s", rows)
     logger.warning("%d orders failed validation; see analytics.etl_rejected_orders", len(rejects))
+
+
+def load_prices(conn, prices):
+    """Save the daily prices in one transaction (re-downloaded days are updated)."""
+    with conn:
+        with conn.cursor() as cur:
+            cur.execute(SCHEMA_SQL)
+            upsert(cur, "fact_daily_prices", prices)
+    logger.info("Loaded %d rows into analytics.fact_daily_prices", len(prices))
