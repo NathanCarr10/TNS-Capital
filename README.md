@@ -1,6 +1,6 @@
 # TNS Capital — Enterprise Trading Platform
 
-A backend trading platform built for the Neueda Leap Program 2026. It manages trading
+A backend trading platform built for the Fidelity Leap Program 2026. It manages trading
 accounts, instruments, orders and positions, and processes orders asynchronously through
 Kafka with a dead-letter queue for failures. A separate auth service issues the JWTs the
 trading API trusts, and a scheduled ETL pipeline copies trade data into reporting tables.
@@ -44,7 +44,7 @@ flowchart LR
     client -- "register / login" --> auth
     client -- "Bearer JWT" --> app
     auth --> pg
-    app -- "orders, trade-events, market-data" --> kafka
+    app -- "orders, trade-events" --> kafka
     kafka -- "orders, executions, trade-events" --> app
     app -- "Trade Executor: POST order" --> broker
     broker -- "fills (executions)" --> kafka
@@ -59,7 +59,7 @@ flowchart LR
 | **Trading API** (`src/`) | REST API for accounts, instruments, orders, positions and the DLQ. Validates JWTs locally using a shared HMAC secret. |
 | **Broker Simulator** (`broker-simulator/`) | Stands in for a real broker: takes orders over a REST API and, after 0.5 to 2 seconds, fills each one at or better than its limit price and publishes the fill to the `executions` topic. Has its own README. |
 | **Auth service** (`shared/auth-service/`) | Registers users (opening a trading account for each), logs them in and issues access and refresh tokens. Passwords are hashed with Argon2id; refresh tokens are stored only as SHA-256 hashes in `refresh_tokens`. |
-| **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and price updates (`market-data`). An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
+| **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), and trade lifecycle events (`trade-events`), each with a `.dlq` topic. An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
 | **PostgreSQL** | System of record. The `db/` image creates the schema, views and seed data on first start. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
 | **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
@@ -93,19 +93,6 @@ flowchart LR
 
 Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 
-### Market prices
-
-There is no live pricing API in the stack yet, so `SimulatedPriceFeed` stands in for one.
-Every 15 seconds it moves each tradable instrument's price by a small random step (about
-±1%), saves it as the instrument's `last_price` and publishes it to the `market-data`
-topic. Positions are valued at that price: `marketValue` in the position endpoints is
-`quantity × last_price`, or `null` for an instrument with no price yet. `GET
-/api/v1/instruments` shows `lastPrice` and `lastPriceOn`. The seed data gives every
-instrument a starting price.
-
-Settings: `pricing.feed.enabled` (default `true`), `pricing.feed.interval-ms` (`15000`) and
-`pricing.feed.volatility` (`0.01`) in `application.yml`.
-
 ---
 
 ## Tech stack
@@ -123,6 +110,9 @@ Settings: `pricing.feed.enabled` (default `true`), `pricing.feed.interval-ms` (`
 | Containers | Docker, Docker Compose |
 
 ---
+
+A PR that fixes, changes or adds a security risk also updates
+[docs/OWASP_REVIEW.md](docs/OWASP_REVIEW.md) in the same PR.
 
 ## Repository layout
 
@@ -259,14 +249,21 @@ curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Beare
 
 ### Stopping and resetting
 
-```bash
-docker compose down        # stop the stack, keep the database
-docker compose down -v     # stop the stack and delete the database volume
-```
+A scheduled Python pipeline in [`etl/`](etl/README.md) extracts trade data from PostgreSQL, transforms it into a reporting star schema and loads it into the `analytics` schema. It also loads daily price history for every instrument from Alpaca into `analytics.fact_daily_prices`. See [etl/README.md](etl/README.md).
 
-The database scripts in `db/` only run when the data volume is empty. **After pulling
-changes to `db/tables` or `db/data`, run `docker compose down -v` and start again** so
-PostgreSQL rebuilds the schema.
+---
+
+## Market Data (Alpaca)
+
+Live prices and price history both come from the [Alpaca market data API](https://docs.alpaca.markets/docs/about-market-data-api), so they agree with each other.
+
+- **Live price pool** (`marketdata/`): `AlpacaPriceStream` subscribes to live trades for the tradable instruments over a WebSocket, and `LivePriceService` keeps the latest price of each one in memory. A price not updated for 60 seconds (or one the stream does not cover) is refreshed from Alpaca's REST API when it is next needed.
+- **Orders:** `price` is optional in `POST /api/v1/orders`. Without it, the order is priced at the live price (rounded to the cent) when it is accepted, and the price is returned in the response. If no live price is available, the API returns `503 PRC-503`.
+- **`GET /api/v1/prices/{symbol}`** returns the latest price of an instrument.
+- **Positions** are valued at the live price: `marketValue` in the position endpoints is
+  `quantity × live price`, or `null` when there is no live price (e.g. without keys).
+- **Setup:** create free API keys at [alpaca.markets](https://alpaca.markets) and set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `.env`. Without keys, the pool is off and orders must include a price.
+- **Free plan limits:** the live feed is IEX only (about 2.5% of US volume), up to 30 streamed symbols, and one stream connection per account, so only one app instance can stream at a time. Set `ALPACA_FEED=sip` on a paid plan for all exchanges.
 
 ---
 

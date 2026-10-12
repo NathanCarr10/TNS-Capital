@@ -77,29 +77,42 @@ public abstract class AbstractIntegrationTest {
         registry.add("jwt.shared-secret", () -> "integration-test-secret-at-least-32-bytes");
         // Tests inspect PENDING DLQ messages, so they must not be auto-resolved
         registry.add("dlq.auto-resolve.enabled", () -> "false");
-        // Tests check exact prices, so the simulated price feed must not move them
-        registry.add("pricing.feed.enabled", () -> "false");
+        // Never call Alpaca from tests, even if the developer's environment has keys
+        registry.add("market-data.alpaca.key-id", () -> "");
+        registry.add("market-data.alpaca.secret-key", () -> "");
     }
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     // CASCADE also clears orders, positions, executions and users, which reference these tables.
-    // An order placed by the previous test may still be in the Kafka consumer, holding row locks
-    // that TRUNCATE can deadlock with; Postgres then aborts one side, so try again.
+    // A Kafka listener can still be writing rows from the previous test, and Postgres may pick
+    // the TRUNCATE as the deadlock victim. The retry then waits for the listener's transaction
+    // to finish, so no pause between attempts is needed.
+    private static final int CLEAR_ATTEMPTS = 5;
+
     @BeforeEach
-    void clearTables() throws InterruptedException {
+    void clearTables() {
         broker.reset();
-        for (int attempt = 1;; attempt++) {
-            try {
-                jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log RESTART IDENTITY CASCADE");
+        for (int attempt = 1; attempt < CLEAR_ATTEMPTS; attempt++) {
+            if (tryTruncate()) {
                 return;
-            } catch (PessimisticLockingFailureException ex) {
-                if (attempt == 5) {
-                    throw ex;
-                }
-                Thread.sleep(200L * attempt);
             }
         }
+        // Last attempt outside the catch so a persistent failure still fails the test
+        truncate();
+    }
+
+    private boolean tryTruncate() {
+        try {
+            truncate();
+            return true;
+        } catch (PessimisticLockingFailureException e) {
+            return false;
+        }
+    }
+
+    private void truncate() {
+        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log RESTART IDENTITY CASCADE");
     }
 }

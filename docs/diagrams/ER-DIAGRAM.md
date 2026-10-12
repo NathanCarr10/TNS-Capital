@@ -29,8 +29,6 @@ erDiagram
         VARCHAR(20) asset_class
         CHAR(3) currency
         BOOLEAN tradable
-        NUMERIC(18-2) last_price "latest market price, NULL until priced"
-        TIMESTAMP last_price_on
     }
 
     ORDERS {

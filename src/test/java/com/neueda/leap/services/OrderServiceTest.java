@@ -33,6 +33,7 @@ import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderPublishException;
+import com.neueda.leap.exceptions.PriceUnavailableException;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.exceptions.BrokerUnavailableException;
 import com.neueda.leap.exceptions.SettlementException;
@@ -52,6 +53,8 @@ import com.neueda.leap.time.ClockTest;
 import org.springframework.transaction.PlatformTransactionManager;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.repositories.ExecutionRepository;
+import com.neueda.leap.marketdata.PriceProvider;
+import com.neueda.leap.marketdata.PriceQuote;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
 
@@ -98,6 +101,9 @@ class OrderServiceTest {
     @Mock
     private ExecutionRepository executionRepository;
 
+    @Mock
+    private PriceProvider priceProvider;
+
     private ClockTest testClock;
     private Account testAccount;
     private PlaceOrderRequest placeOrderRequest;
@@ -120,7 +126,8 @@ class OrderServiceTest {
                 tradeEventPublisher,
                 transactionManager,
                 brokerClient,
-                executionRepository);
+                executionRepository,
+                priceProvider);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -166,6 +173,47 @@ class OrderServiceTest {
             assertThrows(InstrumentNotFoundException.class, () -> orderService.submitOrder(placeOrderRequest));
             verify(orderRepository, never()).saveAndFlush(any());
             verifyNoInteractions(orderEventPublisher);
+        }
+
+        @DisplayName("Should price an order without a price at the live price, rounded to the cent")
+        @Test
+        void testSubmitWithoutPriceUsesLivePrice() {
+            when(priceProvider.latestPrice("AAPL")).thenReturn(Optional.of(
+                    new PriceQuote("AAPL", new BigDecimal("227.4651"), Instant.parse("2026-10-12T14:30:00Z"))));
+            PlaceOrderRequest noPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, null, "ORDER-001");
+
+            Order order = orderService.submitOrder(noPrice);
+
+            assertEquals(new BigDecimal("227.47"), order.getPrice());
+            verify(orderEventPublisher).publish(order);
+        }
+
+        @DisplayName("Should keep the price given in the request without looking up a live price")
+        @Test
+        void testSubmitWithPriceKeepsIt() {
+            assertEquals(new BigDecimal("150.00"), orderService.submitOrder(placeOrderRequest).getPrice());
+            verifyNoInteractions(priceProvider);
+        }
+
+        @DisplayName("Should reject an order without a price when no live price is available, storing nothing")
+        @Test
+        void testSubmitWithoutPriceAndNoLivePrice() {
+            when(priceProvider.latestPrice("AAPL")).thenReturn(Optional.empty());
+            PlaceOrderRequest noPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, null, "ORDER-001");
+
+            assertThrows(PriceUnavailableException.class, () -> orderService.submitOrder(noPrice));
+            verify(orderRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(orderEventPublisher);
+        }
+
+        @DisplayName("Should never ask for a live price for an unknown instrument")
+        @Test
+        void testSubmitUnknownInstrumentWithoutPrice() {
+            when(instrumentRepository.findBySymbol("AAPL")).thenReturn(Optional.empty());
+            PlaceOrderRequest noPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, null, "ORDER-001");
+
+            assertThrows(InstrumentNotFoundException.class, () -> orderService.submitOrder(noPrice));
+            verifyNoInteractions(priceProvider);
         }
 
         @DisplayName("Should store the order as REJECTED when Kafka cannot take it")

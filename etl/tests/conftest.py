@@ -6,6 +6,16 @@ from decimal import Decimal
 import pandas as pd
 import pytest
 
+import config
+
+
+@pytest.fixture(autouse=True)
+def no_alpaca_keys(monkeypatch):
+    """Tests never call Alpaca, even if the developer's .env has keys.
+    Tests that need the price job turned on set the keys themselves."""
+    monkeypatch.setattr(config, "ALPACA_API_KEY_ID", "")
+    monkeypatch.setattr(config, "ALPACA_API_SECRET_KEY", "")
+
 
 @pytest.fixture
 def accounts():

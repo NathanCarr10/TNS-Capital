@@ -20,6 +20,12 @@ spring:
     show-sql: false
     open-in-view: false
 
+  # Outbound REST calls (the Alpaca market data API) must not hang an order request
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 5s
+
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -55,13 +61,19 @@ broker:
   url: ${BROKER_URL:http://localhost:8085}
   timeout-ms: 3000
 
-pricing:
-  feed:
-    # Simulated market prices (SimulatedPriceFeed): each tick moves every tradable
-    # instrument's price by about +/- volatility and publishes it to market-data
-    enabled: true
-    interval-ms: 15000
-    volatility: 0.01
+market-data:
+  alpaca:
+    # Without both keys the live price pool is off and orders must include a price
+    key-id: ${ALPACA_API_KEY_ID:}
+    secret-key: ${ALPACA_API_SECRET_KEY:}
+    # iex is the free plan's real-time feed; sip (all US exchanges) needs a paid plan
+    feed: ${ALPACA_FEED:iex}
+    stream-url: wss://stream.data.alpaca.markets/v2/
+    data-url: https://data.alpaca.markets
+    # The free plan streams at most 30 symbols; the rest are priced over REST
+    max-symbols: 30
+    # A pooled price not updated for this long is refreshed over REST before use
+    max-price-age: 60s
 
 dlq:
   auto-resolve:

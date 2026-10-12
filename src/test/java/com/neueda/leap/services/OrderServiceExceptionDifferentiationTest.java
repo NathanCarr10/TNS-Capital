@@ -38,6 +38,8 @@ import com.neueda.leap.time.ClockTest;
 import org.springframework.transaction.PlatformTransactionManager;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.repositories.ExecutionRepository;
+import com.neueda.leap.marketdata.PriceProvider;
+import com.neueda.leap.marketdata.PriceQuote;
 
 /**
  * Unit tests for exception differentiation in OrderService.
@@ -92,6 +94,9 @@ class OrderServiceExceptionDifferentiationTest {
     @Mock
     private ExecutionRepository executionRepository;
 
+    @Mock
+    private PriceProvider priceProvider;
+
     private ClockTest testClock;
     private UUID orderId;
     private Long accountId = 1L;
@@ -122,7 +127,8 @@ class OrderServiceExceptionDifferentiationTest {
                 tradeEventPublisher,
                 transactionManager,
                 brokerClient,
-                executionRepository);
+                executionRepository,
+                priceProvider);
     }
 
     @DisplayName("processOrderEvent - Not-Found Exceptions")

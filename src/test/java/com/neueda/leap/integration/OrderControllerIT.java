@@ -345,6 +345,26 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should return 503 for an order without a price when no live price is available")
+        @SuppressWarnings("null")
+        void testPlaceOrderWithoutPriceAndNoLivePrice() throws Exception {
+                // Tests run without Alpaca keys, so the live price pool is empty
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(),
+                                "AAPL",
+                                OrderSide.BUY,
+                                10,
+                                null,
+                                "IDEM-NO-PRICE");
+
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isServiceUnavailable())
+                                .andExpect(jsonPath("$.errorCode", equalTo("PRC-503")));
+        }
+
+        @Test
         @DisplayName("Should return 422 for invalid order request")
         @SuppressWarnings("null")
         void testPlaceOrderInvalidRequest() throws Exception {

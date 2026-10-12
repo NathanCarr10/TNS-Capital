@@ -8,6 +8,7 @@ import com.neueda.leap.dtos.TradeEventResponse;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.exceptions.PriceUnavailableException;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.security.AccountAccessGuard;
@@ -40,6 +41,9 @@ public class OrderController {
      * point (insufficient funds, etc.) are captured in the DLQ for review and
      * replay.
      * 
+     * If the request has no price, the order is priced at the latest live
+     * market price, which is returned in the response.
+     * 
      * An unknown account or instrument fails fast (404) and nothing is stored,
      * since those can never succeed later.
      * 
@@ -49,13 +53,15 @@ public class OrderController {
      * @throws AccountNotFoundException    if account does not exist
      * @throws InstrumentNotFoundException if instrument does not exist
      * @throws DuplicateOrderException     if the idempotency key was already used
+     * @throws PriceUnavailableException   if no price was given and no live price is available
      */
     @PostMapping
     public ResponseEntity<PlaceOrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         // Checked first, so a non-owner cannot probe which account IDs exist
         accessGuard.checkAccess(request.accountId());
         Order order = orderService.submitOrder(request);
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(PlaceOrderResponse.accepted(order.getId()));
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(PlaceOrderResponse.accepted(order.getId(), order.getPrice()));
     }
 
     @GetMapping

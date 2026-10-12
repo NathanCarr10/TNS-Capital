@@ -10,7 +10,7 @@ be explained at the showcase and revisited later.
 | 2 | Orders are placed asynchronously (`202 Accepted`) | §19.1 | Team decision |
 | 3 | Failed orders are stored `REJECTED` and captured in a dead-letter queue | §10.2, NFR-05 | Team decision |
 | 4 | Our own Broker Simulator service | FR-12, §5 | In place |
-| 5 | Simulated market prices instead of a live pricing API | FR-07, §5 | Until a pricing API is provided |
+| 5 | Live prices from Alpaca's market data API | FR-07, §5 | In place |
 | 6 | Analytics in a PostgreSQL `analytics` schema, not Snowflake | §4.2, §18.2 | To confirm with tutor |
 | 7 | Jenkins instead of GitHub Actions | §4.1 | In place |
 | 8 | No TLS, SASL or Kafka ACLs in the local stack | §5 | Deployment concern |
@@ -62,13 +62,17 @@ used them while the broker worked this one; funds are not reserved when the orde
 accepted. A fill for an order that was cancelled meanwhile is ignored. A real broker would
 also need to be told about the cancellation; the simulator has no cancel endpoint.
 
-## 5. Simulated market prices
+## 5. Live prices from Alpaca
 
-FR-07 asks for positions priced against live market data from a provided pricing API. Until
-one is available, `SimulatedPriceFeed` moves each tradable instrument's price by a small
-random step every 15 seconds, stores it as `instruments.last_price` and publishes it to the
-`market-data` topic. Positions are valued at that price. Replacing the feed with a client
-for a real API changes no other code.
+FR-07 asks for positions priced against live market data from a provided pricing API. We use
+Alpaca's free market data API (see `docs/MARKET_DATA_PROVIDER_EVALUATION.md`): a WebSocket
+stream keeps the latest trade price of each instrument in memory, with the REST API as a
+fallback. Positions are valued at that price, and an order without a price is priced at it
+when accepted. Without Alpaca keys (local development, CI) there are no live prices: orders
+must include a price and `marketValue` is `null`.
+
+Prices are not yet republished on the `market-data` Kafka topic listed in §10.3; that would
+let other services (e.g. price alerts) consume them.
 
 ## 6. PostgreSQL `analytics` schema instead of Snowflake
 

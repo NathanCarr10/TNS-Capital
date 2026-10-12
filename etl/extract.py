@@ -26,6 +26,15 @@ ORDERS_SQL = """
 """
 
 
+INSTRUMENT_SYMBOLS_SQL = "SELECT symbol FROM instruments ORDER BY symbol"
+
+LAST_PRICE_DATES_SQL = """
+    SELECT symbol, MAX(trade_date)
+    FROM analytics.fact_daily_prices
+    GROUP BY symbol
+"""
+
+
 def read_table(conn, sql):
     """Run a SELECT and return the rows as a DataFrame."""
     with conn.cursor() as cur:
@@ -42,3 +51,20 @@ def extract(conn):
     logger.info("Extracted %d accounts, %d instruments, %d orders",
                 len(accounts), len(instruments), len(orders))
     return accounts, instruments, orders
+
+
+def extract_last_price_dates(conn):
+    """For each instrument, the last day of prices already loaded (None if none yet)."""
+    with conn.cursor() as cur:
+        cur.execute(INSTRUMENT_SYMBOLS_SQL)
+        symbols = [row[0] for row in cur.fetchall()]
+
+        # On the first run the prices table does not exist yet
+        cur.execute("SELECT to_regclass('analytics.fact_daily_prices')")
+        if cur.fetchone()[0] is None:
+            last_loaded = {}
+        else:
+            cur.execute(LAST_PRICE_DATES_SQL)
+            last_loaded = dict(cur.fetchall())
+
+    return {symbol: last_loaded.get(symbol) for symbol in symbols}

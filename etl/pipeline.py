@@ -1,5 +1,9 @@
 """Runs the ETL pipeline: Extract -> Transform -> Load.
 
+Each run does two jobs:
+    trades  orders, accounts and instruments from the app's tables -> star schema
+    prices  daily price bars for every instrument from Alpaca -> fact_daily_prices
+
     python pipeline.py              run once
     python pipeline.py --schedule   run every day at ETL_SCHEDULE_TIME (default 02:00)
 """
@@ -7,14 +11,16 @@
 import logging
 import sys
 import time
+from datetime import date
 
 import psycopg2
 import schedule
 
 import config
-from extract import extract
-from load import load
-from transform import transform
+import market_data
+from extract import extract, extract_last_price_dates
+from load import load, load_prices
+from transform import build_fact_daily_prices, transform
 
 logger = logging.getLogger("etl")
 
@@ -53,8 +59,34 @@ def run_load(tables):
         conn.close()
 
 
+def run_price_extract():
+    conn = psycopg2.connect(**config.DB_SETTINGS)
+    try:
+        return extract_last_price_dates(conn)
+    finally:
+        conn.close()
+
+
+def run_price_load(prices):
+    conn = psycopg2.connect(**config.DB_SETTINGS)
+    try:
+        load_prices(conn, prices)
+    finally:
+        conn.close()
+
+
 def run_pipeline():
-    """Run all three stages. Returns True if it worked, False if a stage failed."""
+    """Run both jobs. Returns True if both worked, False if a stage failed.
+
+    A failure in one job does not stop the other.
+    """
+    trades_ok = run_trades()
+    prices_ok = run_prices()
+    return trades_ok and prices_ok
+
+
+def run_trades():
+    """Run all three trade stages. Returns True if it worked, False if a stage failed."""
     logger.info("ETL run started")
 
     try:
@@ -76,6 +108,42 @@ def run_pipeline():
         return False
 
     logger.info("ETL run finished: %d trades loaded", len(tables["fact_trades"]))
+    return True
+
+
+def run_prices():
+    """Download new daily prices for every instrument and load them.
+
+    Returns True if it worked or was skipped (no Alpaca keys), False if a stage failed.
+    """
+    if not market_data.is_configured():
+        logger.warning("ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY are not set: skipping price history")
+        return True
+
+    logger.info("Price history run started")
+
+    try:
+        last_loaded = with_retry(run_price_extract)
+        bars = {}
+        for start, symbols in market_data.start_dates(last_loaded, date.today(), config.PRICE_BACKFILL_YEARS).items():
+            bars.update(market_data.fetch_daily_bars(symbols, start))
+    except Exception:
+        logger.exception("PRICES EXTRACT stage failed")
+        return False
+
+    try:
+        prices = build_fact_daily_prices(bars)
+    except Exception:
+        logger.exception("PRICES TRANSFORM stage failed")
+        return False
+
+    try:
+        with_retry(lambda: run_price_load(prices))
+    except Exception:
+        logger.exception("PRICES LOAD stage failed")
+        return False
+
+    logger.info("Price history run finished: %d daily prices loaded", len(prices))
     return True
 
 

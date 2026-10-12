@@ -116,6 +116,9 @@ services:
       BROKER_URL: http://broker-simulator:8085
       # One JSON object per log line (Elastic Common Schema), for log tools to parse
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
+      ALPACA_FEED: ${ALPACA_FEED:-iex}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
     ports:
       - "3000:3000"
@@ -137,6 +140,10 @@ services:
       DB_USER: ${DB_USER:-tns-capital-db-user}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
+      PRICE_HISTORY_FEED: ${PRICE_HISTORY_FEED:-sip}
+      PRICE_BACKFILL_YEARS: ${PRICE_BACKFILL_YEARS:-5}
     depends_on:
       postgres:
         condition: service_healthy

@@ -27,6 +27,9 @@ import com.neueda.leap.kafka.events.ExecutionEvent;
 import com.neueda.leap.model.Execution;
 import com.neueda.leap.repositories.ExecutionRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import com.neueda.leap.exceptions.PriceUnavailableException;
+import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
@@ -68,6 +71,7 @@ public class OrderService {
     private final TransactionTemplate transactionTemplate;
     private final BrokerSimulatorClient brokerClient;
     private final ExecutionRepository executionRepository;
+    private final PriceProvider priceProvider;
 
     public OrderService(
             AccountRepository accountRepository,
@@ -82,7 +86,8 @@ public class OrderService {
             TradeEventPublisher tradeEventPublisher,
             PlatformTransactionManager transactionManager,
             BrokerSimulatorClient brokerClient,
-            ExecutionRepository executionRepository) {
+            ExecutionRepository executionRepository,
+            PriceProvider priceProvider) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
         this.instrumentRepository = Objects.requireNonNull(instrumentRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
@@ -97,6 +102,7 @@ public class OrderService {
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.brokerClient = Objects.requireNonNull(brokerClient);
         this.executionRepository = Objects.requireNonNull(executionRepository);
+        this.priceProvider = Objects.requireNonNull(priceProvider);
     }
 
     /**
@@ -140,6 +146,7 @@ public class OrderService {
      * @throws AccountNotFoundException    if the account does not exist
      * @throws InstrumentNotFoundException if the instrument does not exist
      * @throws DuplicateOrderException     if the idempotency key was already used
+     * @throws PriceUnavailableException   if no price was given and no live price is available
      * @throws OrderPublishException       if Kafka could not take the order; it
      *                                     is then stored as REJECTED
      */
@@ -154,7 +161,14 @@ public class OrderService {
         instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
-        Order order = transactionTemplate.execute(status -> acceptOrder(request));
+        // No price given: price the order now at the live market price, so it fills
+        // at the price at the time it was accepted. Only known instruments get here,
+        // so arbitrary symbols are never sent to the market data API.
+        PlaceOrderRequest priced = request.price() != null ? request
+                : new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
+                        livePrice(symbol), request.idempotencyKey());
+
+        Order order = transactionTemplate.execute(status -> acceptOrder(priced));
         try {
             orderEventPublisher.publish(order);
         } catch (OrderPublishException ex) {
@@ -165,6 +179,13 @@ public class OrderService {
         log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
                 order.getId(), order.getAccountId(), order.getSymbol());
         return order;
+    }
+
+    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
+    private BigDecimal livePrice(String symbol) {
+        return priceProvider.latestPrice(symbol)
+                .map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP))
+                .orElseThrow(() -> new PriceUnavailableException("No live price for " + symbol));
     }
 
     private void rejectUnqueuedOrder(Order order, OrderPublishException cause) {
