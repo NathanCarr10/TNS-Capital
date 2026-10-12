@@ -50,6 +50,11 @@ trading:
     # How long placing an order waits for Kafka to acknowledge it
     send-timeout-ms: 5000
 
+broker:
+  # The Broker Simulator API the Trade Executor sends orders to
+  url: ${BROKER_URL:http://localhost:8085}
+  timeout-ms: 3000
+
 pricing:
   feed:
     # Simulated market prices (SimulatedPriceFeed): each tick moves every tradable

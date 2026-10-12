@@ -84,6 +84,26 @@ services:
       timeout: 5s
       retries: 5
 
+  broker-simulator:
+    build: ./broker-simulator
+    mem_limit: 384m
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BROKER_MIN_DELAY: ${BROKER_MIN_DELAY:-500ms}
+      BROKER_MAX_DELAY: ${BROKER_MAX_DELAY:-2000ms}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    # No host port: the broker has no authentication, so only the API can reach it
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8085/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   app:
     build: .
     mem_limit: 512m
@@ -93,6 +113,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BROKER_URL: http://broker-simulator:8085
       # One JSON object per log line (Elastic Common Schema), for log tools to parse
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
@@ -104,6 +125,8 @@ services:
       auth-service:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      broker-simulator:
         condition: service_healthy
 
   etl:

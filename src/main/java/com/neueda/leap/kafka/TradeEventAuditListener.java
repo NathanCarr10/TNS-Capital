@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * independently of any other consumer.
  * 
  * A message that cannot be read or stored is retried, then sent to
- * trade-events.dlq (see AuditKafkaConfig).
+ * trade-events.dlq (see EventListenersConfig).
  */
 @Component
 @RequiredArgsConstructor

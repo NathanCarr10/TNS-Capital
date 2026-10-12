@@ -34,6 +34,10 @@ import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderPublishException;
 import com.neueda.leap.kafka.events.OrderEvent;
+import com.neueda.leap.exceptions.BrokerUnavailableException;
+import com.neueda.leap.exceptions.SettlementException;
+import com.neueda.leap.kafka.events.ExecutionEvent;
+import com.neueda.leap.model.Execution;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.Order;
@@ -46,6 +50,8 @@ import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
 import org.springframework.transaction.PlatformTransactionManager;
+import com.neueda.leap.execution.BrokerSimulatorClient;
+import com.neueda.leap.repositories.ExecutionRepository;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.TradeEventPublisher;
 
@@ -86,6 +92,12 @@ class OrderServiceTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private BrokerSimulatorClient brokerClient;
+
+    @Mock
+    private ExecutionRepository executionRepository;
+
     private ClockTest testClock;
     private Account testAccount;
     private PlaceOrderRequest placeOrderRequest;
@@ -106,7 +118,9 @@ class OrderServiceTest {
         orderService = new OrderService(accountRepository, instrumentRepository, orderRepository,
                 orderHistoryRepository, positionRepository, validator, strategies, testClock, orderEventPublisher,
                 tradeEventPublisher,
-                transactionManager);
+                transactionManager,
+                brokerClient,
+                executionRepository);
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -426,7 +440,7 @@ class OrderServiceTest {
         }
     }
 
-    @DisplayName("processOrderEvent with a stored NEW order")
+    @DisplayName("processOrderEvent with a stored NEW order (Trade Executor)")
     @Nested
     class StoredOrderProcessingTests {
         private Order storedOrder;
@@ -435,41 +449,70 @@ class OrderServiceTest {
         @BeforeEach
         void storeNewOrder() {
             storedOrder = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "CLIENT-KEY", testClock);
-            event = new OrderEvent(storedOrder.getId(), 1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
-                    storedOrder.getCreatedOn(), "CLIENT-KEY");
+            event = eventFor(storedOrder);
             when(orderRepository.findById(storedOrder.getId())).thenReturn(Optional.of(storedOrder));
             when(orderRepository.findWithLockById(storedOrder.getId())).thenReturn(Optional.of(storedOrder));
+            when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol("AAPL"))
                     .thenReturn(Optional.of(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true)));
         }
 
-        @DisplayName("Should fill the stored order, keeping the client's key")
+        private OrderEvent eventFor(Order order) {
+            return new OrderEvent(order.getId(), order.getAccountId(), order.getSymbol(), order.getSide(),
+                    order.getQuantity(), order.getPrice(), order.getCreatedOn(), order.getIdempotencyKey());
+        }
+
+        @DisplayName("Should send an affordable order to the broker, leaving it NEW and moving no cash")
         @Test
-        void testFillsStoredOrder() {
+        void testSendsStoredOrderToBroker() {
             Order result = orderService.processOrderEvent(event);
 
             assertSame(storedOrder, result);
-            assertEquals(OrderStatus.FILLED, result.getStatus());
+            assertEquals(OrderStatus.NEW, result.getStatus());
             assertEquals("CLIENT-KEY", result.getIdempotencyKey());
-            verify(buyStrategy).execute(eq(testAccount), any(PlaceOrderRequest.class), eq("AAPL"));
-            verify(tradeEventPublisher).publish(storedOrder, OrderStatus.NEW, null);
+            verify(brokerClient).submit(storedOrder);
+            verifyNoInteractions(buyStrategy, tradeEventPublisher);
+            assertEquals(new BigDecimal("100000.00"), testAccount.getCashBalance());
         }
 
-        @DisplayName("Should mark the stored order REJECTED when execution fails")
+        @DisplayName("Should reject an order the account cannot afford at its limit price, without the broker")
         @Test
-        void testRejectsStoredOrder() {
-            doThrow(new InsufficientFundsException("Insufficient funds for buy order"))
-                    .when(buyStrategy).execute(any(), any(), any());
+        void testRejectsUnaffordableOrder() {
+            Order tooBig = new Order(1L, "AAPL", OrderSide.BUY, 1000, new BigDecimal("150.00"), "BIG", testClock);
+            when(orderRepository.findById(tooBig.getId())).thenReturn(Optional.of(tooBig));
+            when(orderRepository.findWithLockById(tooBig.getId())).thenReturn(Optional.of(tooBig));
 
-            assertThrows(InsufficientFundsException.class, () -> orderService.processOrderEvent(event));
+            assertThrows(InsufficientFundsException.class, () -> orderService.processOrderEvent(eventFor(tooBig)));
 
-            assertEquals(OrderStatus.REJECTED, storedOrder.getStatus());
-            verify(orderRepository).save(storedOrder);
-            verify(tradeEventPublisher).publish(storedOrder, OrderStatus.NEW, "Insufficient funds for buy order");
+            assertEquals(OrderStatus.REJECTED, tooBig.getStatus());
+            verifyNoInteractions(brokerClient);
+            verify(tradeEventPublisher).publish(tooBig, OrderStatus.NEW, "Insufficient funds for buy order");
         }
 
-        @DisplayName("Should not execute an order cancelled while it waited")
+        @DisplayName("Should reject a SELL without enough holdings")
+        @Test
+        void testRejectsSellWithoutHoldings() {
+            Order sell = new Order(1L, "AAPL", OrderSide.SELL, 10, new BigDecimal("150.00"), "SELL", testClock);
+            when(orderRepository.findById(sell.getId())).thenReturn(Optional.of(sell));
+            when(orderRepository.findWithLockById(sell.getId())).thenReturn(Optional.of(sell));
+            when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL"))
+                    .thenReturn(Optional.of(new Position(1L, "AAPL", 5, new BigDecimal("100.00"))));
+
+            assertThrows(InsufficientHoldingsException.class, () -> orderService.processOrderEvent(eventFor(sell)));
+            verifyNoInteractions(brokerClient);
+        }
+
+        @DisplayName("Should reject the order (retryable) when the broker cannot be reached")
+        @Test
+        void testRejectsWhenBrokerUnavailable() {
+            doThrow(new BrokerUnavailableException("down", new RuntimeException())).when(brokerClient).submit(any());
+
+            assertThrows(BrokerUnavailableException.class, () -> orderService.processOrderEvent(event));
+            assertEquals(OrderStatus.REJECTED, storedOrder.getStatus());
+        }
+
+        @DisplayName("Should not send an order cancelled while it waited")
         @Test
         void testSkipsCancelledOrder() {
             // Cancelled between the first lookup and the locked one
@@ -479,8 +522,83 @@ class OrderServiceTest {
 
             orderService.processOrderEvent(event);
 
-            verify(buyStrategy, never()).execute(any(), any(), any());
-            verify(tradeEventPublisher, never()).publish(any(), any(), any());
+            verifyNoInteractions(brokerClient, tradeEventPublisher);
+        }
+    }
+
+    @DisplayName("settleExecution (fills from the broker)")
+    @Nested
+    class SettlementTests {
+        private Order working;
+
+        @BeforeEach
+        void orderAtTheBroker() {
+            working = new Order(1L, "AAPL", OrderSide.BUY, 10, new BigDecimal("150.00"), "KEY", testClock);
+            when(orderRepository.findWithLockById(working.getId())).thenReturn(Optional.of(working));
+            when(orderRepository.findById(working.getId())).thenReturn(Optional.of(working));
+            when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+        }
+
+        private ExecutionEvent fillAt(String price) {
+            return new ExecutionEvent(UUID.randomUUID(), working.getId(), 1L, "AAPL", OrderSide.BUY, 10,
+                    new BigDecimal(price), "SIM", Instant.parse("2026-10-12T10:00:00Z"));
+        }
+
+        @DisplayName("Should settle at the fill price, record the execution and mark the order FILLED")
+        @Test
+        void testSettlesFill() {
+            ExecutionEvent fill = fillAt("149.50");
+
+            Order result = orderService.settleExecution(fill);
+
+            assertSame(working, result);
+            assertEquals(OrderStatus.FILLED, working.getStatus());
+            ArgumentCaptor<PlaceOrderRequest> request = ArgumentCaptor.forClass(PlaceOrderRequest.class);
+            verify(buyStrategy).execute(eq(testAccount), request.capture(), eq("AAPL"));
+            assertEquals(new BigDecimal("149.50"), request.getValue().price());
+            ArgumentCaptor<Execution> execution = ArgumentCaptor.forClass(Execution.class);
+            verify(executionRepository).save(execution.capture());
+            assertEquals(fill.executionId(), execution.getValue().getId());
+            assertEquals(new BigDecimal("149.50"), execution.getValue().getPrice());
+            assertEquals("SIM", execution.getValue().getVenue());
+            verify(tradeEventPublisher).publish(working, OrderStatus.NEW, null);
+        }
+
+        @DisplayName("Should ignore a fill for an order that is no longer NEW")
+        @Test
+        void testIgnoresFillForCancelledOrder() {
+            working.setStatus(OrderStatus.CANCELLED);
+
+            assertNull(orderService.settleExecution(fillAt("149.50")));
+
+            verifyNoInteractions(buyStrategy, executionRepository, tradeEventPublisher);
+        }
+
+        @DisplayName("Should reject the order when the cash was spent before the fill arrived")
+        @Test
+        void testRejectsWhenNoLongerAffordable() {
+            doThrow(new InsufficientFundsException("Insufficient funds for buy order"))
+                    .when(buyStrategy).execute(any(), any(), any());
+
+            SettlementException ex = assertThrows(SettlementException.class,
+                    () -> orderService.settleExecution(fillAt("149.50")));
+
+            assertEquals(working.getId(), ex.getOrderEvent().orderId());
+            assertEquals("KEY", ex.getOrderEvent().idempotencyKey());
+            assertTrue(ex.isRetryable());
+            assertEquals(OrderStatus.REJECTED, working.getStatus());
+            verify(executionRepository, never()).save(any());
+            verify(tradeEventPublisher).publish(working, OrderStatus.NEW, "Insufficient funds for buy order");
+        }
+
+        @DisplayName("Should reject a fill for an account that was suspended meanwhile")
+        @Test
+        void testRejectsInactiveAccount() {
+            testAccount.setStatus(com.neueda.leap.enums.AccountStatus.SUSPENDED);
+
+            assertThrows(SettlementException.class, () -> orderService.settleExecution(fillAt("149.50")));
+            verifyNoInteractions(buyStrategy);
         }
     }
 }

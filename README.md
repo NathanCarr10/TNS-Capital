@@ -33,6 +33,7 @@ flowchart LR
     subgraph stack[docker-compose stack]
         auth[auth-service<br/>NestJS · :4000]
         app[Trading API<br/>Spring Boot · :3000]
+        broker[Broker Simulator<br/>Spring Boot · internal]
         kafka[(Kafka · :9092)]
         pg[(PostgreSQL 16 · :5432)]
         etl[ETL pipeline<br/>Python · daily]
@@ -43,8 +44,10 @@ flowchart LR
     client -- "register / login" --> auth
     client -- "Bearer JWT" --> app
     auth --> pg
-    app -- "publish order" --> kafka
-    kafka -- "consume order" --> app
+    app -- "orders, trade-events, market-data" --> kafka
+    kafka -- "orders, executions, trade-events" --> app
+    app -- "Trade Executor: POST order" --> broker
+    broker -- "fills (executions)" --> kafka
     app --> pg
     etl -- "extract / load analytics schema" --> pg
     dash -- "live tables + analytics schema" --> pg
@@ -54,8 +57,9 @@ flowchart LR
 | Component | Responsibility |
 |---|---|
 | **Trading API** (`src/`) | REST API for accounts, instruments, orders, positions and the DLQ. Validates JWTs locally using a shared HMAC secret. |
+| **Broker Simulator** (`broker-simulator/`) | Stands in for a real broker: takes orders over a REST API and, after 0.5 to 2 seconds, fills each one at or better than its limit price and publishes the fill to the `executions` topic. Has its own README. |
 | **Auth service** (`shared/auth-service/`) | Registers users (opening a trading account for each), logs them in and issues access and refresh tokens. Passwords are hashed with Argon2id; refresh tokens are stored only as SHA-256 hashes in `refresh_tokens`. |
-| **Kafka** | Carries order events (`orders`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and price updates (`market-data`). An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
+| **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and price updates (`market-data`). An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
 | **PostgreSQL** | System of record. The `db/` image creates the schema, views and seed data on first start. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
 | **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
@@ -67,17 +71,25 @@ flowchart LR
    if it has). It stores the order as `NEW`, publishes an `OrderEvent` to the `orders` topic
    (keyed by account ID, so orders for one account are processed in sequence) and returns
    **`202 Accepted`** with an `orderId`.
-2. While it is `NEW`, the order can be cancelled with `DELETE /api/v1/orders/{orderId}`; the
-   consumer then skips it.
-3. `OrderMessageListener` consumes the event and runs the order through `OrderValidator` and
-   the matching execution strategy (`BuyOrderStrategy` / `SellOrderStrategy`), which update
-   the cash balance and position.
-4. A successful order is saved as `FILLED` and a trade event is published to `trade-events`.
-5. A failed order (insufficient funds or holdings, inactive account, etc.) is saved as
-   `REJECTED` with a reason and captured in the dead-letter queue (`dlq_messages` table and
-   `orders.dlq` topic). Admins can inspect and replay these messages through
-   `/api/v1/dlq`.
-6. Clients poll `GET /api/v1/orders/{orderId}` to see the final status.
+2. **Trade Executor.** `OrderMessageListener` consumes the event and `OrderService` runs the
+   order through `OrderValidator` and checks the account can afford it at its limit price
+   (cash for a BUY, holdings for a SELL). Nothing moves yet. It then sends the order to the
+   **Broker Simulator** over HTTP (`BrokerSimulatorClient`). The order stays `NEW`.
+3. The broker works the order for 0.5 to 2 seconds and publishes the fill to the
+   `executions` topic, at or better than the limit price.
+4. **Settlement.** `ExecutionListener` consumes the fill. In one transaction `OrderService`
+   re-checks the rules at the fill price (another order may have used the cash meanwhile),
+   updates the cash balance and position through the execution strategy
+   (`BuyOrderStrategy` / `SellOrderStrategy`), records the fill in `executions` and marks the
+   order `FILLED`. A trade event is published to `trade-events`.
+5. Until the fill is settled the order is `NEW` and can be cancelled with
+   `DELETE /api/v1/orders/{orderId}`; a fill that arrives later is ignored.
+6. A failed order (insufficient funds or holdings, inactive account, broker unreachable,
+   etc.) is saved as `REJECTED` with a reason and captured in the dead-letter queue
+   (`dlq_messages` table). Admins can inspect and replay these messages through
+   `/api/v1/dlq`; a replay sends the order to the broker again.
+7. Clients poll `GET /api/v1/orders/{orderId}` to see the final status, and
+   `GET /api/v1/orders/{orderId}/events` for its history.
 
 Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 

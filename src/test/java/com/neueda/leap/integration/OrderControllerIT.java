@@ -53,6 +53,12 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         @Autowired
         private Clock clock;
 
+        @Autowired
+        private com.neueda.leap.repositories.ExecutionRepository executionRepository;
+
+        @Autowired
+        private com.neueda.leap.repositories.DeadLetterMessageRepository dlqRepository;
+
         private Account testAccount;
 
         @BeforeEach
@@ -222,6 +228,58 @@ public class OrderControllerIT extends AbstractIntegrationTest {
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$[*].newStatus", contains("FILLED")))
                                 .andExpect(jsonPath("$[0].previousStatus", equalTo("NEW"))));
+        }
+
+        @Test
+        @DisplayName("Should settle the broker's fill: execution recorded, cash and position moved")
+        void testFillIsSettled() throws Exception {
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 10, new BigDecimal("100.00"), "IDEM-SETTLE"));
+                awaitStatus(orderId, "FILLED");
+
+                var execution = executionRepository.findByOrderId(java.util.UUID.fromString(orderId)).orElseThrow();
+                org.junit.jupiter.api.Assertions.assertEquals("TEST", execution.getVenue());
+                org.junit.jupiter.api.Assertions.assertEquals(0, new BigDecimal("100.00").compareTo(execution.getPrice()));
+                org.junit.jupiter.api.Assertions.assertEquals(0, new BigDecimal("49000.00")
+                                .compareTo(accountRepository.findById(testAccount.getId()).orElseThrow().getCashBalance()));
+        }
+
+        @Test
+        @DisplayName("Should cancel an order while the broker works it, and ignore the late fill")
+        void testCancelWhileAtBroker() throws Exception {
+                broker.holdFills();
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 10, new BigDecimal("100.00"), "IDEM-LATE"));
+                await().atMost(10, TimeUnit.SECONDS).until(() -> broker.heldCount() == 1);
+
+                mockMvc.perform(delete("/api/v1/orders/{orderId}", orderId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status", equalTo("CANCELLED")));
+                broker.releaseFills();
+
+                // The fill arrives but must change nothing
+                await().pollInSameThread().during(2, TimeUnit.SECONDS).atMost(5, TimeUnit.SECONDS)
+                                .untilAsserted(() -> mockMvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                                                .andExpect(jsonPath("$.status", equalTo("CANCELLED"))));
+                org.junit.jupiter.api.Assertions.assertEquals(0, new BigDecimal("50000.00")
+                                .compareTo(accountRepository.findById(testAccount.getId()).orElseThrow().getCashBalance()));
+                org.junit.jupiter.api.Assertions.assertTrue(
+                                executionRepository.findByOrderId(java.util.UUID.fromString(orderId)).isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should reject the order (retryable, in the DLQ) when the broker is down")
+        void testBrokerDown() throws Exception {
+                broker.goDown();
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("100.00"), "IDEM-DOWN"));
+
+                awaitStatus(orderId, "REJECTED");
+                await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+                        var dlq = dlqRepository.findAll();
+                        org.junit.jupiter.api.Assertions.assertEquals(1, dlq.size());
+                        org.junit.jupiter.api.Assertions.assertTrue(dlq.get(0).getIsRetryable());
+                });
         }
 
         @Test

@@ -103,6 +103,20 @@ pipeline {
             }
         }
 
+        stage('Broker Simulator Tests') {
+            steps {
+                // The Broker Simulator is its own Maven project
+                dir('broker-simulator') {
+                    sh 'mvn -B test'
+                }
+            }
+            post {
+                always {
+                    junit 'broker-simulator/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
         stage('ETL Tests') {
             steps {
                 // The ETL pytest suite, including its Postgres integration tests against a
