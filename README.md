@@ -36,6 +36,7 @@ flowchart LR
         kafka[(Kafka · :9092)]
         pg[(PostgreSQL 16 · :5432)]
         etl[ETL pipeline<br/>Python · daily]
+        dash[Dashboard<br/>Streamlit · :8501]
         ui[Kafka UI · :8090]
     end
 
@@ -46,6 +47,7 @@ flowchart LR
     kafka -- "consume order" --> app
     app --> pg
     etl -- "extract / load analytics schema" --> pg
+    dash -- "live tables + analytics schema" --> pg
     ui --> kafka
 ```
 
@@ -56,6 +58,7 @@ flowchart LR
 | **Kafka** | Carries order events (`orders`) and trade lifecycle events (`trade-events`), each with a `.dlq` topic. The API creates the topics on startup. |
 | **PostgreSQL** | System of record. The `db/` image creates the schema, views and seed data on first start. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
+| **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
 
 ### Order lifecycle
 
@@ -89,6 +92,7 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 | Messaging | Apache Kafka 7.5 (Confluent) with ZooKeeper, Kafka UI |
 | Database | PostgreSQL 16 |
 | ETL | Python 3.12, pandas, psycopg2, schedule |
+| Dashboard | Python 3.12, Streamlit, Plotly, pandas |
 | Testing | JUnit 5, Mockito, Testcontainers, JaCoCo, Jest, Supertest, pytest |
 | CI/CD and quality | Jenkins, SonarQube, Gitleaks, Semgrep, Trivy |
 | Containers | Docker, Docker Compose |
@@ -113,6 +117,7 @@ TNS-Capital/
 ├── shared/auth-service/             NestJS auth service (has its own README)
 ├── db/                              PostgreSQL image: tables/, views/, seed data/
 ├── etl/                             Python ETL pipeline (has its own README)
+├── dashboard/                       Streamlit analytics dashboard (has its own README)
 ├── bruno/                           Bruno API collection for manual testing
 ├── contracts/                       OpenAPI contract for the auth API
 ├── docs/                            Business logic, security guide, SonarQube, diagrams
@@ -168,7 +173,8 @@ Edit `.env` and set:
 | `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API to verify them. Must be at least 32 bytes. Generate one with `openssl rand -hex 32`. |
 | `JWT_REFRESH_SECRET` | Reserved for the auth service and never given to the API. Nothing reads it yet (refresh tokens are random values stored as hashes), but set it to a different random value with `openssl rand -hex 32`. |
 
-Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`) and
+Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
+`DASHBOARD_PORT` (default `8501`) and
 `AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute).
 
 ### 3. Start the stack
@@ -200,6 +206,7 @@ API's startup with `docker compose logs -f app`.
 | Auth service | http://localhost:4000 | `GET /health` is public |
 | Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
 | Kafka UI | http://localhost:8090 | Browse topics and messages |
+| Dashboard | http://localhost:8501 | Business insights; run the ETL once to fill the batch view |
 | PostgreSQL | `localhost:5432`, database `tns_capital` | Credentials from `.env` |
 | Kafka | `kafka:9092` | Reachable from inside the Compose network (see [Troubleshooting](#troubleshooting)) |
 
@@ -393,6 +400,7 @@ See [etl/README.md](etl/README.md) for settings and the reporting schema.
 | API unit and integration tests | `mvn verify` | `*IT` tests start PostgreSQL and Kafka with Testcontainers, so Docker must be running. JaCoCo writes a coverage report to `target/site/jacoco/` |
 | Auth service | `cd shared/auth-service && npm ci && npm test` | `users.service.spec.ts` also runs against a real database when `DB_HOST` is set |
 | ETL | `cd etl && pip install -r requirements-dev.txt && python -m pytest` | Database integration tests run only with `ETL_IT=1`; see [etl/README.md](etl/README.md) |
+| Dashboard | `cd dashboard && pip install -r requirements-dev.txt && python -m pytest` | No database needed |
 
 ---
 
@@ -408,6 +416,7 @@ Jenkins runs the [`Jenkinsfile`](Jenkinsfile) on every branch and pull request:
 | Build Image | Packages the jar and builds the Docker image, tagged with the build number |
 | Test | `mvn verify` (unit and integration tests); results published as JUnit reports |
 | ETL Tests | The ETL pytest suite in a `python:3.12-slim` container |
+| Dashboard Tests | The dashboard's pytest suite in a `python:3.12-slim` container |
 | Auth Service Tests | The auth service's Jest suite in a `node:20-alpine` container |
 | SonarQube Analysis | Uploads analysis and coverage and waits for the quality gate |
 | Dependency Scan | Trivy scans the manifests and the built image. Fails on fixable CRITICAL CVEs. Accepted risks go in `.trivyignore` |
@@ -426,7 +435,7 @@ for the quality gate.
 | `401 AUTH-401` from the API | The token is missing, expired or signed with a different secret. Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
-| Port already in use (3000, 4000, 5432, 8090, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI). |
+| Port already in use (3000, 4000, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard). |
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |
 | Order stays `NEW` | Check the consumer with `docker compose logs app`, and the `orders` topic in Kafka UI. |
@@ -444,6 +453,7 @@ for the quality gate.
 | [shared/auth-service/README.md](shared/auth-service/README.md) | Auth endpoints, tokens, guards and error codes |
 | [contracts/auth-api.yaml](contracts/auth-api.yaml) | OpenAPI contract for the auth service |
 | [etl/README.md](etl/README.md) | ETL pipeline, settings and the analytics schema |
+| [dashboard/README.md](dashboard/README.md) | Dashboard insights, data sources and how to run it |
 
 ---
 

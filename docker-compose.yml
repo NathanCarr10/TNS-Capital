@@ -117,6 +117,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  dashboard:
+    build: ./dashboard
+    mem_limit: 384m
+    environment:
+      DASHBOARD_DB_HOST: postgres
+      DB_USER: ${DB_USER:-tns-capital-db-user}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   kafka-ui:
     image: kafbat/kafka-ui:v1.5.0
     mem_limit: 384m

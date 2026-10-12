@@ -122,6 +122,23 @@ pipeline {
             }
         }
 
+        stage('Dashboard Tests') {
+            steps {
+                // The analytics dashboard's insight tests (pandas only, no database)
+                sh '''
+                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+                        -v "$WORKSPACE":/repo -w /repo/dashboard python:3.12-slim \
+                        sh -c "pip install --quiet --user -r requirements-dev.txt && \
+                               python -m pytest -p no:cacheprovider --junitxml=test-results.xml"
+                '''
+            }
+            post {
+                always {
+                    junit 'dashboard/test-results.xml'
+                }
+            }
+        }
+
         stage('Auth Service Tests') {
             steps {
                 // The NestJS auth service's Jest suite, in the same Node image its

@@ -1,0 +1,36 @@
+# Runtime dependencies for the dashboard container, pinned to exact versions so builds
+# are repeatable and Trivy can check each one for known CVEs. Resolved in python:3.12-slim.
+streamlit==1.65.0
+plotly==7.1.0
+pandas==2.3.3
+psycopg2-binary==2.9.13
+python-dotenv==1.2.3
+
+altair==6.3.0                     # via streamlit
+attrs==26.1.0                     # via jsonschema
+certifi==2026.7.22                # via requests
+charset-normalizer==3.5.2         # via requests
+click==8.5.0                      # via streamlit
+idna==3.20                        # via requests
+Jinja2==3.1.6                     # via altair
+jsonschema==4.26.0                # via altair
+jsonschema-specifications==2025.9.1  # via jsonschema
+MarkupSafe==3.0.4                 # via Jinja2
+narwhals==2.27.1                  # via altair, plotly
+numpy==2.5.4                      # via pandas
+packaging==26.3                   # via streamlit, plotly
+pillow==12.3.0                    # via streamlit
+protobuf==7.36.2                  # via streamlit
+pyarrow==25.0.1                   # via streamlit
+pydeck==0.9.3                     # via streamlit
+python-dateutil==2.9.0.post0      # via pandas
+pytz==2026.5                      # via pandas
+referencing==0.37.0               # via jsonschema
+requests==2.34.2                  # via streamlit
+rpds-py==2026.9.1                 # via jsonschema
+six==1.17.0                       # via python-dateutil
+toml==0.10.2                      # via streamlit
+typing_extensions==4.16.0         # via streamlit
+tzdata==2026.5                    # via pandas
+urllib3==2.8.0                    # via requests
+watchdog==6.0.0                   # via streamlit
