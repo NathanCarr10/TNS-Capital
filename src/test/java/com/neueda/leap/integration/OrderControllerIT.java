@@ -53,6 +53,12 @@ class OrderControllerIT extends AbstractIntegrationTest {
         @Autowired
         private Clock clock;
 
+        @Autowired
+        private com.neueda.leap.repositories.ExecutionRepository executionRepository;
+
+        @Autowired
+        private com.neueda.leap.repositories.DeadLetterMessageRepository dlqRepository;
+
         private Account testAccount;
 
         @BeforeEach
@@ -167,6 +173,116 @@ class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should store the order with the client's idempotency key before it is processed")
+        void testPlacedOrderIsStoredImmediately() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"),
+                                "IDEM-STORED");
+
+                String orderId = placeOrder(request);
+
+                // No waiting: the order exists as soon as the POST returns (NEW, or FILLED
+                // if the consumer was already quick enough)
+                mockMvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status", anyOf(equalTo("NEW"), equalTo("FILLED"))));
+                org.junit.jupiter.api.Assertions.assertEquals("IDEM-STORED",
+                                orderRepository.findById(java.util.UUID.fromString(orderId)).orElseThrow()
+                                                .getIdempotencyKey());
+                awaitStatus(orderId, "FILLED");
+        }
+
+        @Test
+        @DisplayName("Should return ORD-409 when an idempotency key is reused")
+        void testPlaceOrderDuplicateIdempotencyKey() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"),
+                                "IDEM-TWICE");
+                String orderId = placeOrder(request);
+
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.errorCode", equalTo("ORD-409")));
+
+                org.junit.jupiter.api.Assertions.assertEquals(1, orderRepository.findAll().size());
+                awaitStatus(orderId, "FILLED");
+        }
+
+        /** Waits for the order consumer, so no order is still being processed when the test ends */
+        private void awaitStatus(String orderId, String status) {
+                await().pollInSameThread().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
+                                .perform(get("/api/v1/orders/{orderId}", orderId))
+                                .andExpect(jsonPath("$.status", equalTo(status))));
+        }
+
+        @Test
+        @DisplayName("Should record the order's lifecycle in the audit trail")
+        void testOrderEventsAreAudited() throws Exception {
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"), "IDEM-AUDIT"));
+
+                await().pollInSameThread().atMost(15, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
+                                .perform(get("/api/v1/orders/{orderId}/events", orderId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$[*].newStatus", contains("FILLED")))
+                                .andExpect(jsonPath("$[0].previousStatus", equalTo("NEW"))));
+        }
+
+        @Test
+        @DisplayName("Should settle the broker's fill: execution recorded, cash and position moved")
+        void testFillIsSettled() throws Exception {
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 10, new BigDecimal("100.00"), "IDEM-SETTLE"));
+                awaitStatus(orderId, "FILLED");
+
+                var execution = executionRepository.findByOrderId(java.util.UUID.fromString(orderId)).orElseThrow();
+                org.junit.jupiter.api.Assertions.assertEquals("TEST", execution.getVenue());
+                org.junit.jupiter.api.Assertions.assertEquals(0, new BigDecimal("100.00").compareTo(execution.getPrice()));
+                org.junit.jupiter.api.Assertions.assertEquals(0, new BigDecimal("49000.00")
+                                .compareTo(accountRepository.findById(testAccount.getId()).orElseThrow().getCashBalance()));
+        }
+
+        @Test
+        @DisplayName("Should cancel an order while the broker works it, and ignore the late fill")
+        void testCancelWhileAtBroker() throws Exception {
+                broker.holdFills();
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 10, new BigDecimal("100.00"), "IDEM-LATE"));
+                await().atMost(10, TimeUnit.SECONDS).until(() -> broker.heldCount() == 1);
+
+                mockMvc.perform(delete("/api/v1/orders/{orderId}", orderId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status", equalTo("CANCELLED")));
+                broker.releaseFills();
+
+                // The fill arrives but must change nothing
+                await().pollInSameThread().during(2, TimeUnit.SECONDS).atMost(5, TimeUnit.SECONDS)
+                                .untilAsserted(() -> mockMvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                                                .andExpect(jsonPath("$.status", equalTo("CANCELLED"))));
+                org.junit.jupiter.api.Assertions.assertEquals(0, new BigDecimal("50000.00")
+                                .compareTo(accountRepository.findById(testAccount.getId()).orElseThrow().getCashBalance()));
+                org.junit.jupiter.api.Assertions.assertTrue(
+                                executionRepository.findByOrderId(java.util.UUID.fromString(orderId)).isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should reject the order (retryable, in the DLQ) when the broker is down")
+        void testBrokerDown() throws Exception {
+                broker.goDown();
+                String orderId = placeOrder(new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("100.00"), "IDEM-DOWN"));
+
+                awaitStatus(orderId, "REJECTED");
+                await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+                        var dlq = dlqRepository.findAll();
+                        org.junit.jupiter.api.Assertions.assertEquals(1, dlq.size());
+                        org.junit.jupiter.api.Assertions.assertTrue(dlq.get(0).getIsRetryable());
+                });
+        }
+
+        @Test
         @DisplayName("Should store an unaffordable order as REJECTED")
         void testPlaceOrderInsufficientFundsRejected() throws Exception {
                 PlaceOrderRequest request = new PlaceOrderRequest(
@@ -202,7 +318,9 @@ class OrderControllerIT extends AbstractIntegrationTest {
                 orderRepository.save(working);
 
                 mockMvc.perform(delete("/api/v1/orders/{orderId}", working.getId()))
-                                .andExpect(status().isNoContent());
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id", equalTo(working.getId().toString())))
+                                .andExpect(jsonPath("$.status", equalTo("CANCELLED")));
 
                 mockMvc.perform(get("/api/v1/orders/{orderId}", working.getId()))
                                 .andExpect(jsonPath("$.status", equalTo("CANCELLED")));

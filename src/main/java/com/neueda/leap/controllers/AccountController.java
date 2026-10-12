@@ -9,9 +9,9 @@ import com.neueda.leap.dtos.PositionResponse;
 
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
-import com.neueda.leap.model.Position;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.AccountService;
+import com.neueda.leap.services.PositionValuation;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,10 +32,13 @@ import java.util.List;
 public class AccountController {
         private final AccountService accountService;
         private final AccountAccessGuard accessGuard;
+        private final PositionValuation positionValuation;
 
-        public AccountController(AccountService accountService, AccountAccessGuard accessGuard) {
+        public AccountController(AccountService accountService, AccountAccessGuard accessGuard,
+                        PositionValuation positionValuation) {
                 this.accountService = accountService;
                 this.accessGuard = accessGuard;
+                this.positionValuation = positionValuation;
         }
 
         /**
@@ -121,10 +124,7 @@ public class AccountController {
         @GetMapping("/{accountId}/positions")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 accessGuard.checkAccess(accountId);
-                List<PositionResponse> responses = accountService.getPositions(accountId).stream()
-                                .map(this::mapPositionToResponse)
-                                .toList();
-                return ResponseEntity.ok(responses);
+                return ResponseEntity.ok(positionValuation.toResponses(accountService.getPositions(accountId)));
         }
 
         @GetMapping("/{accountId}/orders")
@@ -144,18 +144,6 @@ public class AccountController {
                                 account.getCashBalance(),
                                 account.getStatus(),
                                 account.getLastUpdated()
-                );
-        }
-
-        private PositionResponse mapPositionToResponse(Position position) {
-                // Maps Position entity to response; uses zero marketValue since real-time
-                // pricing unavailable in this context
-                return new PositionResponse(
-                                position.getAccountId(),
-                                position.getSymbol(),
-                                position.getQuantity(),
-                                position.getAverageCost(),
-                                BigDecimal.ZERO // Market value requires current instrument price; placeholder for now
                 );
         }
 

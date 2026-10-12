@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,7 +43,9 @@ public class InstrumentController {
                 .orElseThrow(() -> new com.neueda.leap.exceptions.InstrumentNotFoundException("Instrument not found: " + symbol));
         return ResponseEntity.ok(mapToResponse(instrument));
     }
+    /** Adding instruments is an admin task, like opening accounts. */
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<InstrumentResponse> createInstrument(@Valid @RequestBody CreateInstrumentRequest request) {
         // symbol is the primary key, so save() would overwrite an existing instrument;
         // reject duplicates explicitly instead
@@ -62,7 +65,9 @@ public class InstrumentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(instrument));
     }
 
+    /** Only admins may change an instrument, e.g. stop it being tradable. */
     @PutMapping("/{symbol}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<InstrumentResponse> updateInstrument(@PathVariable String symbol,
                                                             @Valid @RequestBody CreateInstrumentRequest request) {
         // Updates existing instrument; throws 404 if not found to maintain REST semantics

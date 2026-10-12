@@ -8,6 +8,11 @@ import com.neueda.leap.model.Order;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import com.neueda.leap.exceptions.OrderPublishException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.UUID;
@@ -29,22 +34,26 @@ public class OrderEventPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final String ordersTopic;
+    private final long sendTimeoutMs;
 
     public OrderEventPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
-            @Value("${trading.kafka.topics.orders:orders}") String ordersTopic) {
+            @Value("${trading.kafka.topics.orders:orders}") String ordersTopic,
+            @Value("${trading.kafka.send-timeout-ms:5000}") long sendTimeoutMs) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.ordersTopic = ordersTopic;
+        this.sendTimeoutMs = sendTimeoutMs;
     }
 
     /**
-     * Publishes an order event to the orders topic from a persisted Order entity.
-     * 
-     * Used when an order has already been created (e.g., in synchronous flows).
+     * Publishes a stored NEW order to the orders topic and waits for Kafka to
+     * acknowledge it (at most trading.kafka.send-timeout-ms), so the caller
+     * knows whether the order is really queued.
      * 
      * @param order the order to publish
+     * @throws OrderPublishException if Kafka did not acknowledge the order in time
      */
     public void publish(Order order) {
         try {
@@ -53,55 +62,21 @@ public class OrderEventPublisher {
             String json = objectMapper.writeValueAsString(envelope);
 
             String accountId = order.getAccountId().toString();
-            kafkaTemplate.send(ordersTopic, accountId, json)
-                    .whenComplete((result, error) -> {
-                        if (error != null) {
-                            log.warn("Failed to publish order {} to {}; it will be retried: {}",
-                                    order.getId(), ordersTopic, error.getMessage());
-                        } else {
-                            log.info("Published order {} to {}-{}@{}",
-                                    order.getId(), ordersTopic,
-                                    result.getRecordMetadata().partition(),
-                                    result.getRecordMetadata().offset());
-                        }
-                    });
+            SendResult<String, String> result = kafkaTemplate.send(ordersTopic, accountId, json)
+                    .get(sendTimeoutMs, TimeUnit.MILLISECONDS);
+            log.info("Published order {} to {}-{}@{}",
+                    order.getId(), ordersTopic,
+                    result.getRecordMetadata().partition(),
+                    result.getRecordMetadata().offset());
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new OrderPublishException("Interrupted while queuing order " + order.getId(), ex);
+        } catch (ExecutionException | TimeoutException ex) {
+            log.error("Failed to publish order {} to {}: {}", order.getId(), ordersTopic, ex.getMessage());
+            throw new OrderPublishException("Could not queue order " + order.getId(), ex);
         } catch (JsonProcessingException ex) {
             log.error("Could not serialize order {}: {}", order.getId(), ex.getMessage(), ex);
             throw new IllegalStateException("Failed to serialize order event for order: " + order.getId(), ex);
-        }
-    }
-
-    /**
-     * Publishes an OrderEvent directly to the orders topic.
-     * 
-     * Used in async flows where the REST endpoint publishes an event for later
-     * processing
-     * without creating an Order entity first.
-     * 
-     * @param event     the order event to publish
-     * @param accountId the account ID (used as partition key)
-     */
-    public void publishEvent(OrderEvent event, Long accountId) {
-        try {
-            MessageEnvelope<OrderEvent> envelope = buildEnvelope(event);
-            String json = objectMapper.writeValueAsString(envelope);
-
-            String partitionKey = accountId.toString();
-            kafkaTemplate.send(ordersTopic, partitionKey, json)
-                    .whenComplete((result, error) -> {
-                        if (error != null) {
-                            log.warn("Failed to publish order event {} to {}; error: {}",
-                                    event.orderId(), ordersTopic, error.getMessage());
-                        } else {
-                            log.info("Published order event {} to {}-{}@{}",
-                                    event.orderId(), ordersTopic,
-                                    result.getRecordMetadata().partition(),
-                                    result.getRecordMetadata().offset());
-                        }
-                    });
-        } catch (JsonProcessingException ex) {
-            log.error("Could not serialize order event {}: {}", event.orderId(), ex.getMessage(), ex);
-            throw new IllegalStateException("Failed to serialize order event: " + event.orderId(), ex);
         }
     }
 
@@ -113,7 +88,8 @@ public class OrderEventPublisher {
                 order.getSide(),
                 order.getQuantity(),
                 order.getPrice(),
-                order.getCreatedOn());
+                order.getCreatedOn(),
+                order.getIdempotencyKey());
     }
 
     private MessageEnvelope<OrderEvent> buildEnvelope(OrderEvent orderEvent) {

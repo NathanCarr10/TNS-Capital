@@ -9,7 +9,10 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -42,14 +45,24 @@ public class SecurityConfig {
         @Value("${jwt.shared-secret}")
         private String sharedSecret;
 
+        // Must match the auth service's JWT_ISSUER
+        @Value("${jwt.issuer:urn:tns-capital:auth-service}")
+        private String issuer;
+
         /**
          * Configures JWT decoder using the shared secret.
-         * This validates incoming JWT tokens signed with HMAC-SHA256.
+         * This validates incoming JWT tokens signed with HMAC-SHA256, and checks
+         * that they were issued by the auth service (iss) as access tokens
+         * (typ = "access"), on top of the default expiry checks.
          */
         @Bean
         public JwtDecoder jwtDecoder() {
                 SecretKeySpec secretKey = new SecretKeySpec(sharedSecret.getBytes(), "HmacSHA256");
-                return NimbusJwtDecoder.withSecretKey(secretKey).build();
+                NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey).build();
+                decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                                JwtValidators.createDefaultWithIssuer(issuer),
+                                new JwtClaimValidator<String>("typ", "access"::equals)));
+                return decoder;
         }
 
         /**

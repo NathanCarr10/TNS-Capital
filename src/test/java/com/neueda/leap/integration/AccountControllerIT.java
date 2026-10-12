@@ -1,7 +1,11 @@
 package com.neueda.leap.integration;
 
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
+import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +34,12 @@ class AccountControllerIT extends AbstractIntegrationTest {
 
     @Autowired
     private AccountRepository accountRepository;
+
+    @Autowired
+    private InstrumentRepository instrumentRepository;
+
+    @Autowired
+    private PositionRepository positionRepository;
 
     @Autowired
     private Clock clock;
@@ -101,6 +111,34 @@ class AccountControllerIT extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Should list positions with no market value when there is no live price")
+    void testPositionsWithoutLivePrice() throws Exception {
+        // Tests run without Alpaca keys, so there are no live prices
+        instrumentRepository.save(new Instrument("ACME", "Acme Corp", "Equity", "USD", true));
+        positionRepository.save(new Position(testAccount.getId(), "ACME", 10, new BigDecimal("25.00")));
+
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/positions", testAccount.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].symbol", is("ACME")))
+                .andExpect(jsonPath("$[0].averageCost", is(25.0)))
+                .andExpect(jsonPath("$[0].marketValue", nullValue()));
+    }
+
+    @Test
+    @DisplayName("Should move lastUpdated when the balance changes")
+    void testDepositUpdatesLastUpdated() throws Exception {
+        java.time.Instant created = accountRepository.findById(testAccount.getId()).orElseThrow().getLastUpdated();
+
+        mockMvc.perform(post("/api/v1/accounts/{accountId}/deposit", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"amount\": 5.00}"))
+                .andExpect(status().isOk());
+
+        java.time.Instant updated = accountRepository.findById(testAccount.getId()).orElseThrow().getLastUpdated();
+        org.junit.jupiter.api.Assertions.assertTrue(updated.isAfter(created),
+                "lastUpdated should move from " + created + " but was " + updated);
     }
 
     @Test

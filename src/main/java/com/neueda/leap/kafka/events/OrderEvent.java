@@ -19,6 +19,12 @@ public record OrderEvent(
         OrderSide side,
         Integer quantity,
         BigDecimal price,
-        Instant createdOn
+        Instant createdOn,
+        // The client's key; null in messages published before it was added
+        String idempotencyKey
 ) {
+    public OrderEvent(UUID orderId, Long accountId, String symbol, OrderSide side, Integer quantity,
+            BigDecimal price, Instant createdOn) {
+        this(orderId, accountId, symbol, side, quantity, price, createdOn, null);
+    }
 }

@@ -610,6 +610,22 @@ describe('Auth API contract', () => {
       expect(response.body.errorCode).toBe('REQ-405');
     });
   });
+
+  describe('GET /docs-json - live OpenAPI docs', () => {
+    it('serves a public OpenAPI document generated from the controllers', async () => {
+      const response = await request(app.getHttpServer()).get('/docs-json').expect(200);
+      expect(response.body.openapi).toMatch(/^3\./);
+      expect(Object.keys(response.body.paths)).toEqual(
+        expect.arrayContaining(['/auth/register', '/auth/login', '/auth/refresh', '/auth/logout', '/auth/me']),
+      );
+    });
+
+    it('documents the request bodies and the bearer token', async () => {
+      const response = await request(app.getHttpServer()).get('/docs-json').expect(200);
+      expect(response.body.components.schemas.LoginDto.required).toEqual(['username', 'password']);
+      expect(response.body.components.securitySchemes.bearer.scheme).toBe('bearer');
+    });
+  });
 });
 
 describe('JWT_SECRET validation', () => {

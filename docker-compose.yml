@@ -72,6 +72,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
     ports:
       - "4000:4000"
     depends_on:
@@ -83,6 +84,26 @@ services:
       timeout: 5s
       retries: 5
 
+  broker-simulator:
+    build: ./broker-simulator
+    mem_limit: 384m
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BROKER_MIN_DELAY: ${BROKER_MIN_DELAY:-500ms}
+      BROKER_MAX_DELAY: ${BROKER_MAX_DELAY:-2000ms}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    # No host port: the broker has no authentication, so only the API can reach it
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8085/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   app:
     build: .
     mem_limit: 512m
@@ -92,6 +113,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BROKER_URL: http://broker-simulator:8085
+      # One JSON object per log line (Elastic Common Schema), for log tools to parse
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
       ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
       ALPACA_FEED: ${ALPACA_FEED:-iex}
@@ -104,6 +128,8 @@ services:
       auth-service:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      broker-simulator:
         condition: service_healthy
 
   etl:
@@ -118,6 +144,20 @@ services:
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
       PRICE_HISTORY_FEED: ${PRICE_HISTORY_FEED:-sip}
       PRICE_BACKFILL_YEARS: ${PRICE_BACKFILL_YEARS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    mem_limit: 384m
+    environment:
+      DASHBOARD_DB_HOST: postgres
+      DB_USER: ${DB_USER:-tns-capital-db-user}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
     depends_on:
       postgres:
         condition: service_healthy

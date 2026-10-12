@@ -108,6 +108,13 @@ public class Account {
         return status == AccountStatus.ACTIVE;
     }
 
+    // Every change (cash, status, holder name) is saved through JPA, so stamp
+    // the time here rather than in each method
+    @PreUpdate
+    void touch() {
+        this.lastUpdated = Instant.now();
+    }
+
     // Getters and setters
     public Long getId() {
         return id;

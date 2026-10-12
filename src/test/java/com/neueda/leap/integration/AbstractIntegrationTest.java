@@ -57,9 +57,13 @@ public abstract class AbstractIntegrationTest {
     static final KafkaContainer kafka = new KafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
 
+    // Stand-in for the Broker Simulator: fills every order at once (see TestBroker)
+    protected static final TestBroker broker;
+
     static {
         postgres.start();
         kafka.start();
+        broker = new TestBroker(kafka.getBootstrapServers());
     }
 
     @DynamicPropertySource
@@ -68,6 +72,7 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("broker.url", broker::url);
         // No default secret is committed; tests use @WithMockUser, so any value works
         registry.add("jwt.shared-secret", () -> "integration-test-secret-at-least-32-bytes");
         // Tests inspect PENDING DLQ messages, so they must not be auto-resolved
@@ -88,6 +93,7 @@ public abstract class AbstractIntegrationTest {
 
     @BeforeEach
     void clearTables() {
+        broker.reset();
         for (int attempt = 1; attempt < CLEAR_ATTEMPTS; attempt++) {
             if (tryTruncate()) {
                 return;
@@ -107,6 +113,6 @@ public abstract class AbstractIntegrationTest {
     }
 
     private void truncate() {
-        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log RESTART IDENTITY CASCADE");
     }
 }

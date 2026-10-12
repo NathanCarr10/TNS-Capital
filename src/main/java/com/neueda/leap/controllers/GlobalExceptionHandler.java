@@ -27,7 +27,7 @@ import java.time.ZoneOffset;
  * Global exception handler that provides secure, consistent error responses.
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
  *   ACC-409, INS-409, ORD-404, POS-404, AUTH-403, NOT-404, REQ-405,
- *   REQ-415, PRC-503 and SYS-500 extend the catalog for cases it does not list
+ *   REQ-415, PRC-503, SYS-500 and SYS-503 extend the catalog for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
  * - Follows security best practices to prevent information leakage
@@ -114,6 +114,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleOrderCancellationConflict(OrderCancellationConflictException e) {
         logger.warn("Order cancellation conflict: {}", e.getMessage());
         return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "Only NEW orders can be cancelled");
+    }
+
+    // Kafka did not take the order; it is stored as REJECTED and will not execute
+    @ExceptionHandler(OrderPublishException.class)
+    public ResponseEntity<ErrorResponse> handleOrderPublish(OrderPublishException e) {
+        logger.error("Order could not be queued: {}", e.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "SYS-503",
+                "The order could not be queued and was not executed. Try again later with a new idempotency key");
     }
 
     @ExceptionHandler(OrderNotFoundException.class)
