@@ -13,6 +13,8 @@ throwaway database:
 """
 
 import os
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import psycopg2
@@ -107,3 +109,26 @@ def test_failed_run_leaves_reporting_tables_unchanged(db):
 def test_valid_seed_data_produces_no_rejects(db):
     assert pipeline.run_pipeline() is True
     assert query(db, "SELECT COUNT(*) FROM analytics.etl_rejected_orders") == [(0,)]
+
+
+def test_daily_prices_are_upserted(db, monkeypatch):
+    monkeypatch.setattr(config, "ALPACA_API_KEY_ID", "key")
+    monkeypatch.setattr(config, "ALPACA_API_SECRET_KEY", "secret")
+    fetches = []
+
+    def fake_fetch(symbols, start):
+        fetches.append((symbols, start))
+        return {"ACME": [{"t": "2026-10-09T04:00:00Z", "o": 10, "h": 12, "l": 9, "c": 11, "v": 1000, "n": 50, "vw": 10.5}]}
+
+    monkeypatch.setattr(pipeline.market_data, "fetch_daily_bars", fake_fetch)
+
+    assert pipeline.run_prices() is True
+    assert pipeline.run_prices() is True  # second run reloads the last day, no duplicates
+
+    assert query(db, "SELECT symbol, trade_date::text, close FROM analytics.fact_daily_prices") == [
+        ("ACME", "2026-10-09", Decimal("11.0000"))]
+    # First run backfills every instrument. The second starts ACME at its last
+    # loaded day, and BOND1 (which got no prices) at the backfill date again
+    assert fetches[0][0] == ["ACME", "BOND1"]
+    assert fetches[1] == (["ACME"], date(2026, 10, 9))
+    assert fetches[2] == (["BOND1"], fetches[0][1])
