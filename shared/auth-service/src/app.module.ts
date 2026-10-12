@@ -1,7 +1,9 @@
 import { INestApplication, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { ApiExceptionFilter } from './common/api-exception.filter';
+import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
 import { createValidationPipe } from './common/validation';
 import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -16,6 +18,8 @@ import { setupSwagger } from './swagger';
     AuthModule,
   ],
   controllers: [HealthController],
+  // One log line per request, for every route
+  providers: [{ provide: APP_INTERCEPTOR, useClass: RequestLoggingInterceptor }],
 })
 export class AppModule {}
 

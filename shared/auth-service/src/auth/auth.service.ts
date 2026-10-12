@@ -53,6 +53,20 @@ export class AuthService {
   }
 
   /**
+   * Checks a username and password.
+   *
+   * @returns the user, or null if the username is unknown or the password is
+   *          wrong (callers must not reveal which)
+   */
+  async validate(username: string, password: string): Promise<UserRecord | null> {
+    const user = await this.users.findByUsername(username);
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      return null;
+    }
+    return user;
+  }
+
+  /**
    * Checks the credentials and issues an access token and a refresh token.
    * Each login starts a new session (refresh token family), so a user can be
    * signed in on several devices.
@@ -60,8 +74,8 @@ export class AuthService {
    * Wrong username and wrong password get the same 401, so usernames cannot be probed.
    */
   async login(username: string, password: string): Promise<LoginResult> {
-    const user = await this.users.findByUsername(username);
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    const user = await this.validate(username, password);
+    if (!user) {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
 
