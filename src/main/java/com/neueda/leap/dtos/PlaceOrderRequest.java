@@ -27,7 +27,7 @@ public record PlaceOrderRequest(
         @Max(value = 1000000, message = "Quantity exceeds maximum allowed (1,000,000)")
         Integer quantity,
         
-        @NotNull(message = "Price is required")
+        // Optional: when omitted the order is priced at the live market price
         @Positive(message = "Price must be positive")
         @DecimalMax(value = "999999.99", message = "Price exceeds maximum allowed")
         BigDecimal price,

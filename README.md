@@ -225,14 +225,19 @@ curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Beare
 
 ### Stopping and resetting
 
-```bash
-docker compose down        # stop the stack, keep the database
-docker compose down -v     # stop the stack and delete the database volume
-```
+A scheduled Python pipeline in [`etl/`](etl/README.md) extracts trade data from PostgreSQL, transforms it into a reporting star schema and loads it into the `analytics` schema. It also loads daily price history for every instrument from Alpaca into `analytics.fact_daily_prices`. See [etl/README.md](etl/README.md).
 
-The database scripts in `db/` only run when the data volume is empty. **After pulling
-changes to `db/tables` or `db/data`, run `docker compose down -v` and start again** so
-PostgreSQL rebuilds the schema.
+---
+
+## Market Data (Alpaca)
+
+Live prices and price history both come from the [Alpaca market data API](https://docs.alpaca.markets/docs/about-market-data-api), so they agree with each other.
+
+- **Live price pool** (`marketdata/`): `AlpacaPriceStream` subscribes to live trades for the tradable instruments over a WebSocket, and `LivePriceService` keeps the latest price of each one in memory. A price not updated for 60 seconds (or one the stream does not cover) is refreshed from Alpaca's REST API when it is next needed.
+- **Orders:** `price` is optional in `POST /api/v1/orders`. Without it, the order is priced at the live price (rounded to the cent) when it is accepted, and the price is returned in the response. If no live price is available, the API returns `503 PRC-503`.
+- **`GET /api/v1/prices/{symbol}`** returns the latest price of an instrument.
+- **Setup:** create free API keys at [alpaca.markets](https://alpaca.markets) and set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `.env`. Without keys, the pool is off and orders must include a price.
+- **Free plan limits:** the live feed is IEX only (about 2.5% of US volume), up to 30 streamed symbols, and one stream connection per account, so only one app instance can stream at a time. Set `ALPACA_FEED=sip` on a paid plan for all exchanges.
 
 ---
 

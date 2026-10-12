@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
  * Global exception handler that provides secure, consistent error responses.
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
  *   ACC-409, INS-409, ORD-404, POS-404, AUTH-403, NOT-404, REQ-405,
- *   REQ-415 and SYS-500 extend the catalog for cases it does not list
+ *   REQ-415, PRC-503 and SYS-500 extend the catalog for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
  * - Follows security best practices to prevent information leakage
@@ -125,6 +125,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handlePositionNotFound(PositionNotFoundException e) {
         logger.warn("Position not found: {}", e.getMessage());
         return error(HttpStatus.NOT_FOUND, "POS-404", "The requested position could not be found");
+    }
+
+    @ExceptionHandler(PriceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePriceUnavailable(PriceUnavailableException e) {
+        logger.warn("Price unavailable: {}", e.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "PRC-503",
+                "No live price is available for this instrument; include a price in the order");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

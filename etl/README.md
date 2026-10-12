@@ -63,6 +63,32 @@ service needs to be running too.
 | `ETL_SCHEDULE_TIME` | `02:00` |
 | `ETL_RETRY_ATTEMPTS` | `3` |
 | `ETL_RETRY_DELAY_SECONDS` | `2` (doubles each retry) |
+| `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` | blank: the price job is skipped |
+| `PRICE_HISTORY_FEED` | `sip` (all US exchanges; free for data older than 15 minutes) |
+| `PRICE_BACKFILL_YEARS` | `5` (how far back the first run loads) |
+
+## Daily price history
+
+Each run also loads daily price bars (open, high, low, close, volume, VWAP) for every
+instrument from the [Alpaca market data API](https://docs.alpaca.markets/docs/historical-stock-data-1)
+into `analytics.fact_daily_prices`, one row per symbol per trading day. Alpaca is the same
+source the API uses for live prices, so the history and live prices agree.
+
+| File | What it does |
+|---|---|
+| [market_data.py](market_data.py) | **Extract**: downloads daily bars from Alpaca, following page tokens and retrying when rate limited |
+| [extract.py](extract.py) | `extract_last_price_dates()` reads which days are already loaded for each instrument |
+| [transform.py](transform.py) | `build_fact_daily_prices()` turns the bars into rows and drops invalid ones |
+| [load.py](load.py) | `load_prices()` upserts them on `(symbol, trade_date)` |
+
+- **First run:** loads `PRICE_BACKFILL_YEARS` of history for every instrument.
+- **Later runs:** start at each instrument's last loaded day. That day is downloaded again
+  in case it was loaded before the market closed, and the upsert replaces it.
+- **New instruments** are backfilled on the next run.
+- **Prices are as traded,** not adjusted for splits or dividends, so they match order
+  prices. A stock split shows as a jump in the chart.
+- **Without Alpaca keys** the price job is skipped with a warning, and the trade job runs as before.
+- **Failures:** if the price job fails, the run exits with code 1, but trades are still loaded.
 
 ### Integration tests
 
@@ -75,7 +101,16 @@ ETL_IT=1 ETL_DB_NAME=postgres ETL_DB_PORT=55432 DB_USER=postgres DB_PASSWORD=it 
 docker stop etl-it
 ```
 
-## Example report query
+## Example report queries
+
+Closing prices for a chart:
+
+```sql
+SELECT trade_date, close
+FROM analytics.fact_daily_prices
+WHERE symbol = 'AAPL' AND trade_date >= CURRENT_DATE - INTERVAL '1 year'
+ORDER BY trade_date;
+```
 
 Total value of filled trades per asset class per month:
 

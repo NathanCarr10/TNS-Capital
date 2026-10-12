@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
@@ -21,7 +23,11 @@ import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.exceptions.PriceUnavailableException;
 import com.neueda.leap.kafka.OrderEventPublisher;
+import com.neueda.leap.kafka.events.OrderEvent;
+import com.neueda.leap.marketdata.PriceProvider;
+import com.neueda.leap.marketdata.PriceQuote;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.AccountRepository;
@@ -66,6 +72,9 @@ class OrderControllerValidationTest {
     @Mock
     private AccountAccessGuard accessGuard;
 
+    @Mock
+    private PriceProvider priceProvider;
+
     private PlaceOrderRequest validRequest;
     private Long accountId = 1L;
     private String symbol = "AAPL";
@@ -84,7 +93,8 @@ class OrderControllerValidationTest {
                 orderHistoryRepository,
                 orderService,
                 orderEventPublisher,
-                accessGuard);
+                accessGuard,
+                priceProvider);
 
         validRequest = new PlaceOrderRequest(
                 accountId,
@@ -191,6 +201,63 @@ class OrderControllerValidationTest {
 
             // Verify order was published to Kafka
             verify(orderEventPublisher, times(1)).publishEvent(any(), eq(accountId));
+        }
+    }
+
+    @DisplayName("placeOrder - Live Pricing Tests")
+    @Nested
+    class LivePricingTests {
+
+        private PlaceOrderRequest requestWithoutPrice;
+
+        @BeforeEach
+        void setUp() {
+            Account testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"),
+                    new ClockTest());
+            testAccount.setId(accountId);
+            when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
+            when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(new Instrument(instrument)));
+
+            requestWithoutPrice = new PlaceOrderRequest(
+                    accountId, symbol, OrderSide.BUY, 100, null, UUID.randomUUID().toString());
+        }
+
+        private OrderEvent publishedEvent() {
+            ArgumentCaptor<OrderEvent> event = ArgumentCaptor.forClass(OrderEvent.class);
+            verify(orderEventPublisher).publishEvent(event.capture(), eq(accountId));
+            return event.getValue();
+        }
+
+        @Test
+        @DisplayName("Should price an order without a price at the live price, rounded to the cent")
+        void testOrderWithoutPriceUsesLivePrice() {
+            when(priceProvider.latestPrice(symbol)).thenReturn(Optional.of(
+                    new PriceQuote(symbol, new BigDecimal("227.4651"), Instant.parse("2026-10-12T14:30:00Z"))));
+
+            ResponseEntity<java.util.Map<String, Object>> response = orderController.placeOrder(requestWithoutPrice);
+
+            assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+            assertEquals(new BigDecimal("227.47"), publishedEvent().price());
+            assertEquals(new BigDecimal("227.47"), response.getBody().get("price"));
+        }
+
+        @Test
+        @DisplayName("Should keep the price given in the request without looking up a live price")
+        void testOrderWithPriceKeepsIt() {
+            orderController.placeOrder(validRequest);
+
+            assertEquals(new BigDecimal("150.00"), publishedEvent().price());
+            verifyNoInteractions(priceProvider);
+        }
+
+        @Test
+        @DisplayName("Should reject an order without a price when no live price is available")
+        void testOrderWithoutPriceAndNoLivePriceIsRejected() {
+            when(priceProvider.latestPrice(symbol)).thenReturn(Optional.empty());
+
+            assertThrows(PriceUnavailableException.class, () -> orderController.placeOrder(requestWithoutPrice));
+
+            verify(orderEventPublisher, never()).publishEvent(any(), any());
         }
     }
 

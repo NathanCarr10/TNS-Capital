@@ -9,6 +9,7 @@ Reporting tables produced:
     dim_date        one row per day that has trades
     fact_trades     one row per order, with extra reporting columns
     etl_rejected_orders  orders that failed validation, with the reason
+    fact_daily_prices    one row per instrument per trading day (from Alpaca)
 """
 
 import logging
@@ -151,3 +152,45 @@ def transform(accounts, instruments, orders):
     }
     logger.info("Transformed %d orders into %d trades", len(orders), len(fact_trades))
     return tables
+
+
+PRICE_COLUMNS = ["symbol", "trade_date", "open", "high", "low", "close", "volume", "trade_count", "vwap"]
+
+# Alpaca's short field names -> our column names
+BAR_FIELDS = {"t": "timestamp", "o": "open", "h": "high", "l": "low", "c": "close",
+              "v": "volume", "n": "trade_count", "vw": "vwap"}
+
+
+def build_fact_daily_prices(bars):
+    """Turn Alpaca's {symbol: [bar, ...]} into one row per symbol per trading day.
+
+    Bars with missing or impossible prices are dropped. A day that appears
+    twice (overlapping downloads) is kept once.
+    """
+    rows = [{"symbol": symbol, **{column: bar.get(field) for field, column in BAR_FIELDS.items()}}
+            for symbol, symbol_bars in bars.items()
+            for bar in symbol_bars]
+    df = pd.DataFrame(rows, columns=["symbol", *BAR_FIELDS.values()])
+
+    # Daily bars are stamped at midnight New York time, e.g. 2026-10-09T04:00:00Z,
+    # so convert to New York before taking the date
+    df["trade_date"] = (pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+                        .dt.tz_convert("America/New_York").dt.date)
+    for column in ["open", "high", "low", "close", "volume", "trade_count", "vwap"]:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    is_valid = (
+        df["trade_date"].notna()
+        & (df[["open", "high", "low", "close"]] > 0).all(axis=1)
+        & (df["high"] >= df["low"])
+        & (df["volume"] >= 0)
+    )
+    if (~is_valid).sum() > 0:
+        logger.warning("Removed %d invalid price bars", (~is_valid).sum())
+
+    prices = df[is_valid].drop_duplicates(subset=["symbol", "trade_date"], keep="last").copy()
+    prices["volume"] = prices["volume"].astype("int64")
+    prices["trade_count"] = prices["trade_count"].astype("Int64")  # Int64 allows a missing value
+    for column in ["open", "high", "low", "close", "vwap"]:
+        prices[column] = prices[column].round(4)
+    return prices[PRICE_COLUMNS].sort_values(["symbol", "trade_date"]).reset_index(drop=True)

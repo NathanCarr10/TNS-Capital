@@ -6,8 +6,10 @@ import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.exceptions.PriceUnavailableException;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.kafka.events.OrderEvent;
+import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
@@ -24,6 +26,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -43,10 +47,14 @@ public class OrderController {
     private final OrderService orderService;
     private final OrderEventPublisher orderEventPublisher;
     private final AccountAccessGuard accessGuard;
+    private final PriceProvider priceProvider;
 
     /**
      * Places an order asynchronously by publishing to Kafka.
-     * 
+     *
+     * If the request has no price, the order is priced at the latest live
+     * market price, which is returned in the response.
+     *
      * Returns 202 ACCEPTED immediately; processing happens asynchronously by the
      * OrderMessageListener. Clients should poll GET /api/v1/orders/{orderId} to
      * track order status.
@@ -65,6 +73,7 @@ public class OrderController {
      * @throws AccessDeniedException       if the caller does not own the account
      * @throws AccountNotFoundException    if account does not exist
      * @throws InstrumentNotFoundException if instrument does not exist
+     * @throws PriceUnavailableException   if no price was given and no live price is available
      */
     @PostMapping
     public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
@@ -89,6 +98,9 @@ public class OrderController {
                     return new InstrumentNotFoundException("Instrument not found: " + request.symbol());
                 });
 
+        // Price the order now, so it fills at the price at the time it was accepted
+        BigDecimal price = request.price() != null ? request.price() : livePrice(request.symbol());
+
         // Generate order ID for this request
         UUID orderId = UUID.randomUUID();
 
@@ -99,7 +111,7 @@ public class OrderController {
                 request.symbol(),
                 request.side(),
                 request.quantity(),
-                request.price(),
+                price,
                 Instant.now());
 
         // Publish to Kafka for async processing
@@ -113,6 +125,7 @@ public class OrderController {
         Map<String, Object> response = new HashMap<>();
         response.put("orderId", orderId.toString());
         response.put("status", "ACCEPTED");
+        response.put("price", price);
         response.put("message", "Order accepted for processing. Poll GET /api/v1/orders/{orderId} to track status.");
 
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
@@ -178,6 +191,13 @@ public class OrderController {
                 .map(this::mapHistoryToResponse)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(responses);
+    }
+
+    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
+    private BigDecimal livePrice(String symbol) {
+        return priceProvider.latestPrice(symbol)
+                .map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP))
+                .orElseThrow(() -> new PriceUnavailableException("No live price for " + symbol));
     }
 
     private OrderResponse mapToResponse(Order order) {
