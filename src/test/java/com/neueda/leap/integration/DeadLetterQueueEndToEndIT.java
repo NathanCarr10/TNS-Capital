@@ -35,7 +35,7 @@ import static org.awaitility.Awaitility.await;
  * Tests complete scenarios from message failure to admin recovery
  */
 @DisplayName("Dead Letter Queue End-to-End Integration Tests")
-public class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
+class DeadLetterQueueEndToEndIT extends AbstractIntegrationTest {
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;

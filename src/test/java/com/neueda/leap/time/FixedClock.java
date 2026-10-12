@@ -2,14 +2,14 @@ package com.neueda.leap.time;
 
 import java.time.Instant;
 
-public class ClockTest implements Clock {
+public class FixedClock implements Clock {
     private Instant fixedInstant;
 
-    public ClockTest(Instant fixedInstant) {
+    public FixedClock(Instant fixedInstant) {
         this.fixedInstant = fixedInstant;
     }
 
-    public ClockTest() {
+    public FixedClock() {
         this.fixedInstant = Instant.now();
     }
 

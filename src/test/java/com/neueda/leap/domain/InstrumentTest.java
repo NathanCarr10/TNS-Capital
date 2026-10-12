@@ -60,10 +60,10 @@ class InstrumentTest {
         })
         void testMultipleAssetClasses(String symbol, String name, String assetClass, String currency,
                 boolean tradable) {
-            Instrument instrument = new Instrument(symbol, name, assetClass, currency, tradable);
-            assertEquals(symbol, instrument.getSymbol(), "Symbol should match");
-            assertEquals(assetClass, instrument.getAssetClass(), "Asset class should match");
-            assertEquals(name, instrument.getName(), "Name should match");
+            Instrument created = new Instrument(symbol, name, assetClass, currency, tradable);
+            assertEquals(symbol, created.getSymbol(), "Symbol should match");
+            assertEquals(assetClass, created.getAssetClass(), "Asset class should match");
+            assertEquals(name, created.getName(), "Name should match");
         }
     }
 
@@ -78,9 +78,9 @@ class InstrumentTest {
                 "AAPL, Apple Inc., EQUITY, USD, true"
         })
         void testMultipleCurrencies(String symbol, String name, String assetClass, String currency, boolean tradable) {
-            Instrument instrument = new Instrument(symbol, name, assetClass, currency, tradable);
-            assertEquals(currency, instrument.getCurrency(), "Currency should match");
-            assertEquals(symbol, instrument.getSymbol(), "Symbol should match");
+            Instrument created = new Instrument(symbol, name, assetClass, currency, tradable);
+            assertEquals(currency, created.getCurrency(), "Currency should match");
+            assertEquals(symbol, created.getSymbol(), "Symbol should match");
         }
     }
 }

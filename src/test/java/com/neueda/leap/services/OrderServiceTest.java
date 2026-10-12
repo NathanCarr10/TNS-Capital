@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,7 +49,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 import org.springframework.transaction.PlatformTransactionManager;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.repositories.ExecutionRepository;
@@ -104,7 +104,7 @@ class OrderServiceTest {
     @Mock
     private PriceProvider priceProvider;
 
-    private ClockTest testClock;
+    private FixedClock testClock;
     private Account testAccount;
     private PlaceOrderRequest placeOrderRequest;
 
@@ -112,12 +112,12 @@ class OrderServiceTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-17T10:00:00Z"));
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"), testClock);
         testAccount.setId(1L);
 
         // Create strategy map
-        Map<OrderSide, OrderExecutionStrategy> strategies = new HashMap<>();
+        Map<OrderSide, OrderExecutionStrategy> strategies = new EnumMap<>(OrderSide.class);
         strategies.put(OrderSide.BUY, buyStrategy);
         strategies.put(OrderSide.SELL, sellStrategy);
 

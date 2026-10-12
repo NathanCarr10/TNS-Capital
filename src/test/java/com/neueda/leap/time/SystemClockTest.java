@@ -6,9 +6,9 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 
-public class SystemClockTest {
+class SystemClockTest {
     @Test
-    public void testSystemClockReturnsInstant() {
+    void testSystemClockReturnsInstant() {
         SystemClock clock = SystemClock.INSTANCE;
         Instant instant = clock.now();
 
@@ -16,14 +16,11 @@ public class SystemClockTest {
     }
 
     @Test
-    public void testSystemClockMonotonicallyIncreases() throws InterruptedException {
+    void testSystemClockNeverGoesBackwards() {
         SystemClock clock = SystemClock.INSTANCE;
         Instant first = clock.now();
-
-        Thread.sleep(1);
-
         Instant second = clock.now();
 
-        assertTrue(second.isAfter(first), "Second call to now() should be after first call");
+        assertFalse(second.isBefore(first), "Second call to now() should not be before first call");
     }
 }

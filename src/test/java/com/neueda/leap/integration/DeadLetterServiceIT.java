@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Tests message capture, replay, and dismissal logic
  */
 @DisplayName("Dead Letter Service Integration Tests")
-public class DeadLetterServiceIT extends AbstractIntegrationTest {
+class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Autowired
     private DeadLetterService deadLetterService;
@@ -92,7 +91,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should capture failed message with full details")
-    void testCaptureFailedMessage() throws Exception {
+    void testCaptureFailedMessage() {
         // Arrange
         Exception testException = new IllegalArgumentException("Test exception for DLQ capture");
         String expectedFailureType = "IllegalArgumentException";
@@ -109,7 +108,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
         assertThat(dlqMessage.getOriginalOrderId()).isEqualTo(testEnvelope.getPayload().orderId());
         assertThat(dlqMessage.getFailureType()).isEqualTo(expectedFailureType);
         assertThat(dlqMessage.getStatus()).isEqualTo(DLQStatus.PENDING);
-        assertThat(dlqMessage.getRetryCount()).isEqualTo(0);
+        assertThat(dlqMessage.getRetryCount()).isZero();
         assertThat(dlqMessage.getCreatedOn()).isNotNull();
         assertThat(dlqMessage.getLastRetryOn()).isNull();
         assertThat(dlqMessage.getResolvedOn()).isNull();
@@ -125,7 +124,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should replay message successfully and mark as RESOLVED")
-    void testReplayMessageSuccess() throws Exception {
+    void testReplayMessageSuccess() {
         // Arrange - Capture a message first
         Exception testException = new IllegalArgumentException("Initial capture");
         DeadLetterMessage dlqMessage = deadLetterService.captureFailedMessage(
@@ -155,7 +154,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should increment retry count on replay failure")
-    void testReplayMessageFailure() throws Exception {
+    void testReplayMessageFailure() {
         // Arrange - Create envelope with invalid account (will fail on replay)
         OrderEvent invalidEvent = new OrderEvent(
                 UUID.randomUUID(),
@@ -179,7 +178,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
                 testException,
                 0);
 
-        assertThat(dlqMessage.getRetryCount()).isEqualTo(0);
+        assertThat(dlqMessage.getRetryCount()).isZero();
 
         // Act - Attempt replay (should fail due to invalid account)
         boolean success = deadLetterService.replayMessage(dlqMessage.getId(), orderService);
@@ -201,7 +200,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should dismiss message and mark as IGNORED")
-    void testDismissMessage() throws Exception {
+    void testDismissMessage() {
         // Arrange
         Exception testException = new IllegalArgumentException("Dismissible error");
         DeadLetterMessage dlqMessage = deadLetterService.captureFailedMessage(
@@ -228,7 +227,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should not replay already resolved message")
-    void testReplayResolvedMessageBlocked() throws Exception {
+    void testReplayResolvedMessageBlocked() {
         // Arrange - Capture and successfully replay
         Exception testException = new IllegalArgumentException("Setup");
         DeadLetterMessage dlqMessage = deadLetterService.captureFailedMessage(
@@ -251,7 +250,7 @@ public class DeadLetterServiceIT extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("Should track multiple retries correctly")
-    void testTrackMultipleRetries() throws Exception {
+    void testTrackMultipleRetries() {
         // Arrange
         OrderEvent invalidEvent = new OrderEvent(
                 UUID.randomUUID(),

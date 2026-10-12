@@ -1,6 +1,5 @@
 package com.neueda.leap.dtos;
 
-import com.neueda.leap.enums.DLQStatus;
 import java.time.Instant;
 import java.util.UUID;
 

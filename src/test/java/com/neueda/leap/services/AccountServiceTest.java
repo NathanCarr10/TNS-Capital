@@ -31,7 +31,7 @@ import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("AccountService Test Suite")
 class AccountServiceTest {
@@ -47,12 +47,12 @@ class AccountServiceTest {
     private OrderRepository orderRepository;
 
     private Account testAccount;
-    private ClockTest testClock;
+    private FixedClock testClock;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-17T10:00:00Z"));
         accountService = new AccountService(accountRepository, positionRepository, orderRepository, testClock);
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("50000.00"), testClock);
         testAccount.setId(1L);
@@ -261,8 +261,9 @@ class AccountServiceTest {
         void testValidateSufficientFundsInsufficientFunds() {
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
 
+            BigDecimal amount = new BigDecimal("60000.00");
             assertThrows(IllegalArgumentException.class,
-                    () -> accountService.validateSufficientFunds(1L, new BigDecimal("60000.00")),
+                    () -> accountService.validateSufficientFunds(1L, amount),
                     "Should throw IllegalArgumentException when funds are insufficient");
         }
 
@@ -287,8 +288,9 @@ class AccountServiceTest {
         @DisplayName("Should throw IllegalArgumentException for negative amount")
         @Test
         void testValidateSufficientFundsNegativeAmount() {
+            BigDecimal amount = new BigDecimal("-100.00");
             assertThrows(IllegalArgumentException.class,
-                    () -> accountService.validateSufficientFunds(1L, new BigDecimal("-100.00")),
+                    () -> accountService.validateSufficientFunds(1L, amount),
                     "Should throw IllegalArgumentException for negative amount");
             verify(accountRepository, never()).findById(anyLong());
         }
@@ -298,8 +300,9 @@ class AccountServiceTest {
         void testValidateSufficientFundsAccountNotFound() {
             when(accountRepository.findById(999L)).thenReturn(Optional.empty());
 
+            BigDecimal amount = new BigDecimal("1000.00");
             assertThrows(AccountNotFoundException.class,
-                    () -> accountService.validateSufficientFunds(999L, new BigDecimal("1000.00")),
+                    () -> accountService.validateSufficientFunds(999L, amount),
                     "Should throw AccountNotFoundException for non-existent account");
         }
     }

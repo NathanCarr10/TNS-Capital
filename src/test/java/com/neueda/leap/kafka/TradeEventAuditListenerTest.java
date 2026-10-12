@@ -19,7 +19,7 @@ import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.TradeEvent;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.services.TradeEventAuditService;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("TradeEventAuditListener")
 class TradeEventAuditListenerTest {
@@ -31,7 +31,7 @@ class TradeEventAuditListenerTest {
     void roundTripsThePublishersMessage() throws Exception {
         KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
         when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(new CompletableFuture<>());
-        Order order = new Order(11L, "ACME", OrderSide.BUY, 10, new BigDecimal("30.00"), "key-1", new ClockTest());
+        Order order = new Order(11L, "ACME", OrderSide.BUY, 10, new BigDecimal("30.00"), "key-1", new FixedClock());
         order.setStatus(OrderStatus.REJECTED);
         new TradeEventPublisher(kafkaTemplate, objectMapper, "trade-events").publish(order, OrderStatus.NEW,
                 "Insufficient funds");
