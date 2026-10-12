@@ -4,6 +4,9 @@ import com.neueda.leap.utils.InputNormalizer;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
 
 /**
  * Instrument domain entity.
@@ -33,6 +36,12 @@ public class Instrument {
     @Column(nullable = false)
     private boolean tradable;
 
+    // Latest market price from the price feed; null until the first price arrives
+    @Column(precision = 18, scale = 2)
+    private BigDecimal lastPrice;
+
+    private Instant lastPriceOn;
+
     public Instrument() {
     }
 
@@ -54,6 +63,8 @@ public class Instrument {
         this.assetClass = other.assetClass;
         this.currency = other.currency;
         this.tradable = other.tradable;
+        this.lastPrice = other.lastPrice;
+        this.lastPriceOn = other.lastPriceOn;
     }
 
     private void validateConstructorArgs(String symbol, String name, String assetClass, String currency) {
@@ -73,6 +84,34 @@ public class Instrument {
 
     public boolean isTradable() {
         return tradable;
+    }
+
+    /**
+     * Records a new market price for the instrument.
+     *
+     * @param price the price, rounded to cents; must be positive
+     * @param at    when the price was observed
+     */
+    public void updatePrice(BigDecimal price, Instant at) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Price must be positive");
+        }
+        if (at == null) {
+            throw new IllegalArgumentException("Price time cannot be null");
+        }
+        this.lastPrice = price.setScale(2, RoundingMode.HALF_UP);
+        this.lastPriceOn = at;
+    }
+
+    /**
+     * @return the latest market price, or null if no price has arrived yet
+     */
+    public BigDecimal getLastPrice() {
+        return lastPrice;
+    }
+
+    public Instant getLastPriceOn() {
+        return lastPriceOn;
     }
 
     // Getters

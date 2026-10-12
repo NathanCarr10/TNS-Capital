@@ -45,6 +45,14 @@ trading:
       trade-events: trade-events
       market-data: market-data
 
+pricing:
+  feed:
+    # Simulated market prices (SimulatedPriceFeed): each tick moves every tradable
+    # instrument's price by about +/- volatility and publishes it to market-data
+    enabled: true
+    interval-ms: 15000
+    volatility: 0.01
+
 dlq:
   auto-resolve:
     # PENDING DLQ messages are marked RESOLVED once older than after-ms

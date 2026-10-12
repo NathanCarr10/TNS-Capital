@@ -1,7 +1,11 @@
 package com.neueda.leap.integration;
 
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
+import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +34,12 @@ public class AccountControllerIT extends AbstractIntegrationTest {
 
     @Autowired
     private AccountRepository accountRepository;
+
+    @Autowired
+    private InstrumentRepository instrumentRepository;
+
+    @Autowired
+    private PositionRepository positionRepository;
 
     @Autowired
     private Clock clock;
@@ -101,6 +111,31 @@ public class AccountControllerIT extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Should value positions at the instrument's last price")
+    void testPositionsAreValuedAtMarketPrice() throws Exception {
+        Instrument acme = new Instrument("ACME", "Acme Corp", "Equity", "USD", true);
+        acme.updatePrice(new BigDecimal("26.10"), clock.now());
+        instrumentRepository.save(acme);
+        instrumentRepository.save(new Instrument("NEWCO", "New Co", "Equity", "USD", true));
+        positionRepository.save(new Position(testAccount.getId(), "ACME", 10, new BigDecimal("25.00")));
+        positionRepository.save(new Position(testAccount.getId(), "NEWCO", 5, new BigDecimal("3.00")));
+
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/positions", testAccount.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.symbol == 'ACME')].marketValue", contains(261.0)))
+                .andExpect(jsonPath("$[?(@.symbol == 'NEWCO')].marketValue", contains(nullValue())));
+
+        mockMvc.perform(get("/api/v1/positions/{accountId}/ACME", testAccount.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marketValue", is(261.0)));
+
+        mockMvc.perform(get("/api/v1/instruments/ACME"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastPrice", is(26.1)))
+                .andExpect(jsonPath("$.lastPriceOn", notNullValue()));
     }
 
     @Test

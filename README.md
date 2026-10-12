@@ -55,7 +55,7 @@ flowchart LR
 |---|---|
 | **Trading API** (`src/`) | REST API for accounts, instruments, orders, positions and the DLQ. Validates JWTs locally using a shared HMAC secret. |
 | **Auth service** (`shared/auth-service/`) | Registers users (opening a trading account for each), logs them in and issues access and refresh tokens. Passwords are hashed with Argon2id; refresh tokens are stored only as SHA-256 hashes in `refresh_tokens`. |
-| **Kafka** | Carries order events (`orders`) and trade lifecycle events (`trade-events`), each with a `.dlq` topic. The API creates the topics on startup. |
+| **Kafka** | Carries order events (`orders`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and price updates (`market-data`). The API creates the topics on startup. |
 | **PostgreSQL** | System of record. The `db/` image creates the schema, views and seed data on first start. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
 | **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
@@ -80,6 +80,19 @@ flowchart LR
 6. Clients poll `GET /api/v1/orders/{orderId}` to see the final status.
 
 Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
+
+### Market prices
+
+There is no live pricing API in the stack yet, so `SimulatedPriceFeed` stands in for one.
+Every 15 seconds it moves each tradable instrument's price by a small random step (about
+±1%), saves it as the instrument's `last_price` and publishes it to the `market-data`
+topic. Positions are valued at that price: `marketValue` in the position endpoints is
+`quantity × last_price`, or `null` for an instrument with no price yet. `GET
+/api/v1/instruments` shows `lastPrice` and `lastPriceOn`. The seed data gives every
+instrument a starting price.
+
+Settings: `pricing.feed.enabled` (default `true`), `pricing.feed.interval-ms` (`15000`) and
+`pricing.feed.volatility` (`0.01`) in `application.yml`.
 
 ---
 

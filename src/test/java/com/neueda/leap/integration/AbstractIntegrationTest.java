@@ -72,6 +72,8 @@ public abstract class AbstractIntegrationTest {
         registry.add("jwt.shared-secret", () -> "integration-test-secret-at-least-32-bytes");
         // Tests inspect PENDING DLQ messages, so they must not be auto-resolved
         registry.add("dlq.auto-resolve.enabled", () -> "false");
+        // Tests check exact prices, so the simulated price feed must not move them
+        registry.add("pricing.feed.enabled", () -> "false");
     }
 
     @Autowired

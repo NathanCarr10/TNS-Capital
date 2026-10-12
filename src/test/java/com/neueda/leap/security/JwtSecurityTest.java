@@ -12,6 +12,7 @@ import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.services.AccountService;
 import com.neueda.leap.services.DeadLetterService;
 import com.neueda.leap.services.OrderService;
+import com.neueda.leap.services.PositionValuation;
 import com.neueda.leap.time.ClockTest;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -66,6 +67,8 @@ class JwtSecurityTest {
     private DeadLetterService deadLetterService;
     @MockitoBean
     private OrderService orderService;
+    @MockitoBean
+    private PositionValuation positionValuation;
     // Ownership rules have their own tests; here every account is allowed
     @MockitoBean
     private AccountAccessGuard accessGuard;

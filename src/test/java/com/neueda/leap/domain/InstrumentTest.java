@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+
 import com.neueda.leap.model.Instrument;
 
 @DisplayName("Instrument Test Suite")
@@ -81,6 +84,59 @@ class InstrumentTest {
             Instrument instrument = new Instrument(symbol, name, assetClass, currency, tradable);
             assertEquals(currency, instrument.getCurrency(), "Currency should match");
             assertEquals(symbol, instrument.getSymbol(), "Symbol should match");
+        }
+    }
+
+    @Nested
+    @DisplayName("updatePrice")
+    class UpdatePrice {
+        private final Instant at = Instant.parse("2026-10-12T09:00:00Z");
+
+        @Test
+        @DisplayName("has no price until one is set")
+        void noPriceAtFirst() {
+            Instrument instrument = new Instrument("ACME", "Acme Corp", "Equity", "USD", true);
+
+            assertNull(instrument.getLastPrice());
+            assertNull(instrument.getLastPriceOn());
+        }
+
+        @Test
+        @DisplayName("stores the price rounded to cents and when it was observed")
+        void storesPrice() {
+            Instrument instrument = new Instrument("ACME", "Acme Corp", "Equity", "USD", true);
+
+            instrument.updatePrice(new BigDecimal("12.345"), at);
+
+            assertEquals(new BigDecimal("12.35"), instrument.getLastPrice());
+            assertEquals(at, instrument.getLastPriceOn());
+        }
+
+        @ParameterizedTest
+        @CsvSource({ "0", "-1.00" })
+        @DisplayName("rejects a price that is not positive")
+        void rejectsNonPositive(String price) {
+            Instrument instrument = new Instrument("ACME", "Acme Corp", "Equity", "USD", true);
+
+            assertThrows(IllegalArgumentException.class, () -> instrument.updatePrice(new BigDecimal(price), at));
+        }
+
+        @Test
+        @DisplayName("rejects a missing price or time")
+        void rejectsNulls() {
+            Instrument instrument = new Instrument("ACME", "Acme Corp", "Equity", "USD", true);
+
+            assertThrows(IllegalArgumentException.class, () -> instrument.updatePrice(null, at));
+            assertThrows(IllegalArgumentException.class, () -> instrument.updatePrice(BigDecimal.ONE, null));
+        }
+
+        @Test
+        @DisplayName("is kept by the copy constructor")
+        void copied() {
+            Instrument instrument = new Instrument("ACME", "Acme Corp", "Equity", "USD", true);
+            instrument.updatePrice(new BigDecimal("12.00"), at);
+
+            assertEquals(new BigDecimal("12.00"), new Instrument(instrument).getLastPrice());
         }
     }
 }

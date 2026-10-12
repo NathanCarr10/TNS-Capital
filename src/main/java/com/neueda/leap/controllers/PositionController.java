@@ -6,14 +6,13 @@ import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.security.AccountAccessGuard;
+import com.neueda.leap.services.PositionValuation;
 import com.neueda.leap.utils.InputNormalizer;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.constraints.NotNull;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/positions")
@@ -21,12 +20,15 @@ public class PositionController {
         private final PositionRepository positionRepository;
         private final AccountRepository accountRepository;
         private final AccountAccessGuard accessGuard;
+        private final PositionValuation positionValuation;
 
         public PositionController(PositionRepository positionRepository,
-                        AccountRepository accountRepository, AccountAccessGuard accessGuard) {
+                        AccountRepository accountRepository, AccountAccessGuard accessGuard,
+                        PositionValuation positionValuation) {
                 this.positionRepository = positionRepository;
                 this.accountRepository = accountRepository;
                 this.accessGuard = accessGuard;
+                this.positionValuation = positionValuation;
         }
 
         @SuppressWarnings("null")
@@ -39,10 +41,7 @@ public class PositionController {
                                 .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
 
                 List<Position> positions = positionRepository.findByAccountId(accountId);
-                List<PositionResponse> responses = positions.stream()
-                                .map(this::mapToResponse)
-                                .collect(Collectors.toList());
-                return ResponseEntity.ok(responses);
+                return ResponseEntity.ok(positionValuation.toResponses(positions));
         }
 
         @SuppressWarnings("null")
@@ -58,18 +57,6 @@ public class PositionController {
                 Position position = positionRepository.findByAccountIdAndSymbol(accountId, normalizedSymbol)
                                 .orElseThrow(() -> new com.neueda.leap.exceptions.PositionNotFoundException(
                                                 "Position not found: " + accountId + " " + symbol));
-                return ResponseEntity.ok(mapToResponse(position));
-        }
-
-        private PositionResponse mapToResponse(Position position) {
-                // Maps Position entity to response; uses zero marketValue since real-time
-                // pricing unavailable in this context
-                return new PositionResponse(
-                                position.getAccountId(),
-                                position.getSymbol(),
-                                position.getQuantity(),
-                                position.getAverageCost(),
-                                BigDecimal.ZERO // Market value requires current instrument price; placeholder for now
-                );
+                return ResponseEntity.ok(positionValuation.toResponse(position));
         }
 }

@@ -87,7 +87,9 @@ public class InstrumentController {
                 instrument.getName(),
                 instrument.getAssetClass(),
                 instrument.getCurrency(),
-                instrument.isTradable()
+                instrument.isTradable(),
+                instrument.getLastPrice(),
+                instrument.getLastPriceOn()
         );
     }
 }
