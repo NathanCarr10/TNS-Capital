@@ -89,4 +89,34 @@ class LivePriceServiceTest {
     void returnsEmptyWithoutAnyPrice() {
         assertTrue(service.latestPrice("AAPL").isEmpty());
     }
+
+    @Test
+    @DisplayName("Refreshes all missing and stale prices in one REST call")
+    void refreshesManyPricesInOneCall() {
+        service.update(quote("227.10", NOW));
+        service.update(new PriceQuote("MSFT", new BigDecimal("431.00"), NOW));
+        clock.incrementSeconds(61);
+        service.update(new PriceQuote("NVDA", new BigDecimal("120.00"), NOW.plusSeconds(61)));
+        when(restClient.latestTrades(List.of("AAPL", "MSFT", "TSLA"))).thenReturn(Map.of(
+                "AAPL", quote("229.50", NOW.plusSeconds(30)),
+                "TSLA", new PriceQuote("TSLA", new BigDecimal("250.00"), NOW.plusSeconds(30))));
+
+        Map<String, PriceQuote> prices = service.latestPrices(List.of("AAPL", "MSFT", "NVDA", "TSLA"));
+
+        verify(restClient, times(1)).latestTrades(any());
+        assertEquals(new BigDecimal("229.50"), prices.get("AAPL").price());
+        // Refresh found nothing newer, so the last known price is kept
+        assertEquals(new BigDecimal("431.00"), prices.get("MSFT").price());
+        assertEquals(new BigDecimal("120.00"), prices.get("NVDA").price());
+        assertEquals(new BigDecimal("250.00"), prices.get("TSLA").price());
+    }
+
+    @Test
+    @DisplayName("Makes no REST call when every price is fresh")
+    void makesNoCallWhenPricesFresh() {
+        service.update(quote("227.10", NOW));
+
+        assertEquals(1, service.latestPrices(List.of("AAPL")).size());
+        verifyNoInteractions(restClient);
+    }
 }
