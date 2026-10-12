@@ -79,19 +79,31 @@ public abstract class AbstractIntegrationTest {
 
     // CASCADE also clears orders, positions, executions and users, which reference these tables.
     // A Kafka listener can still be writing rows from the previous test, and Postgres may pick
-    // the TRUNCATE as the deadlock victim, so retry it a few times.
+    // the TRUNCATE as the deadlock victim. The retry then waits for the listener's transaction
+    // to finish, so no pause between attempts is needed.
+    private static final int CLEAR_ATTEMPTS = 5;
+
     @BeforeEach
-    void clearTables() throws InterruptedException {
-        for (int attempt = 1; ; attempt++) {
-            try {
-                jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
+    void clearTables() {
+        for (int attempt = 1; attempt < CLEAR_ATTEMPTS; attempt++) {
+            if (tryTruncate()) {
                 return;
-            } catch (PessimisticLockingFailureException e) {
-                if (attempt == 5) {
-                    throw e;
-                }
-                Thread.sleep(200L * attempt);
             }
         }
+        // Last attempt outside the catch so a persistent failure still fails the test
+        truncate();
+    }
+
+    private boolean tryTruncate() {
+        try {
+            truncate();
+            return true;
+        } catch (PessimisticLockingFailureException e) {
+            return false;
+        }
+    }
+
+    private void truncate() {
+        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages RESTART IDENTITY CASCADE");
     }
 }
