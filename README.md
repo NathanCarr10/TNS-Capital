@@ -337,6 +337,15 @@ Non-admin users can only see and act on their own account. Errors use one format
 { "errorCode": "AUTH-401", "message": "Unauthorised or invalid token", "timestamp": "..." }
 ```
 
+### Logs
+
+In Docker the trading API logs one JSON object per line (Spring Boot's structured logging, in
+Elastic Common Schema), so tools such as Elasticsearch or CloudWatch can filter by level,
+logger or message. Read them with `docker compose logs app`, or pretty-print with
+`docker compose logs --no-log-prefix app | jq`. Set `LOG_FORMAT=logstash` (or `gelf`) in
+`.env` for another format. Running the API with `mvn spring-boot:run` keeps the usual
+plain-text lines.
+
 ### Bruno collection
 
 The `bruno/` folder is a ready-made [Bruno](https://www.usebruno.com/) collection covering
