@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -57,6 +58,31 @@ public class LivePriceService implements PriceProvider {
             cached = prices.get(symbol);
         }
         return Optional.ofNullable(cached).map(CachedPrice::quote);
+    }
+
+    /**
+     * Like latestPrice, but refreshes every missing or stale price in one REST call.
+     */
+    @Override
+    public Map<String, PriceQuote> latestPrices(Collection<String> symbols) {
+        List<String> toRefresh = symbols.stream()
+                .filter(symbol -> {
+                    CachedPrice cached = prices.get(symbol);
+                    return cached == null || isStale(cached);
+                })
+                .toList();
+        if (!toRefresh.isEmpty()) {
+            refresh(toRefresh);
+        }
+
+        Map<String, PriceQuote> result = new HashMap<>();
+        symbols.forEach(symbol -> {
+            CachedPrice cached = prices.get(symbol);
+            if (cached != null) {
+                result.put(symbol, cached.quote());
+            }
+        });
+        return result;
     }
 
     private boolean isStale(CachedPrice cached) {
