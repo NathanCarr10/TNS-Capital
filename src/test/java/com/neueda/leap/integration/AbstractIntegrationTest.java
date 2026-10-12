@@ -71,6 +71,9 @@ public abstract class AbstractIntegrationTest {
         registry.add("jwt.shared-secret", () -> "integration-test-secret-at-least-32-bytes");
         // Tests inspect PENDING DLQ messages, so they must not be auto-resolved
         registry.add("dlq.auto-resolve.enabled", () -> "false");
+        // Never call Alpaca from tests, even if the developer's environment has keys
+        registry.add("market-data.alpaca.key-id", () -> "");
+        registry.add("market-data.alpaca.secret-key", () -> "");
     }
 
     @Autowired
