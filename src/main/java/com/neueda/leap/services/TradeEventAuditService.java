@@ -34,7 +34,7 @@ public class TradeEventAuditService {
      * @return true if it was stored now, false if it was a duplicate
      */
     @Transactional
-    public boolean record(TradeEvent event) {
+    public boolean store(TradeEvent event) {
         String eventId = Objects.requireNonNull(event.getCorrelationId(), "Trade event has no correlationId");
         if (repository.existsById(eventId)) {
             log.debug("Trade event already recorded: eventId={}", eventId);

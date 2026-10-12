@@ -11,6 +11,8 @@ import insights
 
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
+VALUE_LABEL = "Value ($)"
+
 
 @st.cache_data(ttl=30)
 def load():
@@ -77,7 +79,7 @@ st.markdown("\n".join(f"- {point}" for point in points) or "No trades yet.")
 left, right = st.columns(2)
 volume = insights.trade_volume_by_date(trades)
 left.plotly_chart(px.bar(volume, x="date", y="value", hover_data=["trades"],
-                         title="Filled trade value by day", labels={"value": "Value ($)", "date": "Day"}),
+                         title="Filled trade value by day", labels={"value": VALUE_LABEL, "date": "Day"}),
                   width="stretch")
 statuses = insights.status_breakdown(trades)
 right.plotly_chart(px.pie(statuses, names="status", values="orders", title="Orders by status", hole=0.4),
@@ -91,13 +93,13 @@ left.plotly_chart(px.bar(top_accounts, x="orders", y="holder_name", orientation=
                   width="stretch")
 right.plotly_chart(px.bar(exposure, x="symbol", y="exposure", color="asset_class",
                           title="Exposure by instrument (cost basis)",
-                          labels={"exposure": "Value ($)", "symbol": "Instrument", "asset_class": "Asset class"}),
+                          labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": "Asset class"}),
                    width="stretch")
 
 mix = insights.value_by_asset_class(trades)
 st.plotly_chart(px.bar(mix, x="asset_class", y="value", color="side", barmode="group",
                        title="Buy and sell value by asset class",
-                       labels={"value": "Value ($)", "asset_class": "Asset class", "side": "Side"}),
+                       labels={"value": VALUE_LABEL, "asset_class": "Asset class", "side": "Side"}),
                 width="stretch")
 
 with st.expander("Orders not yet loaded by the ETL"):

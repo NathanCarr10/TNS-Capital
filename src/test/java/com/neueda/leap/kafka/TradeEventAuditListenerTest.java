@@ -42,7 +42,7 @@ class TradeEventAuditListenerTest {
         new TradeEventAuditListener(auditService, objectMapper).onTradeEvent(json.getValue());
 
         ArgumentCaptor<TradeEvent> event = ArgumentCaptor.forClass(TradeEvent.class);
-        verify(auditService).record(event.capture());
+        verify(auditService).store(event.capture());
         TradeEvent.TradeEventPayload payload = event.getValue().getPayload();
         assertNotNull(event.getValue().getCorrelationId());
         assertEquals(order.getId().toString(), payload.getOrderId());

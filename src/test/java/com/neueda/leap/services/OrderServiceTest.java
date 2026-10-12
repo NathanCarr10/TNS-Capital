@@ -531,7 +531,8 @@ class OrderServiceTest {
             when(orderRepository.findById(tooBig.getId())).thenReturn(Optional.of(tooBig));
             when(orderRepository.findWithLockById(tooBig.getId())).thenReturn(Optional.of(tooBig));
 
-            assertThrows(InsufficientFundsException.class, () -> orderService.processOrderEvent(eventFor(tooBig)));
+            OrderEvent tooBigEvent = eventFor(tooBig);
+            assertThrows(InsufficientFundsException.class, () -> orderService.processOrderEvent(tooBigEvent));
 
             assertEquals(OrderStatus.REJECTED, tooBig.getStatus());
             verifyNoInteractions(brokerClient);
@@ -547,7 +548,8 @@ class OrderServiceTest {
             when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL"))
                     .thenReturn(Optional.of(new Position(1L, "AAPL", 5, new BigDecimal("100.00"))));
 
-            assertThrows(InsufficientHoldingsException.class, () -> orderService.processOrderEvent(eventFor(sell)));
+            OrderEvent sellEvent = eventFor(sell);
+            assertThrows(InsufficientHoldingsException.class, () -> orderService.processOrderEvent(sellEvent));
             verifyNoInteractions(brokerClient);
         }
 
@@ -629,8 +631,8 @@ class OrderServiceTest {
             doThrow(new InsufficientFundsException("Insufficient funds for buy order"))
                     .when(buyStrategy).execute(any(), any(), any());
 
-            SettlementException ex = assertThrows(SettlementException.class,
-                    () -> orderService.settleExecution(fillAt("149.50")));
+            ExecutionEvent fill = fillAt("149.50");
+            SettlementException ex = assertThrows(SettlementException.class, () -> orderService.settleExecution(fill));
 
             assertEquals(working.getId(), ex.getOrderEvent().orderId());
             assertEquals("KEY", ex.getOrderEvent().idempotencyKey());
@@ -645,7 +647,8 @@ class OrderServiceTest {
         void testRejectsInactiveAccount() {
             testAccount.setStatus(com.neueda.leap.enums.AccountStatus.SUSPENDED);
 
-            assertThrows(SettlementException.class, () -> orderService.settleExecution(fillAt("149.50")));
+            ExecutionEvent fill = fillAt("149.50");
+            assertThrows(SettlementException.class, () -> orderService.settleExecution(fill));
             verifyNoInteractions(buyStrategy);
         }
     }

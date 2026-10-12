@@ -58,6 +58,8 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional
 @Slf4j
 public class OrderService {
+    private static final String ACCOUNT_NOT_FOUND = "Account not found: ";
+
     private final AccountRepository accountRepository;
     private final InstrumentRepository instrumentRepository;
     private final OrderRepository orderRepository;
@@ -121,6 +123,10 @@ public class OrderService {
      * @throws DuplicateOrderException if the idempotency key was already used
      */
     public Order acceptOrder(PlaceOrderRequest request) {
+        return storeNewOrder(request);
+    }
+
+    private Order storeNewOrder(PlaceOrderRequest request) {
         Objects.requireNonNull(request);
 
         String idempotencyKey = InputNormalizer.normalize(request.idempotencyKey());
@@ -156,7 +162,7 @@ public class OrderService {
 
         // Fail fast: these cannot succeed later, so don't store or queue the order
         accountRepository.findById(request.accountId())
-                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
+                .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + request.accountId()));
         String symbol = InputNormalizer.normalize(request.symbol());
         instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
@@ -168,7 +174,7 @@ public class OrderService {
                 : new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
                         livePrice(symbol), request.idempotencyKey());
 
-        Order order = transactionTemplate.execute(status -> acceptOrder(priced));
+        Order order = transactionTemplate.execute(status -> storeNewOrder(priced));
         try {
             orderEventPublisher.publish(order);
         } catch (OrderPublishException ex) {
@@ -392,7 +398,7 @@ public class OrderService {
         // DEFENSIVE VALIDATION: account or instrument may have been deleted between
         // REST validation and async processing
         Account account = accountRepository.findById(event.accountId())
-                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + event.accountId()));
+                .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + event.accountId()));
         instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
@@ -470,7 +476,7 @@ public class OrderService {
         }
 
         Account account = accountRepository.findById(order.getAccountId())
-                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + order.getAccountId()));
+                .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + order.getAccountId()));
         if (!account.isActive()) {
             throw new AccountNotActiveException("Account not active: " + order.getAccountId());
         }

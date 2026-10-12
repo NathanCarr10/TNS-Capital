@@ -1,5 +1,6 @@
 package com.neueda.leap.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.kafka.events.MessageEnvelope;
@@ -26,11 +27,11 @@ public class TradeEventAuditListener {
 
     @KafkaListener(topics = "${trading.kafka.topics.trade-events:trade-events}", groupId = "tns-capital-audit",
             containerFactory = "auditListenerContainerFactory")
-    public void onTradeEvent(@Payload String message) throws Exception {
+    public void onTradeEvent(@Payload String message) throws JsonProcessingException {
         // The publisher wraps a TradeEvent (itself enveloped) in a MessageEnvelope
         MessageEnvelope<TradeEvent> envelope = objectMapper.readValue(message,
                 new TypeReference<MessageEnvelope<TradeEvent>>() {
                 });
-        auditService.record(envelope.getPayload());
+        auditService.store(envelope.getPayload());
     }
 }

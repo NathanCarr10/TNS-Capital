@@ -39,7 +39,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.repositories.ExecutionRepository;
 import com.neueda.leap.marketdata.PriceProvider;
-import com.neueda.leap.marketdata.PriceQuote;
 
 /**
  * Unit tests for exception differentiation in OrderService.

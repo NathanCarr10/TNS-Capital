@@ -52,6 +52,8 @@ public class TradeEventRecord {
         // JPA no-arg constructor
     }
 
+    // One argument per column of the audit table
+    @SuppressWarnings("java:S107")
     public TradeEventRecord(String eventId, UUID orderId, Long accountId, String symbol, String side,
             Integer quantity, BigDecimal price, String previousStatus, String newStatus, String reason,
             Instant receivedOn) {

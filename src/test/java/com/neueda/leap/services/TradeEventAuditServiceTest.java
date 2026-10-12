@@ -33,18 +33,18 @@ class TradeEventAuditServiceTest {
     @Test
     @DisplayName("stores a new event with its order details")
     void recordsNewEvent() {
-        assertTrue(service.record(filledEvent()));
+        assertTrue(service.store(filledEvent()));
 
         ArgumentCaptor<TradeEventRecord> saved = ArgumentCaptor.forClass(TradeEventRecord.class);
         verify(repository).save(saved.capture());
-        TradeEventRecord record = saved.getValue();
-        assertEquals("event-1", record.getEventId());
-        assertEquals(ORDER_ID, record.getOrderId());
-        assertEquals(11L, record.getAccountId());
-        assertEquals(new BigDecimal("30.00"), record.getPrice());
-        assertEquals("NEW", record.getPreviousStatus());
-        assertEquals("FILLED", record.getNewStatus());
-        assertEquals(NOW, record.getReceivedOn());
+        TradeEventRecord stored = saved.getValue();
+        assertEquals("event-1", stored.getEventId());
+        assertEquals(ORDER_ID, stored.getOrderId());
+        assertEquals(11L, stored.getAccountId());
+        assertEquals(new BigDecimal("30.00"), stored.getPrice());
+        assertEquals("NEW", stored.getPreviousStatus());
+        assertEquals("FILLED", stored.getNewStatus());
+        assertEquals(NOW, stored.getReceivedOn());
     }
 
     @Test
@@ -52,7 +52,7 @@ class TradeEventAuditServiceTest {
     void skipsDuplicate() {
         when(repository.existsById("event-1")).thenReturn(true);
 
-        assertFalse(service.record(filledEvent()));
+        assertFalse(service.store(filledEvent()));
         verify(repository, never()).save(any());
     }
 
@@ -62,6 +62,6 @@ class TradeEventAuditServiceTest {
         TradeEvent event = filledEvent();
         event.setCorrelationId(null);
 
-        assertThrows(NullPointerException.class, () -> service.record(event));
+        assertThrows(NullPointerException.class, () -> service.store(event));
     }
 }
