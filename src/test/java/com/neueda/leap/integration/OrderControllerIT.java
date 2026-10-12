@@ -247,7 +247,9 @@ public class OrderControllerIT extends AbstractIntegrationTest {
                 orderRepository.save(working);
 
                 mockMvc.perform(delete("/api/v1/orders/{orderId}", working.getId()))
-                                .andExpect(status().isNoContent());
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id", equalTo(working.getId().toString())))
+                                .andExpect(jsonPath("$.status", equalTo("CANCELLED")));
 
                 mockMvc.perform(get("/api/v1/orders/{orderId}", working.getId()))
                                 .andExpect(jsonPath("$.status", equalTo("CANCELLED")));

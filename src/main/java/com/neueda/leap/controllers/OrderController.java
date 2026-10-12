@@ -132,8 +132,12 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(order));
     }
 
+    /**
+     * Cancels a NEW order and returns it with its updated status (CANCELLED).
+     * A FILLED, REJECTED or already CANCELLED order gets 409 ORD-409.
+     */
     @DeleteMapping("/{orderId}")
-    public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
+    public ResponseEntity<OrderResponse> cancelOrder(@PathVariable UUID orderId) {
         // Validates order exists before cancellation; prevents silently ignoring
         // requests for non-existent orders
         Order order = orderRepository.findById(orderId)
@@ -143,8 +147,8 @@ public class OrderController {
 
         // Delegates cancellation to service layer; service validates business rules
         // (status, timing)
-        orderService.cancelOrder(orderId);
-        return ResponseEntity.noContent().build();
+        Order cancelled = orderService.cancelOrder(orderId);
+        return ResponseEntity.ok(mapToResponse(cancelled));
     }
 
     @GetMapping("/history/{orderId}")
