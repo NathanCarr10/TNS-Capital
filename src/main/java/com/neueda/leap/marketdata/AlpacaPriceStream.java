@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -64,7 +65,7 @@ public class AlpacaPriceStream {
     });
 
     private volatile boolean running;
-    private volatile WebSocket webSocket;
+    private final AtomicReference<WebSocket> webSocket = new AtomicReference<>();
     private Duration reconnectDelay = MIN_RECONNECT_DELAY;
 
     public AlpacaPriceStream(
@@ -98,7 +99,7 @@ public class AlpacaPriceStream {
     public void stop() {
         running = false;
         scheduler.shutdownNow();
-        WebSocket current = webSocket;
+        WebSocket current = webSocket.get();
         if (current != null) {
             current.abort();
         }
@@ -136,7 +137,7 @@ public class AlpacaPriceStream {
                         log.warn("Could not connect to Alpaca price stream: {}", error.getMessage());
                         scheduleReconnect();
                     } else {
-                        webSocket = connected;
+                        webSocket.set(connected);
                     }
                 });
     }

@@ -1,0 +1,15 @@
+# The insight tests only need pandas and pytest; the app's other dependencies are not required.
+pandas==2.3.3
+pytest==9.1.1
+pytest-cov==7.1.0
+
+numpy==2.5.4                  # via pandas
+python-dateutil==2.9.0.post0  # via pandas
+pytz==2026.5                  # via pandas
+tzdata==2026.5                # via pandas
+six==1.17.0                   # via python-dateutil
+iniconfig==2.3.1              # via pytest
+packaging==26.3               # via pytest
+pluggy==1.6.0                 # via pytest
+Pygments==2.21.0              # via pytest
+coverage==7.16.2              # via pytest-cov

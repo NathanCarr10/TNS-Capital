@@ -37,6 +37,9 @@ spring:
       properties:
         linger.ms: 10
         batch.size: 32768
+        # Fail a send within 5 s when Kafka is unreachable (default 60 s), so
+        # placing an order cannot hang
+        max.block.ms: 5000
     consumer:
       bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       group-id: tns-capital-orders
@@ -50,6 +53,13 @@ trading:
       orders: orders
       trade-events: trade-events
       market-data: market-data
+    # How long placing an order waits for Kafka to acknowledge it
+    send-timeout-ms: 5000
+
+broker:
+  # The Broker Simulator API the Trade Executor sends orders to
+  url: ${BROKER_URL:http://localhost:8085}
+  timeout-ms: 3000
 
 market-data:
   alpaca:
@@ -75,6 +85,8 @@ dlq:
 jwt:
   # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
   shared-secret: ${JWT_SECRET}
+  # Tokens must carry this iss claim; must match the auth service's JWT_ISSUER
+  issuer: urn:tns-capital:auth-service
 
 mybatis:
   type-handlers-package: com.neueda.leap.config

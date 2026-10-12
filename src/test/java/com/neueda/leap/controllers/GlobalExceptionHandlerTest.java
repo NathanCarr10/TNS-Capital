@@ -39,7 +39,9 @@ class GlobalExceptionHandlerTest {
                 Arguments.of("ORD-404", 404, (Function<String, ResponseEntity<ErrorResponse>>)
                         m -> handler.handleOrderNotFound(new OrderNotFoundException(m))),
                 Arguments.of("ACC-409", 409, (Function<String, ResponseEntity<ErrorResponse>>)
-                        m -> handler.handleAccountAlreadyExists(new AccountAlreadyExistsException(m))));
+                        m -> handler.handleAccountAlreadyExists(new AccountAlreadyExistsException(m))),
+                Arguments.of("SYS-503", 503, (Function<String, ResponseEntity<ErrorResponse>>)
+                        m -> handler.handleOrderPublish(new OrderPublishException(m, new RuntimeException()))));
     }
 
     @ParameterizedTest(name = "{0} -> HTTP {1}")

@@ -8,6 +8,8 @@ import com.neueda.leap.model.Position;
 import com.neueda.leap.exceptions.AccountAlreadyExistsException;
 import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.utils.InputNormalizer;
+import com.neueda.leap.exceptions.PositionNotFoundException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.repositories.AccountRepository;
@@ -92,6 +94,19 @@ public class AccountService {
     public List<Position> getPositions(Long accountId) {
         getAccountById(accountId);
         return positionRepository.findByAccountId(accountId);
+    }
+
+    /**
+     * One holding of an account.
+     *
+     * @throws AccountNotFoundException  if the account does not exist
+     * @throws PositionNotFoundException if the account holds none of the symbol
+     */
+    @Transactional(readOnly = true)
+    public Position getPosition(Long accountId, String symbol) {
+        getAccountById(accountId);
+        return positionRepository.findByAccountIdAndSymbol(accountId, InputNormalizer.normalize(symbol))
+                .orElseThrow(() -> new PositionNotFoundException("Position not found: " + accountId + " " + symbol));
     }
 
     @Transactional(readOnly = true)

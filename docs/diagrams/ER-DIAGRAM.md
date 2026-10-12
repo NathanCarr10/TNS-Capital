@@ -10,6 +10,8 @@ erDiagram
     INSTRUMENTS ||--o{ ORDERS : "traded in"
     INSTRUMENTS ||--o{ POSITIONS : "held as"
     ORDERS ||--o| EXECUTIONS : "filled by"
+    ACCOUNTS |o--o| USERS : "owned by"
+    USERS ||--o{ REFRESH_TOKENS : "signed in with"
 
     ACCOUNTS {
         BIGINT id PK "generated identity"
@@ -86,6 +88,40 @@ erDiagram
         TEXT admin_notes
         BOOLEAN is_retryable "false = cannot succeed on replay"
     }
+
+    TRADE_EVENT_LOG {
+        VARCHAR(64) event_id PK "the event's correlationId"
+        UUID order_id "no FK: survives the order"
+        BIGINT account_id "no FK"
+        VARCHAR(20) symbol
+        VARCHAR(4) side
+        INT quantity
+        NUMERIC(18-2) price
+        VARCHAR(20) previous_status
+        VARCHAR(20) new_status
+        TEXT reason
+        TIMESTAMP received_on
+    }
+
+    USERS {
+        BIGINT id PK
+        VARCHAR(255) username UK
+        VARCHAR(255) password_hash "Argon2id; plaintext never stored"
+        VARCHAR(20) role "USER | ADMIN"
+        BIGINT account_id FK, UK "opened at registration; NULL for admins"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    REFRESH_TOKENS {
+        BIGINT id PK
+        BIGINT user_id FK "ON DELETE CASCADE"
+        CHAR(64) token_hash UK "SHA-256 of the token"
+        UUID family_id "one login session"
+        TIMESTAMP expires_at
+        TIMESTAMP used_at "NULL until spent"
+        TIMESTAMP created_at
+    }
 ```
 
 ## Notes
@@ -104,6 +140,13 @@ erDiagram
 - **Failed messages.** `dlq_messages` is independent of the trading tables: it
   stores Kafka order messages that could not be processed, for an admin to
   replay or dismiss.
+- **Lifecycle audit.** `trade_event_log` holds every event from the `trade-events`
+  Kafka topic (each status change of each order), written by the API's audit consumer;
+  `GET /api/v1/orders/{id}/events` reads it.
+- **Users and sessions.** The auth service owns `users` and `refresh_tokens`.
+  Registering creates a user and opens their trading account (`users.account_id`).
+  Each refresh token is single use and stored only as a hash; tokens from one
+  login share a `family_id`, so reusing a spent token revokes the whole session.
 - **Reporting.** The views in `db/views` (`v_positions_detail`,
   `v_order_history`, `v_account_summary`) join these tables for dashboards. The
   ETL pipeline loads a star schema into the separate `analytics` schema

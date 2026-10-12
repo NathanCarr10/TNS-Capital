@@ -163,6 +163,22 @@ describe('AuthService', () => {
     });
   });
 
+  describe('validate', () => {
+    it('returns the user for the right password', async () => {
+      users.findByUsername.mockResolvedValue(trader);
+
+      expect(await auth.validate('trader', 'password123')).toBe(trader);
+    });
+
+    it('returns null for a wrong password or an unknown user', async () => {
+      users.findByUsername.mockResolvedValue(trader);
+      expect(await auth.validate('trader', 'wrongPassword')).toBeNull();
+
+      users.findByUsername.mockResolvedValue(null);
+      expect(await auth.validate('nobody', 'password123')).toBeNull();
+    });
+  });
+
   describe('me', () => {
     const claims = { sub: 'trader', roles: ['ADMIN' as const], typ: 'access' as const, jti: 'j', iss: 'x', iat: 0, exp: 0 };
 

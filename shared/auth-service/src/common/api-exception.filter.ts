@@ -37,6 +37,8 @@ export class ApiExceptionFilter implements ExceptionFilter {
           return [HttpStatus.NOT_FOUND, 'NOT-404', `Resource not found: ${request.path}`];
         case HttpStatus.METHOD_NOT_ALLOWED:
           return [HttpStatus.METHOD_NOT_ALLOWED, 'REQ-405', `HTTP method ${request.method} is not supported here`];
+        case HttpStatus.TOO_MANY_REQUESTS:
+          return [HttpStatus.TOO_MANY_REQUESTS, 'AUTH-429', 'Too many attempts. Try again later'];
       }
     }
     this.logger.error('Unexpected error', exception instanceof Error ? exception.stack : String(exception));

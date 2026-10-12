@@ -3,132 +3,65 @@ package com.neueda.leap.controllers;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
-import com.neueda.leap.enums.OrderSide;
+import com.neueda.leap.dtos.PlaceOrderResponse;
+import com.neueda.leap.dtos.TradeEventResponse;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.PriceUnavailableException;
-import com.neueda.leap.kafka.OrderEventPublisher;
-import com.neueda.leap.kafka.events.OrderEvent;
-import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
-import com.neueda.leap.repositories.AccountRepository;
-import com.neueda.leap.repositories.InstrumentRepository;
-import com.neueda.leap.repositories.OrderRepository;
-import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.OrderService;
+import com.neueda.leap.services.TradeEventAuditService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
-@Slf4j
 public class OrderController {
-    private final OrderRepository orderRepository;
-    private final AccountRepository accountRepository;
-    private final InstrumentRepository instrumentRepository;
-    private final OrderHistoryRepository orderHistoryRepository;
     private final OrderService orderService;
-    private final OrderEventPublisher orderEventPublisher;
     private final AccountAccessGuard accessGuard;
-    private final PriceProvider priceProvider;
+    private final TradeEventAuditService auditService;
 
     /**
-     * Places an order asynchronously by publishing to Kafka.
-     *
+     * Places an order asynchronously.
+     * 
+     * The order is stored as NEW and published to Kafka, and 202 ACCEPTED is
+     * returned straight away. The Trade Executor works it from there; poll
+     * GET /api/v1/orders/{orderId} for FILLED or REJECTED. Failures after this
+     * point (insufficient funds, etc.) are captured in the DLQ for review and
+     * replay.
+     * 
      * If the request has no price, the order is priced at the latest live
      * market price, which is returned in the response.
-     *
-     * Returns 202 ACCEPTED immediately; processing happens asynchronously by the
-     * OrderMessageListener. Clients should poll GET /api/v1/orders/{orderId} to
-     * track order status.
      * 
-     * Failures (invalid account, insufficient funds, etc.) are captured in the DLQ
-     * for administrative review and replay.
-     * 
-     * NOTE: This endpoint validates that the Account and Instrument exist BEFORE
-     * publishing to Kafka. This fail-fast approach prevents non-recoverable errors
-     * (e.g., deleted account) from wasting Kafka retry attempts. Business logic
-     * exceptions (insufficient funds, etc.) are still handled in the async
-     * consumer.
+     * An unknown account or instrument fails fast (404) and nothing is stored,
+     * since those can never succeed later.
      * 
      * @param request the order placement request with validation
-     * @return 202 ACCEPTED with order ID for client tracking
+     * @return 202 ACCEPTED with the order ID for tracking
      * @throws AccessDeniedException       if the caller does not own the account
      * @throws AccountNotFoundException    if account does not exist
      * @throws InstrumentNotFoundException if instrument does not exist
+     * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
      */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
+    public ResponseEntity<PlaceOrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         // Checked first, so a non-owner cannot probe which account IDs exist
         accessGuard.checkAccess(request.accountId());
-
-        // FAIL-FAST VALIDATION: Check Account and Instrument existence before
-        // publishing to Kafka
-        // This prevents non-recoverable errors from triggering Kafka retries
-
-        // Validate Account exists
-        accountRepository.findById(request.accountId())
-                .orElseThrow(() -> {
-                    log.warn("Order placement rejected: Account not found: accountId={}", request.accountId());
-                    return new AccountNotFoundException("Account not found: " + request.accountId());
-                });
-
-        // Validate Instrument exists
-        instrumentRepository.findBySymbol(request.symbol())
-                .orElseThrow(() -> {
-                    log.warn("Order placement rejected: Instrument not found: symbol={}", request.symbol());
-                    return new InstrumentNotFoundException("Instrument not found: " + request.symbol());
-                });
-
-        // Price the order now, so it fills at the price at the time it was accepted
-        BigDecimal price = request.price() != null ? request.price() : livePrice(request.symbol());
-
-        // Generate order ID for this request
-        UUID orderId = UUID.randomUUID();
-
-        // Create order event from request
-        OrderEvent event = new OrderEvent(
-                orderId,
-                request.accountId(),
-                request.symbol(),
-                request.side(),
-                request.quantity(),
-                price,
-                Instant.now());
-
-        // Publish to Kafka for async processing
-        // Message will be retried with exponential backoff and routed to DLQ on failure
-        orderEventPublisher.publishEvent(event, request.accountId());
-
-        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
-                orderId, request.accountId(), request.symbol());
-
-        // Return 202 ACCEPTED with order ID for client tracking
-        Map<String, Object> response = new HashMap<>();
-        response.put("orderId", orderId.toString());
-        response.put("status", "ACCEPTED");
-        response.put("price", price);
-        response.put("message", "Order accepted for processing. Poll GET /api/v1/orders/{orderId} to track status.");
-
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+        Order order = orderService.submitOrder(request);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(PlaceOrderResponse.accepted(order.getId(), order.getPrice()));
     }
 
     @GetMapping
@@ -136,68 +69,58 @@ public class OrderController {
         // Admins see every order (monitoring of system order flow); other users
         // see only the orders on their own account
         List<Order> orders = accessGuard.isAdmin()
-                ? orderRepository.findAll()
-                : accessGuard.currentAccountId().map(orderRepository::findByAccountId).orElse(List.of());
-        List<OrderResponse> responses = orders.stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
+                ? orderService.findAllOrders()
+                : accessGuard.currentAccountId().map(orderService::getOrdersByAccountId).orElse(List.of());
+        return ResponseEntity.ok(orders.stream().map(this::mapToResponse).toList());
     }
 
     @GetMapping("/{orderId}")
-    @SuppressWarnings("null")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID orderId) {
-        // Retrieves order by UUID; throws exception if not found to maintain REST
-        // consistency
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(
-                        () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
+        Order order = orderService.getOrder(orderId);
         accessGuard.checkAccess(order.getAccountId());
         return ResponseEntity.ok(mapToResponse(order));
     }
 
+    /**
+     * Cancels a NEW order and returns it with its updated status (CANCELLED).
+     * A FILLED, REJECTED or already CANCELLED order gets 409 ORD-409.
+     */
     @DeleteMapping("/{orderId}")
-    public ResponseEntity<Void> cancelOrder(@PathVariable UUID orderId) {
-        // Validates order exists before cancellation; prevents silently ignoring
-        // requests for non-existent orders
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(
-                        () -> new com.neueda.leap.exceptions.OrderNotFoundException("Order not found: " + orderId));
-        accessGuard.checkAccess(order.getAccountId());
-
-        // Delegates cancellation to service layer; service validates business rules
-        // (status, timing)
-        orderService.cancelOrder(orderId);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<OrderResponse> cancelOrder(@PathVariable UUID orderId) {
+        // Looked up first so the ownership check runs before any change
+        accessGuard.checkAccess(orderService.getOrder(orderId).getAccountId());
+        Order cancelled = orderService.cancelOrder(orderId);
+        return ResponseEntity.ok(mapToResponse(cancelled));
     }
 
+    /**
+     * The order's lifecycle (e.g. NEW -> FILLED), from the audit trail of the
+     * trade-events topic, oldest first.
+     */
+    @GetMapping("/{orderId}/events")
+    public ResponseEntity<List<TradeEventResponse>> getOrderEvents(@PathVariable UUID orderId) {
+        accessGuard.checkAccess(orderService.getOrder(orderId).getAccountId());
+        return ResponseEntity.ok(auditService.eventsForOrder(orderId).stream()
+                .map(event -> new TradeEventResponse(event.getEventId(), event.getPreviousStatus(),
+                        event.getNewStatus(), event.getReason(), event.getReceivedOn()))
+                .toList());
+    }
+
+    /** The archived copy of a cancelled order */
     @GetMapping("/history/{orderId}")
     public ResponseEntity<OrderHistoryResponse> getOrderHistory(@PathVariable UUID orderId) {
-        // Retrieves order history record for a cancelled/deleted order
-        OrderHistory history = orderHistoryRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new com.neueda.leap.exceptions.OrderNotFoundException(
-                        "Order history not found: " + orderId));
+        OrderHistory history = orderService.getOrderHistory(orderId);
         accessGuard.checkAccess(history.getAccountId());
         return ResponseEntity.ok(mapHistoryToResponse(history));
     }
 
+    /** Archived cancelled orders for an account; works even for closed accounts */
     @GetMapping("/{accountId}/history")
     public ResponseEntity<List<OrderHistoryResponse>> getAccountOrderHistory(@PathVariable Long accountId) {
-        // Retrieves all order history records for an account; enables audit trail
-        // queries even for deleted accounts
         accessGuard.checkAccess(accountId);
-        List<OrderHistory> histories = orderHistoryRepository.findByAccountId(accountId);
-        List<OrderHistoryResponse> responses = histories.stream()
+        return ResponseEntity.ok(orderService.getAccountOrderHistory(accountId).stream()
                 .map(this::mapHistoryToResponse)
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
-    }
-
-    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
-    private BigDecimal livePrice(String symbol) {
-        return priceProvider.latestPrice(symbol)
-                .map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP))
-                .orElseThrow(() -> new PriceUnavailableException("No live price for " + symbol));
+                .toList());
     }
 
     private OrderResponse mapToResponse(Order order) {

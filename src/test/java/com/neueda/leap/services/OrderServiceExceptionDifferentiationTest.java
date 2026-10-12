@@ -36,6 +36,9 @@ import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
 import com.neueda.leap.time.ClockTest;
 import org.springframework.transaction.PlatformTransactionManager;
+import com.neueda.leap.execution.BrokerSimulatorClient;
+import com.neueda.leap.repositories.ExecutionRepository;
+import com.neueda.leap.marketdata.PriceProvider;
 
 /**
  * Unit tests for exception differentiation in OrderService.
@@ -84,6 +87,15 @@ class OrderServiceExceptionDifferentiationTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private BrokerSimulatorClient brokerClient;
+
+    @Mock
+    private ExecutionRepository executionRepository;
+
+    @Mock
+    private PriceProvider priceProvider;
+
     private ClockTest testClock;
     private UUID orderId;
     private Long accountId = 1L;
@@ -112,7 +124,10 @@ class OrderServiceExceptionDifferentiationTest {
                 testClock,
                 orderEventPublisher,
                 tradeEventPublisher,
-                transactionManager);
+                transactionManager,
+                brokerClient,
+                executionRepository,
+                priceProvider);
     }
 
     @DisplayName("processOrderEvent - Not-Found Exceptions")
@@ -212,9 +227,7 @@ class OrderServiceExceptionDifferentiationTest {
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(testInstrument));
 
-            // Mock: Strategy throws InsufficientFundsException (business logic error)
-            doThrow(new InsufficientFundsException("Insufficient balance for order"))
-                    .when(buyStrategy).execute(any(), any(), any());
+            // The account holds 100.00, but the order costs 100 x 150.00
 
             // Act & Assert
             InsufficientFundsException exception = assertThrows(
@@ -222,7 +235,7 @@ class OrderServiceExceptionDifferentiationTest {
                     () -> orderService.processOrderEvent(event));
 
             // Verify it's NOT wrapped in NonRetryableOrderException
-            assertEquals("Insufficient balance for order", exception.getMessage());
+            assertEquals("Insufficient funds for buy order", exception.getMessage());
 
             // Verify rejected order was saved (because business logic validation failed)
             verify(orderRepository, atLeastOnce()).save(argThat(order -> order.getStatus() == OrderStatus.REJECTED));

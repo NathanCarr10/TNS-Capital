@@ -92,16 +92,18 @@ def test_retries_when_rate_limited(fake_alpaca):
 def test_gives_up_after_three_attempts(fake_alpaca):
     responses, requests = fake_alpaca
     responses.extend([503, 503, 503])
+    start = date(2026, 10, 1)
 
     with pytest.raises(market_data.MarketDataError):
-        market_data.fetch_daily_bars(["AAPL"], date(2026, 10, 1), now=NOW)
+        market_data.fetch_daily_bars(["AAPL"], start, now=NOW)
     assert len(requests) == 3
 
 
 def test_wrong_keys_are_not_retried(fake_alpaca):
     responses, requests = fake_alpaca
     responses.append(403)
+    start = date(2026, 10, 1)
 
     with pytest.raises(market_data.MarketDataError, match="403"):
-        market_data.fetch_daily_bars(["AAPL"], date(2026, 10, 1), now=NOW)
+        market_data.fetch_daily_bars(["AAPL"], start, now=NOW)
     assert len(requests) == 1

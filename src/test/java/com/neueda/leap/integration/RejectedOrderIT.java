@@ -131,7 +131,7 @@ class RejectedOrderIT extends AbstractIntegrationTest {
         assertThat(accountRepository.findById(testAccount.getId()).orElseThrow().getCashBalance())
                 .isEqualByComparingTo("1000.00");
 
-        // Fund the account and replay the DLQ message: the REJECTED order is re-executed
+        // Fund the account and replay the DLQ message: the REJECTED order is worked again
         Account account = accountRepository.findById(testAccount.getId()).orElseThrow();
         account.credit(new BigDecimal("10000.00"));
         accountRepository.save(account);
@@ -139,7 +139,9 @@ class RejectedOrderIT extends AbstractIntegrationTest {
         DeadLetterMessage dlqMessage = dlqRepository.findAll().get(0);
         assertThat(deadLetterService.replayMessage(dlqMessage.getId(), orderService)).isTrue();
 
-        assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.FILLED);
+        // The replay sends the order to the broker again; it is FILLED once the fill is settled
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(
+                orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatus.FILLED));
         pollTradeEvents(Duration.ofSeconds(3));
         assertThat(eventsFor(orderId))
                 .extracting(e -> e.at("/payload/payload/status").asText())

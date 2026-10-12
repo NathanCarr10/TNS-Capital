@@ -1,0 +1,25 @@
+server:
+  port: ${SERVER_PORT:8085}
+
+spring:
+  application:
+    name: broker-simulator
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+
+broker:
+  # Each order is filled after a random delay in this range, at or better than
+  # its limit price by up to max-price-improvement-bps (50 = 0.5%)
+  min-delay: ${BROKER_MIN_DELAY:500ms}
+  max-delay: ${BROKER_MAX_DELAY:2000ms}
+  max-price-improvement-bps: ${BROKER_MAX_PRICE_IMPROVEMENT_BPS:50}
+  executions-topic: executions
+  venue: SIM
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
