@@ -482,6 +482,7 @@ for the quality gate.
 
 | Document | Contents |
 |---|---|
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Design decisions and where the build deliberately differs from the spec |
 | [docs/BusinessLogic.md](docs/BusinessLogic.md) | Domain model, class diagram and buy/sell sequence diagrams |
 | [docs/diagrams/ER-DIAGRAM.md](docs/diagrams/ER-DIAGRAM.md) | Database ER diagram |
 | [docs/SECURITY_GUIDE.md](docs/SECURITY_GUIDE.md) | API security measures |
