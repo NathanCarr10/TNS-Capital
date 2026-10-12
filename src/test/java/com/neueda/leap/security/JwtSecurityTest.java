@@ -92,9 +92,19 @@ class JwtSecurityTest {
         when(dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING)).thenReturn(List.of());
     }
 
+    private static final String ISSUER = "urn:tns-capital:auth-service";
+
     private static String token(String secret, Instant expiresAt, List<String> roles) throws JOSEException {
+        return token(secret, expiresAt, roles, ISSUER, "access");
+    }
+
+    /** A token shaped like the auth service's: sub, roles, typ, iss, iat, exp */
+    private static String token(String secret, Instant expiresAt, List<String> roles, String issuer, String type)
+            throws JOSEException {
         JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder()
                 .subject("alice")
+                .issuer(issuer)
+                .claim("typ", type)
                 .issueTime(new Date())
                 .expirationTime(Date.from(expiresAt));
         if (roles != null) {
@@ -142,6 +152,28 @@ class JwtSecurityTest {
         String expired = token(SECRET, Instant.now().minusSeconds(300), List.of("ADMIN"));
 
         mockMvc.perform(get(ACCOUNT_URL).header("Authorization", "Bearer " + expired))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("A token from another issuer is rejected")
+    void wrongIssuerIsRejected() throws Exception {
+        String foreign = token(SECRET, Instant.now().plusSeconds(3600), List.of("ADMIN"), "urn:someone-else", "access");
+
+        mockMvc.perform(get(ACCOUNT_URL).header("Authorization", "Bearer " + foreign))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("AUTH-401"));
+    }
+
+    @Test
+    @DisplayName("A token that is not an access token is rejected")
+    void wrongTokenTypeIsRejected() throws Exception {
+        String refresh = token(SECRET, Instant.now().plusSeconds(3600), List.of("ADMIN"), ISSUER, "refresh");
+        String untyped = token(SECRET, Instant.now().plusSeconds(3600), List.of("ADMIN"), ISSUER, null);
+
+        mockMvc.perform(get(ACCOUNT_URL).header("Authorization", "Bearer " + refresh))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get(ACCOUNT_URL).header("Authorization", "Bearer " + untyped))
                 .andExpect(status().isUnauthorized());
     }
 

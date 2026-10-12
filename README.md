@@ -445,7 +445,7 @@ for the quality gate.
 |---|---|
 | `required variable DB_PASSWORD is missing` or `set JWT_SECRET in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
 | Auth service exits on startup | `JWT_SECRET` must be at least 32 bytes. Use `openssl rand -hex 32`. |
-| `401 AUTH-401` from the API | The token is missing, expired or signed with a different secret. Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
+| `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
 | Port already in use (3000, 4000, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard). |
