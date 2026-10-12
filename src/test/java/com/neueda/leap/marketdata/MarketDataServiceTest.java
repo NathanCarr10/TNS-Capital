@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("MarketDataService")
 class MarketDataServiceTest {
@@ -25,7 +25,7 @@ class MarketDataServiceTest {
 
     private PriceProvider priceProvider;
     private AlpacaRestClient restClient;
-    private ClockTest clock;
+    private FixedClock clock;
     private MarketDataService service;
 
     @BeforeEach
@@ -34,7 +34,7 @@ class MarketDataServiceTest {
         restClient = mock(AlpacaRestClient.class);
         when(priceProvider.latestPrices(any())).thenReturn(Map.of());
         when(restClient.dailyCloses(any())).thenReturn(Map.of());
-        clock = new ClockTest(NOW);
+        clock = new FixedClock(NOW);
         service = new MarketDataService(priceProvider, restClient, clock);
     }
 
