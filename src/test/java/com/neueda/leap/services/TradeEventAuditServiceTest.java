@@ -15,7 +15,7 @@ import org.mockito.ArgumentCaptor;
 import com.neueda.leap.kafka.events.TradeEvent;
 import com.neueda.leap.model.TradeEventRecord;
 import com.neueda.leap.repositories.TradeEventRecordRepository;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("TradeEventAuditService")
 class TradeEventAuditServiceTest {
@@ -23,7 +23,7 @@ class TradeEventAuditServiceTest {
     private static final UUID ORDER_ID = UUID.randomUUID();
 
     private final TradeEventRecordRepository repository = mock(TradeEventRecordRepository.class);
-    private final TradeEventAuditService service = new TradeEventAuditService(repository, new ClockTest(NOW));
+    private final TradeEventAuditService service = new TradeEventAuditService(repository, new FixedClock(NOW));
 
     private static TradeEvent filledEvent() {
         return new TradeEvent(NOW, "event-1", "1.0", "order_status_changed", new TradeEvent.TradeEventPayload(

@@ -22,7 +22,6 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Account endpoints. Admins can use every account; other users only the
@@ -55,7 +54,7 @@ public class AccountController {
                                                 .orElse(List.of());
                 List<AccountResponse> responses = accounts.stream()
                                 .map(this::mapToResponse)
-                                .collect(Collectors.toList());
+                                .toList();
                 return ResponseEntity.ok(responses);
         }
 
@@ -133,7 +132,7 @@ public class AccountController {
                 accessGuard.checkAccess(accountId);
                 List<OrderResponse> responses = accountService.getOrders(accountId).stream()
                                 .map(this::mapOrderToResponse)
-                                .collect(Collectors.toList());
+                                .toList();
                 return ResponseEntity.ok(responses);
         }
 

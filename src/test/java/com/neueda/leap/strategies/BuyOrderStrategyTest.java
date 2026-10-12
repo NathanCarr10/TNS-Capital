@@ -24,7 +24,7 @@ import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 import com.neueda.leap.repositories.PositionRepository;
 
 @DisplayName("BuyOrderStrategy Test Suite")
@@ -35,13 +35,13 @@ class BuyOrderStrategyTest {
         @Mock
         private PositionRepository positionRepository;
         private Account testAccount;
-        private ClockTest testClock;
+        private FixedClock testClock;
 
         @BeforeEach
         void setUp() {
                 MockitoAnnotations.openMocks(this);
                 
-                testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+                testClock = new FixedClock(Instant.parse("2026-09-17T10:00:00Z"));
                 positionsMap = new HashMap<>();
 
                 // Create test account with sufficient funds

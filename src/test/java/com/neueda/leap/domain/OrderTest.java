@@ -15,16 +15,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.model.Order;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("Order Test Suite")
 class OrderTest {
     private Order order;
-    private ClockTest testClock;
+    private FixedClock testClock;
 
     @BeforeEach
     void setUp() {
-        testClock = new ClockTest(Instant.parse("2026-09-16T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-16T10:00:00Z"));
         order = new Order(1L, "   aapl  ", OrderSide.BUY, 100, new BigDecimal("150.50"), " id-12345", testClock);
     }
 

@@ -15,7 +15,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/instruments")
@@ -32,7 +31,7 @@ public class InstrumentController {
         List<Instrument> instruments = instrumentRepository.findAll();
         List<InstrumentResponse> responses = instruments.stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(responses);
     }
 

@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @DisplayName("Health Controller Integration Tests")
 @WithMockUser(username = "testuser", roles = "ADMIN")
-public class HealthControllerIT extends AbstractIntegrationTest {
+class HealthControllerIT extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

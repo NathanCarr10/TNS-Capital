@@ -215,7 +215,7 @@ public class KafkaConfig {
         // The BackOff must be explicit: DefaultErrorHandler defaults to
         // FixedBackOff(0, 9), i.e. 10 delivery attempts per failed record.
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception),
+                this::handleRecovery,
                 new FixedBackOff(0L, 0L));
 
         log.info(

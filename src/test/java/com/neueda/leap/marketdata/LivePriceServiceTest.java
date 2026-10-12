@@ -14,21 +14,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("LivePriceService")
 class LivePriceServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-12T14:30:00Z");
 
     private AlpacaRestClient restClient;
-    private ClockTest clock;
+    private FixedClock clock;
     private LivePriceService service;
 
     @BeforeEach
     void setUp() {
         restClient = mock(AlpacaRestClient.class);
         when(restClient.latestTrades(any())).thenReturn(Map.of());
-        clock = new ClockTest(NOW);
+        clock = new FixedClock(NOW);
         AlpacaProperties properties = new AlpacaProperties("key", "secret", "iex",
                 "wss://example.test/v2/", "https://example.test", 30, Duration.ofSeconds(60));
         service = new LivePriceService(restClient, properties, clock);

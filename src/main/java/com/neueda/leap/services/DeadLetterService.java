@@ -127,41 +127,49 @@ public class DeadLetterService {
                 return false;
             }
 
-            try {
-                // Deserialize the original message envelope using TypeReference to preserve
-                // generic type
-                MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
-                        dlqMessage.getOriginalMessage(),
-                        new com.fasterxml.jackson.core.type.TypeReference<MessageEnvelope<OrderEvent>>() {
-                        });
-
-                // Re-process the order event
-                OrderEvent event = envelope.getPayload();
-                orderService.replayOrderEvent(event);
-
-                // Mark DLQ message as resolved
-                dlqMessage.setStatus(DLQStatus.RESOLVED);
-                dlqMessage.setResolvedOn(clock.now());
-                dlqMessage.setLastRetryOn(clock.now());
-                dlqRepository.save(dlqMessage);
-
-                log.info("DLQ message replayed successfully: dlqId={}, orderId={}", dlqMessageId, event.orderId());
-                return true;
-
-            } catch (Exception ex) {
-                // Increment retry count and keep message as PENDING
-                dlqMessage.setRetryCount(dlqMessage.getRetryCount() + 1);
-                dlqMessage.setLastRetryOn(clock.now());
-                dlqRepository.save(dlqMessage);
-
-                log.warn("DLQ message replay failed (attempt {}): dlqId={}, orderId={}, error={}",
-                        dlqMessage.getRetryCount(), dlqMessageId,
-                        dlqMessage.getOriginalOrderId(), ex.getMessage());
-
-                return false;
-            }
+            return replay(dlqMessage, orderService);
         } catch (Exception ex) {
             log.error("Error replaying DLQ message: dlqId={}", dlqMessageId, ex);
+            return false;
+        }
+    }
+
+    /**
+     * Re-processes the message's order event and marks it resolved. If that
+     * fails, counts the attempt and leaves the message PENDING.
+     */
+    private boolean replay(DeadLetterMessage dlqMessage, OrderService orderService) {
+        try {
+            // Deserialize the original message envelope using TypeReference to preserve
+            // generic type
+            MessageEnvelope<OrderEvent> envelope = objectMapper.readValue(
+                    dlqMessage.getOriginalMessage(),
+                    new com.fasterxml.jackson.core.type.TypeReference<MessageEnvelope<OrderEvent>>() {
+                    });
+
+            // Re-process the order event
+            OrderEvent event = envelope.getPayload();
+            orderService.replayOrderEvent(event);
+
+            // Mark DLQ message as resolved
+            dlqMessage.setStatus(DLQStatus.RESOLVED);
+            dlqMessage.setResolvedOn(clock.now());
+            dlqMessage.setLastRetryOn(clock.now());
+            dlqRepository.save(dlqMessage);
+
+            log.info("DLQ message replayed successfully: dlqId={}, orderId={}", dlqMessage.getId(), event.orderId());
+            return true;
+
+        } catch (Exception ex) {
+            // Increment retry count and keep message as PENDING
+            dlqMessage.setRetryCount(dlqMessage.getRetryCount() + 1);
+            dlqMessage.setLastRetryOn(clock.now());
+            dlqRepository.save(dlqMessage);
+
+            log.warn("DLQ message replay failed (attempt {}): dlqId={}, orderId={}, error={}",
+                    dlqMessage.getRetryCount(), dlqMessage.getId(),
+                    dlqMessage.getOriginalOrderId(), ex.getMessage());
+
             return false;
         }
     }

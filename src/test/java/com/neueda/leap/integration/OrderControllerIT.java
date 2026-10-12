@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @DisplayName("Order Controller Integration Tests")
 @WithMockUser(username = "testuser", roles = "ADMIN")
-public class OrderControllerIT extends AbstractIntegrationTest {
+class OrderControllerIT extends AbstractIntegrationTest {
 
         @Autowired
         private MockMvc mockMvc;

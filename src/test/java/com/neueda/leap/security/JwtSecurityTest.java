@@ -13,7 +13,7 @@ import com.neueda.leap.services.AccountService;
 import com.neueda.leap.services.DeadLetterService;
 import com.neueda.leap.services.OrderService;
 import com.neueda.leap.services.PositionValuationService;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -73,7 +73,8 @@ class JwtSecurityTest {
     @MockitoBean
     private PositionValuationService valuationService;
 
-    // @MapperScan registers the MyBatis mappers, which need a database in a web-layer test
+    // @MapperScan registers the MyBatis mappers, which need a database in a
+    // web-layer test
     @MockitoBean
     private AccountMapper accountMapper;
     @MockitoBean
@@ -86,7 +87,7 @@ class JwtSecurityTest {
     @BeforeEach
     void setUp() {
         Account account = new Account("ACC-1001", "John Doe", new BigDecimal("5000.00"),
-                new ClockTest(Instant.parse("2026-10-01T09:00:00Z")));
+                new FixedClock(Instant.parse("2026-10-01T09:00:00Z")));
         account.setId(1L);
         when(accountService.getAccountById(1L)).thenReturn(account);
         when(dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING)).thenReturn(List.of());
@@ -219,7 +220,8 @@ class JwtSecurityTest {
     @Test
     @DisplayName("The token's roles claim grants ADMIN access to the DLQ")
     void dlqAllowsAdminRoleFromToken() throws Exception {
-        mockMvc.perform(get(DLQ_URL).header("Authorization", "Bearer " + validToken(List.of("MISSION_OPERATOR", "ADMIN"))))
+        mockMvc.perform(
+                get(DLQ_URL).header("Authorization", "Bearer " + validToken(List.of("MISSION_OPERATOR", "ADMIN"))))
                 .andExpect(status().isOk());
     }
 }
