@@ -197,10 +197,9 @@ public class Order {
         }
 
         // From NEW state, can only go to FILLED, REJECTED or CANCELLED
-        if (from == OrderStatus.NEW) {
-            if (to == OrderStatus.FILLED || to == OrderStatus.REJECTED || to == OrderStatus.CANCELLED) {
-                return; // Valid transition
-            }
+        if (from == OrderStatus.NEW
+                && (to == OrderStatus.FILLED || to == OrderStatus.REJECTED || to == OrderStatus.CANCELLED)) {
+            return; // Valid transition
         }
 
         // Any other transition is invalid

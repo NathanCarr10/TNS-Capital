@@ -24,7 +24,7 @@ import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Position;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 import com.neueda.leap.repositories.PositionRepository;
 
 @DisplayName("SellOrderStrategy Test Suite")
@@ -37,13 +37,13 @@ class SellOrderStrategyTest {
         private PositionRepository positionRepository;
         
         private Account testAccount;
-        private ClockTest testClock;
+        private FixedClock testClock;
 
         @BeforeEach
         void setUp() {
                 MockitoAnnotations.openMocks(this);
                 
-                testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+                testClock = new FixedClock(Instant.parse("2026-09-17T10:00:00Z"));
                 positionsMap = new HashMap<>();
 
                 // Create test account
@@ -194,8 +194,6 @@ class SellOrderStrategyTest {
                 @DisplayName("Sell profit is correctly calculated (selling at higher price)")
                 @Test
                 void testSellProfitCalculation() {
-                        BigDecimal initialBalance = testAccount.getCashBalance();
-
                         // Buy 100 shares at $150
                         PlaceOrderRequest buyRequest = new PlaceOrderRequest(
                                         1L,

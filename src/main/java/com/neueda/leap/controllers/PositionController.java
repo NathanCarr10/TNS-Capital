@@ -13,7 +13,6 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/positions")
@@ -41,7 +40,7 @@ public class PositionController {
                 List<Position> positions = positionRepository.findByAccountId(accountId);
                 List<PositionResponse> responses = positions.stream()
                                 .map(this::mapToResponse)
-                                .collect(Collectors.toList());
+                                .toList();
                 return ResponseEntity.ok(responses);
         }
 

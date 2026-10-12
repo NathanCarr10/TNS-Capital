@@ -21,6 +21,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 /**
  * Global exception handler that provides secure, consistent error responses.
@@ -207,6 +208,6 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ErrorResponse> error(HttpStatus status, String errorCode, String message) {
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(errorCode, message, LocalDateTime.now()));
+                .body(new ErrorResponse(errorCode, message, LocalDateTime.now(ZoneOffset.UTC)));
     }
 }

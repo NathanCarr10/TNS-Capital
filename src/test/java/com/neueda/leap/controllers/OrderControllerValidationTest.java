@@ -36,7 +36,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.OrderService;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 /**
  * Unit tests for REST layer validation in OrderController.
@@ -131,7 +131,7 @@ class OrderControllerValidationTest {
         void testInstrumentNotFoundReturn404() {
             // Arrange
             Account testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"),
-                    new ClockTest());
+                    new FixedClock());
             testAccount.setId(accountId);
 
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
@@ -153,7 +153,7 @@ class OrderControllerValidationTest {
         void testValidOrderReturn202Accepted() {
             // Arrange
             Account testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"),
-                    new ClockTest());
+                    new FixedClock());
             testAccount.setId(accountId);
 
             Instrument testInstrument = new Instrument(instrument);
@@ -185,7 +185,7 @@ class OrderControllerValidationTest {
 
             // Arrange: REST validation passes
             Account testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"),
-                    new ClockTest());
+                    new FixedClock());
             testAccount.setId(accountId);
 
             Instrument testInstrument = new Instrument(instrument);
@@ -213,7 +213,7 @@ class OrderControllerValidationTest {
         @BeforeEach
         void setUp() {
             Account testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"),
-                    new ClockTest());
+                    new FixedClock());
             testAccount.setId(accountId);
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(new Instrument(instrument)));

@@ -25,7 +25,7 @@ import com.neueda.leap.mappers.InstrumentMapper;
 import com.neueda.leap.mappers.OrderMapper;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("OrderValidator Test Suite")
 class OrderValidatorTest {
@@ -40,7 +40,7 @@ class OrderValidatorTest {
     @Mock
     private OrderMapper orderMapper;
 
-    private ClockTest testClock;
+    private FixedClock testClock;
     private PlaceOrderRequest validRequest;
     private Account testAccount;
     private Instrument testInstrument;
@@ -50,7 +50,7 @@ class OrderValidatorTest {
         MockitoAnnotations.openMocks(this);
         orderValidator = new OrderValidator(accountMapper, instrumentMapper, orderMapper);
 
-        testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-17T10:00:00Z"));
         testAccount = new Account("ACC001", "John Doe", new BigDecimal("100000.00"), testClock);
         testAccount.setId(1L);
         testAccount.setStatus(AccountStatus.ACTIVE);

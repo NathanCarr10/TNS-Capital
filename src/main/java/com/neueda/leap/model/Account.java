@@ -56,7 +56,8 @@ public class Account {
         if (other == null) {
             throw new IllegalArgumentException("Source account cannot be null");
         }
-        // this.id = other.id;
+        // The copy is a new, unsaved account, so it gets its own id when saved
+        this.id = null;
         this.accountNumber = other.accountNumber;
         this.holderName = other.holderName;
         this.cashBalance = new BigDecimal(other.cashBalance.toPlainString());

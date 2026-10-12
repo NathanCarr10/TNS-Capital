@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -140,7 +139,7 @@ public class OrderController {
                 : accessGuard.currentAccountId().map(orderRepository::findByAccountId).orElse(List.of());
         List<OrderResponse> responses = orders.stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(responses);
     }
 
@@ -189,7 +188,7 @@ public class OrderController {
         List<OrderHistory> histories = orderHistoryRepository.findByAccountId(accountId);
         List<OrderHistoryResponse> responses = histories.stream()
                 .map(this::mapHistoryToResponse)
-                .collect(Collectors.toList());
+                .toList();
         return ResponseEntity.ok(responses);
     }
 

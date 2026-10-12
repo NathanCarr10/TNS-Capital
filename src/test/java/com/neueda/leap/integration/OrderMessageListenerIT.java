@@ -20,10 +20,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +35,7 @@ import static org.awaitility.Awaitility.await;
  * Tests async order processing via Kafka topic
  */
 @DisplayName("Order Message Listener Integration Tests")
-public class OrderMessageListenerIT extends AbstractIntegrationTest {
+class OrderMessageListenerIT extends AbstractIntegrationTest {
 
     @Autowired
     private KafkaTemplate<String, String> kafkaTemplate;

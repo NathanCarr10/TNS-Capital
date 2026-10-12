@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -17,6 +19,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 /**
  * Security configuration for the API with JWT validation and security headers.
@@ -76,13 +79,18 @@ public class SecurityConfig {
                                 HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
 
                 http
-                                // Disable CSRF for stateless APIs (no session state)
+                                // Clients authenticate with a bearer token in the Authorization header,
+                                // never a cookie, and no session is created. A browser cannot attach
+                                // the token to a forged cross-site request, so CSRF protection adds
+                                // nothing here
                                 .csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                                 // Add security headers to all responses
                                 .headers(headers -> headers
                                                 // Prevent clickjacking attacks
-                                                .frameOptions(frameOptions -> frameOptions.deny())
+                                                .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                                                 // Prevent MIME type sniffing - use correct method for Spring 6.x
                                                 .contentTypeOptions(contentTypeOptions -> {
                                                 })
@@ -120,6 +128,6 @@ public class SecurityConfig {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.getWriter().write(String.format(
                                 "{\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
-                                errorCode, message, LocalDateTime.now()));
+                                errorCode, message, LocalDateTime.now(ZoneOffset.UTC)));
         }
 }

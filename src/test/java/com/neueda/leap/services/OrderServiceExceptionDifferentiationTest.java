@@ -34,7 +34,7 @@ import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.OrderHistoryRepository;
 import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.strategies.OrderExecutionStrategy;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -84,7 +84,7 @@ class OrderServiceExceptionDifferentiationTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
-    private ClockTest testClock;
+    private FixedClock testClock;
     private UUID orderId;
     private Long accountId = 1L;
     private String symbol = "AAPL";
@@ -93,7 +93,7 @@ class OrderServiceExceptionDifferentiationTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
 
-        testClock = new ClockTest(Instant.parse("2026-09-17T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-17T10:00:00Z"));
         orderId = UUID.randomUUID();
 
         // Create strategy map

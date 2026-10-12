@@ -12,7 +12,7 @@ import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.services.AccountService;
 import com.neueda.leap.services.DeadLetterService;
 import com.neueda.leap.services.OrderService;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -83,7 +83,7 @@ class JwtSecurityTest {
     @BeforeEach
     void setUp() {
         Account account = new Account("ACC-1001", "John Doe", new BigDecimal("5000.00"),
-                new ClockTest(Instant.parse("2026-10-01T09:00:00Z")));
+                new FixedClock(Instant.parse("2026-10-01T09:00:00Z")));
         account.setId(1L);
         when(accountService.getAccountById(1L)).thenReturn(account);
         when(dlqRepository.findByStatusOrderByCreatedOnDesc(DLQStatus.PENDING)).thenReturn(List.of());

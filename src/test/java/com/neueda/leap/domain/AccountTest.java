@@ -15,17 +15,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("Account Test Suite")
 
 class AccountTest {
     private Account account;
-    private ClockTest testClock;
+    private FixedClock testClock;
 
     @BeforeEach
     void setUp() {
-        testClock = new ClockTest(Instant.parse("2026-09-16T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-16T10:00:00Z"));
         account = new Account("ACC001", "John Doe", new BigDecimal("10000.00"), testClock);
     }
 
@@ -58,17 +58,17 @@ class AccountTest {
         @DisplayName("Debit amount exceeding balance throws InsufficientFundsException")
         @Test
         void testDebitInsufficientFunds() {
-            assertThrows(InsufficientFundsException.class, () -> {
-                account.debit(new BigDecimal("15000.00"));
-            }, "Should throw exception when debiting amount exceeds balance");
+            BigDecimal amount = new BigDecimal("15000.00");
+            assertThrows(InsufficientFundsException.class, () -> account.debit(amount),
+                    "Should throw exception when debiting amount exceeds balance");
         }
 
         @DisplayName("Debit with amount slightly exceeding balance throws exception")
         @Test
         void testDebitBoundaryExceedsBalance() {
-            assertThrows(InsufficientFundsException.class, () -> {
-                account.debit(new BigDecimal("10000.01"));
-            }, "Should throw exception even when exceeding by minimal amount");
+            BigDecimal amount = new BigDecimal("10000.01");
+            assertThrows(InsufficientFundsException.class, () -> account.debit(amount),
+                    "Should throw exception even when exceeding by minimal amount");
         }
 
         @DisplayName("Debit exact balance leaves account with zero")
