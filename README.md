@@ -60,18 +60,21 @@ flowchart LR
 ### Order lifecycle
 
 1. `POST /api/v1/orders` checks that the caller owns the account and that the account and
-   instrument exist, then publishes an `OrderEvent` to the `orders` topic (keyed by account
-   ID, so orders for one account are processed in sequence) and returns **`202 Accepted`**
-   with an `orderId`.
-2. `OrderMessageListener` consumes the event and runs the order through `OrderValidator` and
+   instrument exist, and that the `idempotencyKey` has not been used before (`409 ORD-409`
+   if it has). It stores the order as `NEW`, publishes an `OrderEvent` to the `orders` topic
+   (keyed by account ID, so orders for one account are processed in sequence) and returns
+   **`202 Accepted`** with an `orderId`.
+2. While it is `NEW`, the order can be cancelled with `DELETE /api/v1/orders/{orderId}`; the
+   consumer then skips it.
+3. `OrderMessageListener` consumes the event and runs the order through `OrderValidator` and
    the matching execution strategy (`BuyOrderStrategy` / `SellOrderStrategy`), which update
    the cash balance and position.
-3. A successful order is saved as `FILLED` and a trade event is published to `trade-events`.
-4. A failed order (insufficient funds or holdings, inactive account, etc.) is saved as
+4. A successful order is saved as `FILLED` and a trade event is published to `trade-events`.
+5. A failed order (insufficient funds or holdings, inactive account, etc.) is saved as
    `REJECTED` with a reason and captured in the dead-letter queue (`dlq_messages` table and
    `orders.dlq` topic). Admins can inspect and replay these messages through
    `/api/v1/dlq`.
-5. Clients poll `GET /api/v1/orders/{orderId}` to see the final status.
+6. Clients poll `GET /api/v1/orders/{orderId}` to see the final status.
 
 Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 
@@ -286,8 +289,7 @@ curl -s -X POST http://localhost:3000/api/v1/orders \
   -d '{"accountId":11,"symbol":"ACME","side":"BUY","quantity":10,"price":100.00,
        "idempotencyKey":"'"$(uuidgen)"'"}'
 
-# 5. Poll the order until it is FILLED or REJECTED
-#    (a 404 straight after placing it means the consumer has not processed it yet)
+# 5. Poll the order until it is FILLED or REJECTED (it is NEW until the consumer runs)
 curl -s http://localhost:3000/api/v1/orders/<orderId> -H "Authorization: Bearer $TOKEN"
 
 # 6. See the resulting position

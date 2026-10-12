@@ -113,7 +113,8 @@ public class OrderEventPublisher {
                 order.getSide(),
                 order.getQuantity(),
                 order.getPrice(),
-                order.getCreatedOn());
+                order.getCreatedOn(),
+                order.getIdempotencyKey());
     }
 
     private MessageEnvelope<OrderEvent> buildEnvelope(OrderEvent orderEvent) {

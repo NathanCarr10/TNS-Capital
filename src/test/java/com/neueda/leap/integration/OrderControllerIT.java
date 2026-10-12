@@ -167,6 +167,51 @@ public class OrderControllerIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should store the order with the client's idempotency key before it is processed")
+        void testPlacedOrderIsStoredImmediately() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"),
+                                "IDEM-STORED");
+
+                String orderId = placeOrder(request);
+
+                // No waiting: the order exists as soon as the POST returns (NEW, or FILLED
+                // if the consumer was already quick enough)
+                mockMvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status", anyOf(equalTo("NEW"), equalTo("FILLED"))));
+                org.junit.jupiter.api.Assertions.assertEquals("IDEM-STORED",
+                                orderRepository.findById(java.util.UUID.fromString(orderId)).orElseThrow()
+                                                .getIdempotencyKey());
+                awaitStatus(orderId, "FILLED");
+        }
+
+        @Test
+        @DisplayName("Should return ORD-409 when an idempotency key is reused")
+        void testPlaceOrderDuplicateIdempotencyKey() throws Exception {
+                PlaceOrderRequest request = new PlaceOrderRequest(
+                                testAccount.getId(), "AAPL", OrderSide.BUY, 1, new BigDecimal("150.00"),
+                                "IDEM-TWICE");
+                String orderId = placeOrder(request);
+
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isConflict())
+                                .andExpect(jsonPath("$.errorCode", equalTo("ORD-409")));
+
+                org.junit.jupiter.api.Assertions.assertEquals(1, orderRepository.findAll().size());
+                awaitStatus(orderId, "FILLED");
+        }
+
+        /** Waits for the order consumer, so no order is still being processed when the test ends */
+        private void awaitStatus(String orderId, String status) {
+                await().pollInSameThread().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> mockMvc
+                                .perform(get("/api/v1/orders/{orderId}", orderId))
+                                .andExpect(jsonPath("$.status", equalTo(status))));
+        }
+
+        @Test
         @DisplayName("Should store an unaffordable order as REJECTED")
         void testPlaceOrderInsufficientFundsRejected() throws Exception {
                 PlaceOrderRequest request = new PlaceOrderRequest(

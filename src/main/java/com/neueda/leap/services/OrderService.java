@@ -17,6 +17,7 @@ import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.NonRetryableOrderException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
@@ -136,6 +137,34 @@ public class OrderService {
     }
 
     /**
+     * Stores an order as NEW before it is published for execution, so it can be
+     * looked up and cancelled while it waits.
+     * 
+     * The order keeps the client's idempotency key. Reusing a key is rejected
+     * with DuplicateOrderException (ORD-409); two requests racing with the same
+     * key are caught by the unique constraint on flush (also ORD-409).
+     * 
+     * Commits before returning, so the order exists before its event is
+     * published and the consumer can always find it.
+     *
+     * @param request the validated order request
+     * @return the stored NEW order
+     * @throws DuplicateOrderException if the idempotency key was already used
+     */
+    public Order acceptOrder(PlaceOrderRequest request) {
+        Objects.requireNonNull(request);
+
+        String idempotencyKey = InputNormalizer.normalize(request.idempotencyKey());
+        if (orderRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
+            throw new DuplicateOrderException("Order already submitted: " + request.idempotencyKey());
+        }
+
+        Order order = new Order(request.accountId(), request.symbol(), request.side(), request.quantity(),
+                request.price(), request.idempotencyKey(), clock);
+        return orderRepository.saveAndFlush(order);
+    }
+
+    /**
      * Processes an order event from Kafka asynchronously.
      * 
      * Called by OrderMessageListener when an order event is received from the Kafka
@@ -188,11 +217,14 @@ public class OrderService {
     private Order processOrderEvent(OrderEvent event, boolean replay) {
         Objects.requireNonNull(event, "Order event cannot be null");
 
-        // Idempotency check: a redelivered message must not execute the order twice
+        // Idempotency check: a redelivered message must not execute the order twice.
+        // A NEW order was stored by acceptOrder and is waiting for this message; any
+        // other status means it was already processed or cancelled.
         Optional<Order> existingOrder = orderRepository.findById(event.orderId());
         boolean replayingRejected = replay && existingOrder.isPresent()
                 && existingOrder.get().getStatus() == OrderStatus.REJECTED;
-        if (existingOrder.isPresent() && !replayingRejected) {
+        boolean waiting = existingOrder.isPresent() && existingOrder.get().getStatus() == OrderStatus.NEW;
+        if (existingOrder.isPresent() && !waiting && !replayingRejected) {
             log.info("Order already exists, skipping re-processing: orderId={}, status={}",
                     event.orderId(), existingOrder.get().getStatus());
             return existingOrder.get();
@@ -225,6 +257,11 @@ public class OrderService {
             throw ex;
         }
 
+        if (order == null) {
+            log.info("Order is no longer NEW, not executing it: orderId={}", event.orderId());
+            return orderRepository.findById(event.orderId()).orElse(null);
+        }
+
         log.info("Order FILLED: orderId={}, accountId={}", event.orderId(), event.accountId());
         tradeEventPublisher.publish(order, OrderStatus.NEW, null);
         return order;
@@ -233,10 +270,23 @@ public class OrderService {
     /**
      * Validates and executes the order. Must run inside a transaction so that
      * account and position changes are rolled back if execution fails.
+     * 
+     * Locks the stored NEW order first, so a cancellation cannot slip in
+     * between the status check and the fill.
+     * 
+     * @return the FILLED order, or null if the stored order is no longer NEW
+     *         (cancelled while it waited)
      */
     private Order executeOrderEvent(OrderEvent event) {
+        Optional<Order> stored = orderRepository.findWithLockById(event.orderId());
+        if (stored.isPresent() && stored.get().getStatus() != OrderStatus.NEW) {
+            return null;
+        }
+
         String symbol = InputNormalizer.normalize(event.symbol());
 
+        // The client's idempotency key was checked by acceptOrder and is already on
+        // the stored order, so the validator's duplicate check runs on the order ID
         PlaceOrderRequest request = new PlaceOrderRequest(
                 event.accountId(),
                 event.symbol(),
@@ -259,7 +309,8 @@ public class OrderService {
             throw new IllegalStateException("No strategy registered for order side: " + event.side());
         }
 
-        Order order = newOrderFromEvent(event);
+        // Messages published before orders were stored as NEW have no stored order
+        Order order = stored.orElseGet(() -> newOrderFromEvent(event));
         strategy.execute(account, request, symbol);
         order.setStatus(OrderStatus.FILLED);
         orderRepository.save(order);
@@ -270,19 +321,20 @@ public class OrderService {
      * Persists the order as REJECTED in its own transaction and publishes the
      * REJECTED trade event once it is committed.
      * 
-     * Does nothing if the order is already stored (e.g. a failed DLQ replay of an
-     * order that was already rejected), so each order produces at most one
-     * REJECTED event. Failures here are logged and swallowed so the original
+     * Updates the stored NEW order. Does nothing if the order already has a
+     * final status (e.g. a failed DLQ replay of an order that was already
+     * rejected), so each order produces at most one REJECTED event. Failures here are logged and swallowed so the original
      * exception still reaches the Kafka error handler.
      */
     private void recordRejectedOrder(OrderEvent event, RuntimeException cause) {
         String reason = cause.getMessage();
         try {
             Order rejectedOrder = transactionTemplate.execute(status -> {
-                if (orderRepository.existsById(event.orderId())) {
+                Optional<Order> stored = orderRepository.findWithLockById(event.orderId());
+                if (stored.isPresent() && stored.get().getStatus() != OrderStatus.NEW) {
                     return null;
                 }
-                Order order = newOrderFromEvent(event);
+                Order order = stored.orElseGet(() -> newOrderFromEvent(event));
                 order.setStatus(OrderStatus.REJECTED);
                 order.setStatusReason(DeadLetterService.buildFailureReason(cause));
                 orderRepository.save(order);
@@ -302,13 +354,15 @@ public class OrderService {
     }
 
     private Order newOrderFromEvent(OrderEvent event) {
+        // Older messages carry no idempotency key; the order ID is unique too
+        String idempotencyKey = event.idempotencyKey() != null ? event.idempotencyKey() : event.orderId().toString();
         Order order = new Order(
                 event.accountId(),
                 event.symbol(),
                 event.side(),
                 event.quantity(),
                 event.price(),
-                event.orderId().toString(),
+                idempotencyKey,
                 clock);
         order.setId(event.orderId());
         return order;
@@ -351,8 +405,8 @@ public class OrderService {
     public Order cancelOrder(UUID orderId) {
         Objects.requireNonNull(orderId, "Order ID cannot be null");
 
-        // Retrieve order
-        Order order = orderRepository.findById(orderId)
+        // Locked so the order consumer cannot fill it while it is being cancelled
+        Order order = orderRepository.findWithLockById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
 
         // Validate cancellation is allowed (only NEW orders can be cancelled)

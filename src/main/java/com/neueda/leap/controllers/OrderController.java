@@ -5,9 +5,9 @@ import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.kafka.OrderEventPublisher;
-import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
 import com.neueda.leap.repositories.AccountRepository;
@@ -24,7 +24,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +64,7 @@ public class OrderController {
      * @throws AccessDeniedException       if the caller does not own the account
      * @throws AccountNotFoundException    if account does not exist
      * @throws InstrumentNotFoundException if instrument does not exist
+     * @throws DuplicateOrderException     if the idempotency key was already used
      */
     @PostMapping
     public ResponseEntity<Map<String, Object>> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
@@ -89,22 +89,11 @@ public class OrderController {
                     return new InstrumentNotFoundException("Instrument not found: " + request.symbol());
                 });
 
-        // Generate order ID for this request
-        UUID orderId = UUID.randomUUID();
-
-        // Create order event from request
-        OrderEvent event = new OrderEvent(
-                orderId,
-                request.accountId(),
-                request.symbol(),
-                request.side(),
-                request.quantity(),
-                request.price(),
-                Instant.now());
-
-        // Publish to Kafka for async processing
-        // Message will be retried with exponential backoff and routed to DLQ on failure
-        orderEventPublisher.publishEvent(event, request.accountId());
+        // Store the order as NEW (checking the idempotency key), then queue it.
+        // acceptOrder commits first, so the consumer always finds the stored order.
+        Order order = orderService.acceptOrder(request);
+        orderEventPublisher.publish(order);
+        UUID orderId = order.getId();
 
         log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
                 orderId, request.accountId(), request.symbol());

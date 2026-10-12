@@ -24,6 +24,7 @@ import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.kafka.OrderEventPublisher;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
@@ -95,6 +96,12 @@ class OrderControllerValidationTest {
                 UUID.randomUUID().toString());
     }
 
+    /** The NEW order OrderService stores for validRequest */
+    private Order acceptedOrder() {
+        return new Order(validRequest.accountId(), validRequest.symbol(), validRequest.side(),
+                validRequest.quantity(), validRequest.price(), validRequest.idempotencyKey(), new ClockTest());
+    }
+
     @DisplayName("placeOrder - REST Validation Tests")
     @Nested
     class RestValidationTests {
@@ -113,7 +120,7 @@ class OrderControllerValidationTest {
             assertTrue(exception.getMessage().contains("Account not found"));
 
             // Verify Kafka was NOT called
-            verify(orderEventPublisher, never()).publishEvent(any(), any());
+            verify(orderEventPublisher, never()).publish(any());
         }
 
         @Test
@@ -135,7 +142,7 @@ class OrderControllerValidationTest {
             assertTrue(exception.getMessage().contains("Instrument not found"));
 
             // Verify Kafka was NOT called
-            verify(orderEventPublisher, never()).publishEvent(any(), any());
+            verify(orderEventPublisher, never()).publish(any());
         }
 
         @Test
@@ -150,6 +157,7 @@ class OrderControllerValidationTest {
 
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(testInstrument));
+            when(orderService.acceptOrder(validRequest)).thenReturn(acceptedOrder());
 
             // Act
             ResponseEntity<java.util.Map<String, Object>> response = orderController.placeOrder(validRequest);
@@ -161,7 +169,7 @@ class OrderControllerValidationTest {
             assertTrue(response.getBody().containsKey("orderId"));
 
             // Verify Kafka WAS called
-            verify(orderEventPublisher, times(1)).publishEvent(any(), eq(accountId));
+            verify(orderEventPublisher, times(1)).publish(any(Order.class));
         }
 
         @Test
@@ -182,6 +190,7 @@ class OrderControllerValidationTest {
 
             when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(testInstrument));
+            when(orderService.acceptOrder(validRequest)).thenReturn(acceptedOrder());
 
             // Act
             ResponseEntity<java.util.Map<String, Object>> response = orderController.placeOrder(validRequest);
@@ -190,7 +199,7 @@ class OrderControllerValidationTest {
             assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
 
             // Verify order was published to Kafka
-            verify(orderEventPublisher, times(1)).publishEvent(any(), eq(accountId));
+            verify(orderEventPublisher, times(1)).publish(any(Order.class));
         }
     }
 

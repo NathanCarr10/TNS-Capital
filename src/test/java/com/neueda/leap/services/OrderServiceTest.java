@@ -25,11 +25,14 @@ import org.mockito.MockitoAnnotations;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
+import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
@@ -352,13 +355,13 @@ class OrderServiceTest {
             UUID orderId = UUID.randomUUID();
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);
 
-            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(orderId)).thenReturn(Optional.of(order));
 
             Order result = orderService.cancelOrder(orderId);
 
             assertNotNull(result);
             assertEquals(OrderStatus.CANCELLED, result.getStatus());
-            verify(orderRepository, times(1)).findById(orderId);
+            verify(orderRepository, times(1)).findWithLockById(orderId);
             verify(orderRepository, times(1)).save(order);
         }
 
@@ -367,7 +370,7 @@ class OrderServiceTest {
         @SuppressWarnings("null")
         void testCancelOrderNotFound() {
             UUID orderId = UUID.randomUUID();
-            when(orderRepository.findById(orderId)).thenReturn(Optional.empty());
+            when(orderRepository.findWithLockById(orderId)).thenReturn(Optional.empty());
 
             assertThrows(OrderNotFoundException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderNotFoundException when order not found");
@@ -382,7 +385,7 @@ class OrderServiceTest {
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-002", testClock);
             order.setStatus(OrderStatus.FILLED); // Transition from NEW to FILLED
 
-            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(orderId)).thenReturn(Optional.of(order));
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is FILLED");
@@ -397,7 +400,7 @@ class OrderServiceTest {
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-003", testClock);
             order.setStatus(OrderStatus.REJECTED); // Transition from NEW to REJECTED
 
-            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(orderId)).thenReturn(Optional.of(order));
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is REJECTED");
@@ -412,7 +415,7 @@ class OrderServiceTest {
             Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-004", testClock);
             order.setStatus(OrderStatus.CANCELLED); // Transition from NEW to CANCELLED
 
-            when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+            when(orderRepository.findWithLockById(orderId)).thenReturn(Optional.of(order));
 
             assertThrows(OrderCancellationConflictException.class, () -> orderService.cancelOrder(orderId),
                     "Should throw OrderCancellationConflictException when order is already CANCELLED");
@@ -473,6 +476,91 @@ class OrderServiceTest {
             assertThrows(NullPointerException.class, () -> orderService.getOrdersByAccountId(null),
                     "Should throw NullPointerException for null account ID");
             verify(orderRepository, never()).findByAccountId(any());
+        }
+    }
+
+    @DisplayName("acceptOrder Tests")
+    @Nested
+    class AcceptOrderTests {
+        @DisplayName("Should store the order as NEW with the client's idempotency key")
+        @Test
+        void testAcceptOrderStoresNewOrder() {
+            when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            Order order = orderService.acceptOrder(placeOrderRequest);
+
+            assertEquals(OrderStatus.NEW, order.getStatus());
+            assertEquals("ORDER-001", order.getIdempotencyKey());
+            assertEquals(1L, order.getAccountId());
+            verify(orderRepository).saveAndFlush(order);
+        }
+
+        @DisplayName("Should reject a reused idempotency key")
+        @Test
+        void testAcceptOrderDuplicateKey() {
+            Order earlier = new Order(1L, "AAPL", OrderSide.BUY, 1, new BigDecimal("1.00"), "ORDER-001", testClock);
+            when(orderRepository.findByIdempotencyKey("ORDER-001")).thenReturn(Optional.of(earlier));
+
+            assertThrows(DuplicateOrderException.class, () -> orderService.acceptOrder(placeOrderRequest));
+            verify(orderRepository, never()).saveAndFlush(any(Order.class));
+        }
+    }
+
+    @DisplayName("processOrderEvent with a stored NEW order")
+    @Nested
+    class StoredOrderProcessingTests {
+        private Order storedOrder;
+        private OrderEvent event;
+
+        @BeforeEach
+        void storeNewOrder() {
+            storedOrder = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "CLIENT-KEY", testClock);
+            event = new OrderEvent(storedOrder.getId(), 1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
+                    storedOrder.getCreatedOn(), "CLIENT-KEY");
+            when(orderRepository.findById(storedOrder.getId())).thenReturn(Optional.of(storedOrder));
+            when(orderRepository.findWithLockById(storedOrder.getId())).thenReturn(Optional.of(storedOrder));
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(instrumentRepository.findBySymbol("AAPL"))
+                    .thenReturn(Optional.of(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true)));
+        }
+
+        @DisplayName("Should fill the stored order, keeping the client's key")
+        @Test
+        void testFillsStoredOrder() {
+            Order result = orderService.processOrderEvent(event);
+
+            assertSame(storedOrder, result);
+            assertEquals(OrderStatus.FILLED, result.getStatus());
+            assertEquals("CLIENT-KEY", result.getIdempotencyKey());
+            verify(buyStrategy).execute(eq(testAccount), any(PlaceOrderRequest.class), eq("AAPL"));
+            verify(tradeEventPublisher).publish(storedOrder, OrderStatus.NEW, null);
+        }
+
+        @DisplayName("Should mark the stored order REJECTED when execution fails")
+        @Test
+        void testRejectsStoredOrder() {
+            doThrow(new InsufficientFundsException("Insufficient funds for buy order"))
+                    .when(buyStrategy).execute(any(), any(), any());
+
+            assertThrows(InsufficientFundsException.class, () -> orderService.processOrderEvent(event));
+
+            assertEquals(OrderStatus.REJECTED, storedOrder.getStatus());
+            verify(orderRepository).save(storedOrder);
+            verify(tradeEventPublisher).publish(storedOrder, OrderStatus.NEW, "Insufficient funds for buy order");
+        }
+
+        @DisplayName("Should not execute an order cancelled while it waited")
+        @Test
+        void testSkipsCancelledOrder() {
+            // Cancelled between the first lookup and the locked one
+            Order cancelled = new Order(storedOrder, testClock);
+            cancelled.setStatus(OrderStatus.CANCELLED);
+            when(orderRepository.findWithLockById(storedOrder.getId())).thenReturn(Optional.of(cancelled));
+
+            orderService.processOrderEvent(event);
+
+            verify(buyStrategy, never()).execute(any(), any(), any());
+            verify(tradeEventPublisher, never()).publish(any(), any(), any());
         }
     }
 }
