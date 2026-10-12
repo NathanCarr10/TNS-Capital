@@ -52,16 +52,11 @@ public class LivePriceService implements PriceProvider {
 
     @Override
     public Optional<PriceQuote> latestPrice(String symbol) {
-        CachedPrice cached = prices.get(symbol);
-        if (cached == null || isStale(cached)) {
-            refresh(List.of(symbol));
-            cached = prices.get(symbol);
-        }
-        return Optional.ofNullable(cached).map(CachedPrice::quote);
+        return Optional.ofNullable(latestPrices(List.of(symbol)).get(symbol));
     }
 
     /**
-     * Like latestPrice, but refreshes every missing or stale price in one REST call.
+     * Refreshes every missing or stale price in one REST call.
      */
     @Override
     public Map<String, PriceQuote> latestPrices(Collection<String> symbols) {

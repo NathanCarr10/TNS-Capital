@@ -46,7 +46,7 @@ public class PositionValuationService {
 
     private static PositionResponse toResponse(Position position, PriceQuote quote) {
         BigDecimal marketValue = quote == null ? null
-                : quote.price().multiply(BigDecimal.valueOf(position.getQuantity())).setScale(2, RoundingMode.HALF_UP);
+                : position.marketValue(quote.price()).setScale(2, RoundingMode.HALF_UP);
         return new PositionResponse(
                 position.getAccountId(),
                 position.getSymbol(),

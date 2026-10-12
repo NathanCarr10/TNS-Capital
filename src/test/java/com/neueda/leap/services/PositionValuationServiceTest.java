@@ -47,6 +47,17 @@ class PositionValuationServiceTest {
     }
 
     @Test
+    @DisplayName("Rounds market value to the cent")
+    void roundsToCent() {
+        when(priceProvider.latestPrices(List.of("AAPL"))).thenReturn(Map.of(
+                "AAPL", new PriceQuote("AAPL", new BigDecimal("227.4651"), Instant.EPOCH)));
+
+        PositionResponse response = service.toResponse(new Position(1L, "AAPL", 10, new BigDecimal("200.00")));
+
+        assertEquals(new BigDecimal("2274.65"), response.marketValue());
+    }
+
+    @Test
     @DisplayName("Makes no price lookup for an empty portfolio")
     void noLookupForNoPositions() {
         assertTrue(service.toResponses(List.of()).isEmpty());
