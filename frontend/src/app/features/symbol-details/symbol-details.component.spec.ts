@@ -5,7 +5,8 @@ import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { MarketDataService } from '../dashboard/market-data.service';
-import { InstrumentResponse, MarketQuote, PositionResponse, PriceBar } from '../dashboard/trading.models';
+import { InstrumentResponse, MarketQuote, PositionResponse } from '../../api/trading';
+import { PriceBar } from '../dashboard/trading.models';
 import { TradingService } from '../dashboard/trading.service';
 import { SymbolDetailsComponent } from './symbol-details.component';
 

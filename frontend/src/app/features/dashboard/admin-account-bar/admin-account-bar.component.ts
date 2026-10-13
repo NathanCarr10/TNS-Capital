@@ -1,6 +1,6 @@
 import { Component, input, output } from '@angular/core';
 
-import { AccountResponse } from '../trading.models';
+import { AccountResponse } from '../../../api/trading';
 
 /** Header controls for admins: choose which account to view, or go to the analytics dashboard. */
 @Component({

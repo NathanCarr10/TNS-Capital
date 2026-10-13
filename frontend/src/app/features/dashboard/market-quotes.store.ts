@@ -5,7 +5,8 @@ import { BehaviorSubject, EMPTY, Observable, Subject, combineLatest, fromEvent, 
 import { catchError, distinctUntilChanged, finalize, map, startWith, switchMap, tap } from 'rxjs/operators';
 
 import { MarketDataService } from './market-data.service';
-import { MarketQuote, PlatformErrorResponse } from './trading.models';
+import { PlatformErrorResponse } from '../../api/auth';
+import { MarketQuote } from '../../api/trading';
 
 /**
  * Live quotes shared by the dashboard's market data table and performance panel,

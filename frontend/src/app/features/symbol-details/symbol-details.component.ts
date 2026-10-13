@@ -8,13 +8,9 @@ import { catchError, finalize, startWith, switchMap, tap } from 'rxjs/operators'
 import { toHoldingRow } from '../dashboard/holdings/holding-row';
 import { MarketDataService } from '../dashboard/market-data.service';
 import { MarketQuotesStore } from '../dashboard/market-quotes.store';
-import {
-  BarTimeframe,
-  InstrumentResponse,
-  PlatformErrorResponse,
-  PositionResponse,
-  PriceBar,
-} from '../dashboard/trading.models';
+import { PlatformErrorResponse } from '../../api/auth';
+import { InstrumentResponse, PositionResponse } from '../../api/trading';
+import { BarTimeframe, PriceBar } from '../dashboard/trading.models';
 import { TradingService } from '../dashboard/trading.service';
 import { CandlestickChartComponent } from './candlestick-chart/candlestick-chart.component';
 

@@ -1,24 +1,24 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 
 import {
-  JwtClaims,
+  AccessTokenClaims,
+  AuthenticationService,
   LoginRequest,
-  LogoutResponse,
   PlatformErrorResponse,
   RegisterRequest,
-  RegisteredUser,
-  RefreshRequest,
-  TokenPair,
-} from './auth.models';
+  RegisterResponse,
+} from '../../api/auth';
 import { TokenStorageService } from './token-storage.service';
+
+// Decoding can fail or meet a token without every claim, so all are optional here
+type JwtClaims = Partial<AccessTokenClaims>;
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly http = inject(HttpClient);
+  private readonly authApi = inject(AuthenticationService);
   private readonly router = inject(Router);
   private readonly tokenStorage = inject(TokenStorageService);
 
@@ -27,7 +27,7 @@ export class AuthService {
   readonly isAuthenticated$ = this.authState$.asObservable();
 
   login(credentials: LoginRequest): Observable<void> {
-    return this.http.post<TokenPair>('/auth/login', credentials).pipe(
+    return this.authApi.login(credentials).pipe(
       tap((tokens) => {
         this.tokenStorage.setTokens(tokens);
         this.authState$.next(true);
@@ -36,8 +36,8 @@ export class AuthService {
     );
   }
 
-  register(request: RegisterRequest): Observable<RegisteredUser> {
-    return this.http.post<RegisteredUser>('/auth/register', request);
+  register(request: RegisterRequest): Observable<RegisterResponse> {
+    return this.authApi.register(request);
   }
 
   logout(): Observable<void> {
@@ -48,9 +48,7 @@ export class AuthService {
       return of(undefined);
     }
 
-    const request: RefreshRequest = { refreshToken };
-
-    return this.http.post<LogoutResponse>('/auth/logout', request).pipe(
+    return this.authApi.logout({ refreshToken }).pipe(
       map(() => undefined),
       catchError(() => of(undefined))
     );

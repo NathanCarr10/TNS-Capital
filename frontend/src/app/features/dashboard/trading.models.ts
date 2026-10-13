@@ -1,97 +1,13 @@
-export interface UserProfileResponse {
-  username: string;
-  roles: string[];
-  accountId: number | null;
-}
+import { PlaceOrderRequest, PriceBar as ApiPriceBar } from '../../api/trading';
 
-export interface AccountResponse {
-  id: number;
-  accountNumber: string;
-  holderName: string;
-  cashBalance: number;
-  status: string;
-  lastUpdated: string;
-}
+// API models come from the generated clients in src/app/api; only view types live here
 
-export interface InstrumentResponse {
-  symbol: string;
-  name: string;
-  assetClass: string;
-  currency: string;
-  tradable: boolean;
-}
-
-export interface PositionResponse {
-  accountId: number;
-  symbol: string;
-  quantity: number;
-  averageCost: number;
-  marketValue: number | null;
-}
-
-/** Price fields are null when no live price is available; change fields also when the previous close is unknown. */
-export interface MarketQuote {
-  symbol: string;
-  price: number | null;
-  previousClose: number | null;
-  change: number | null;
-  changePercent: number | null;
-  tradedAt: string | null;
-}
+export type OrderSide = PlaceOrderRequest.SideEnum;
 
 export type BarTimeframe = '15Min' | '1Hour' | '1Day';
 
 /** One OHLC bar (candlestick); time is the start of the bar's period. */
-export interface PriceBar {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export type OrderSide = 'BUY' | 'SELL';
-
-export interface PlaceOrderRequest {
-  accountId: number;
-  symbol: string;
-  side: OrderSide;
-  quantity: number;
-  price?: number;
-  idempotencyKey: string;
-}
-
-export interface OrderAcceptedResponse {
-  orderId: string;
-  status: string;
-  price?: number;
-  message?: string;
-}
-
-export interface OrderResponse {
-  id: string;
-  accountId: number;
-  symbol: string;
-  side: OrderSide;
-  quantity: number;
-  price: number;
-  status: 'NEW' | 'FILLED' | 'REJECTED' | 'CANCELLED';
-  createdOn: string;
-  statusReason?: string;
-}
-
-export interface ArchivedOrderResponse {
-  orderId: string;
-  accountId: number;
-  symbol: string;
-  side: OrderSide;
-  quantity: number;
-  price: number;
-  status: 'CANCELLED';
-  orderCreatedOn: string;
-  deletedOn: string;
-}
+export type PriceBar = Required<ApiPriceBar>;
 
 export interface OrderHistoryRow {
   id: string;
@@ -101,10 +17,4 @@ export interface OrderHistoryRow {
   quantity: number;
   price: number;
   status: 'FILLED' | 'REJECTED' | 'CANCELLED' | 'NEW';
-}
-
-export interface PlatformErrorResponse {
-  errorCode: string;
-  message: string;
-  timestamp: string;
 }

@@ -1,0 +1,1553 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Trade REST API",
+    "description": "Order placement, cancellation, history, and portfolio/account endpoints",
+    "contact": {
+      "name": "Team Leap"
+    },
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Generated server url"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/instruments/{symbol}": {
+      "get": {
+        "tags": [
+          "instrument-controller"
+        ],
+        "operationId": "getInstrument",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "instrument-controller"
+        ],
+        "operationId": "updateInstrument",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInstrumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "get": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "getAllOrders",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "placeOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOrderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/instruments": {
+      "get": {
+        "tags": [
+          "instrument-controller"
+        ],
+        "operationId": "getAllInstruments",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InstrumentResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "instrument-controller"
+        ],
+        "operationId": "createInstrument",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInstrumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dlq/messages/{id}/replay": {
+      "post": {
+        "tags": [
+          "dead-letter-queue-controller"
+        ],
+        "operationId": "replayMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadLetterMessageDTO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts": {
+      "get": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "getAllAccounts",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "createAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/withdraw": {
+      "post": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "withdraw",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashTransactionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/deposit": {
+      "post": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "deposit",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashTransactionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}": {
+      "get": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "getAccount",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "deleteAccount",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "updateAccount",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prices": {
+      "get": {
+        "tags": [
+          "price-controller"
+        ],
+        "operationId": "getQuotes",
+        "parameters": [
+          {
+            "name": "symbols",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MarketQuote"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prices/{symbol}": {
+      "get": {
+        "tags": [
+          "price-controller"
+        ],
+        "operationId": "getPrice",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceQuote"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prices/{symbol}/bars": {
+      "get": {
+        "tags": [
+          "price-controller"
+        ],
+        "operationId": "getBars",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "timeframe",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "1Day"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PriceBar"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/positions/{accountId}": {
+      "get": {
+        "tags": [
+          "position-controller"
+        ],
+        "operationId": "getAccountPositions",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PositionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/positions/{accountId}/{symbol}": {
+      "get": {
+        "tags": [
+          "position-controller"
+        ],
+        "operationId": "getPosition",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{orderId}": {
+      "get": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "getOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "cancelOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{orderId}/events": {
+      "get": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "getOrderEvents",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TradeEventResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{accountId}/history": {
+      "get": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "getAccountOrderHistory",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderHistoryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/history/{orderId}": {
+      "get": {
+        "tags": [
+          "order-controller"
+        ],
+        "operationId": "getOrderHistory",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderHistoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dlq/statistics": {
+      "get": {
+        "tags": [
+          "dead-letter-queue-controller"
+        ],
+        "operationId": "getDLQStatistics",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DLQStatistics"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dlq/messages": {
+      "get": {
+        "tags": [
+          "dead-letter-queue-controller"
+        ],
+        "operationId": "getDLQMessages",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "failureType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeadLetterMessageDTO"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dlq/messages/{id}": {
+      "get": {
+        "tags": [
+          "dead-letter-queue-controller"
+        ],
+        "operationId": "getDLQMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadLetterMessageDTO"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "dead-letter-queue-controller"
+        ],
+        "operationId": "dismissMessage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "adminNotes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/positions": {
+      "get": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "getAccountPositions_1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PositionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/orders": {
+      "get": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "getAccountOrders",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{accountId}/balance": {
+      "get": {
+        "tags": [
+          "account-controller"
+        ],
+        "operationId": "getAccountBalance",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateInstrumentRequest": {
+        "required": [
+          "assetClass",
+          "currency",
+          "name",
+          "symbol",
+          "tradable"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "pattern": "^[A-Z]{1,10}$",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "assetClass": {
+            "pattern": "^[A-Z_]{1,20}$",
+            "type": "string"
+          },
+          "currency": {
+            "pattern": "^[A-Z]{3}$",
+            "type": "string"
+          },
+          "tradable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "InstrumentResponse": {
+        "required": [
+          "assetClass",
+          "currency",
+          "name",
+          "symbol",
+          "tradable"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "assetClass": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "tradable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PlaceOrderRequest": {
+        "required": [
+          "accountId",
+          "idempotencyKey",
+          "quantity",
+          "side",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "symbol": {
+            "pattern": "^[A-Z]{1,10}$",
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "quantity": {
+            "maximum": 1000000,
+            "type": "integer",
+            "format": "int32"
+          },
+          "price": {
+            "maximum": 999999.99,
+            "exclusiveMaximum": false,
+            "type": "number"
+          },
+          "idempotencyKey": {
+            "pattern": "^[a-zA-Z0-9_-]{1,100}$",
+            "type": "string"
+          }
+        }
+      },
+      "PlaceOrderResponse": {
+        "required": [
+          "message",
+          "orderId",
+          "price",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "nullable": true
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "DeadLetterMessageDTO": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "failureType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "retryCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastRetryOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "adminNotes": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateAccountRequest": {
+        "required": [
+          "accountNumber",
+          "cashBalance",
+          "holderName"
+        ],
+        "type": "object",
+        "properties": {
+          "accountNumber": {
+            "type": "string"
+          },
+          "holderName": {
+            "type": "string"
+          },
+          "cashBalance": {
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "type": "number"
+          }
+        }
+      },
+      "AccountResponse": {
+        "required": [
+          "accountNumber",
+          "cashBalance",
+          "holderName",
+          "id",
+          "lastUpdated",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accountNumber": {
+            "type": "string"
+          },
+          "holderName": {
+            "type": "string"
+          },
+          "cashBalance": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "CLOSED"
+            ]
+          },
+          "lastUpdated": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CashTransactionRequest": {
+        "required": [
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "amount": {
+            "maximum": 1000000000,
+            "exclusiveMaximum": false,
+            "type": "number"
+          }
+        }
+      },
+      "UpdateAccountRequest": {
+        "required": [
+          "holderName"
+        ],
+        "type": "object",
+        "properties": {
+          "holderName": {
+            "type": "string"
+          }
+        }
+      },
+      "MarketQuote": {
+        "required": [
+          "change",
+          "changePercent",
+          "previousClose",
+          "price",
+          "symbol",
+          "tradedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "nullable": true
+          },
+          "previousClose": {
+            "type": "number",
+            "nullable": true
+          },
+          "change": {
+            "type": "number",
+            "nullable": true
+          },
+          "changePercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "tradedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "PriceQuote": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number"
+          },
+          "tradedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PriceBar": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "open": {
+            "type": "number"
+          },
+          "high": {
+            "type": "number"
+          },
+          "low": {
+            "type": "number"
+          },
+          "close": {
+            "type": "number"
+          },
+          "volume": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "PositionResponse": {
+        "required": [
+          "accountId",
+          "averageCost",
+          "marketValue",
+          "quantity",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "averageCost": {
+            "type": "number"
+          },
+          "marketValue": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "OrderResponse": {
+        "required": [
+          "accountId",
+          "createdOn",
+          "id",
+          "price",
+          "quantity",
+          "side",
+          "status",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "price": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "FILLED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "statusReason": {
+            "type": "string"
+          }
+        }
+      },
+      "TradeEventResponse": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "previousStatus": {
+            "type": "string"
+          },
+          "newStatus": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "receivedOn": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrderHistoryResponse": {
+        "required": [
+          "accountId",
+          "deletedOn",
+          "orderCreatedOn",
+          "orderId",
+          "price",
+          "quantity",
+          "side",
+          "status",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "price": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NEW",
+              "FILLED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "orderCreatedOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedOn": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DLQStatistics": {
+        "type": "object",
+        "properties": {
+          "pendingMessages": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "resolvedMessages": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ignoredMessages": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalMessages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BalanceResponse": {
+        "type": "object",
+        "properties": {
+          "balance": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "description": "Enter the accessToken obtained from the auth service (POST /auth/login)",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
