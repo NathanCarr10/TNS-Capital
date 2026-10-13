@@ -6,36 +6,46 @@
 
   <div class="dashboard-grid">
     <div class="left-column">
-      <article class="account-panel">
-        <h2>Account Details</h2>
+      <div class="overview-row">
+        <article class="account-panel">
+          <h2>Account Details</h2>
 
-        @if (accountLoading()) {
-          <p class="status">Loading account information...</p>
-        } @else {
-          @if (account(); as accountDetails) {
-            <dl class="account-grid">
-              <div>
-                <dt>Account Number</dt>
-                <dd>{{ accountDetails.accountNumber }}</dd>
-              </div>
-              <div>
-                <dt>Holder Name</dt>
-                <dd>{{ accountDetails.holderName }}</dd>
-              </div>
-              <div>
-                <dt>Cash Balance</dt>
-                <dd>{{ accountDetails.cashBalance | currency:'USD':'symbol':'1.2-2' }}</dd>
-              </div>
-              <div>
-                <dt>Status</dt>
-                <dd>{{ accountDetails.status }}</dd>
-              </div>
-            </dl>
+          @if (accountLoading()) {
+            <p class="status">Loading account information...</p>
           } @else {
-            <p class="status error">Account details unavailable.</p>
+            @if (account(); as accountDetails) {
+              <dl class="account-grid">
+                <div>
+                  <dt>Account Number</dt>
+                  <dd>{{ accountDetails.accountNumber }}</dd>
+                </div>
+                <div>
+                  <dt>Holder Name</dt>
+                  <dd>{{ accountDetails.holderName }}</dd>
+                </div>
+                <div>
+                  <dt>Cash Balance</dt>
+                  <dd>{{ accountDetails.cashBalance | currency:'USD':'symbol':'1.2-2' }}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{{ accountDetails.status }}</dd>
+                </div>
+              </dl>
+            } @else {
+              <p class="status error">Account details unavailable.</p>
+            }
           }
-        }
-      </article>
+        </article>
+
+        <article class="performance-panel">
+          <app-performance-summary
+            [positions]="positions()"
+            [cashBalance]="account()?.cashBalance ?? null"
+            [error]="positionsError()"
+          />
+        </article>
+      </div>
 
       <article class="order-panel">
         <h2>Submit Order</h2>

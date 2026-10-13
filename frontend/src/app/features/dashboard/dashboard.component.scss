@@ -49,11 +49,18 @@
     }
   }
 
+  .overview-row {
+    display: grid;
+    grid-template-columns: minmax(200px, 0.75fr) minmax(0, 1.25fr);
+    gap: 1.2rem;
+    align-items: stretch;
+  }
+
   .account-grid {
     margin: 0.9rem 0 0;
     display: grid;
-    gap: 0.8rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+    grid-template-columns: minmax(0, 1fr);
 
     div {
       border: 1px solid #dae7f1;
@@ -230,7 +237,7 @@
       grid-template-columns: 1fr;
     }
 
-    .account-grid {
+    .overview-row {
       grid-template-columns: 1fr;
     }
 

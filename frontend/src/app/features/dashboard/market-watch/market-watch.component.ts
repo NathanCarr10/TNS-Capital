@@ -1,11 +1,8 @@
-import { CommonModule, DOCUMENT } from '@angular/common';
-import { Component, computed, inject, input, signal } from '@angular/core';
-import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
-import { EMPTY, Observable, Subject, combineLatest, fromEvent, timer } from 'rxjs';
-import { catchError, distinctUntilChanged, finalize, map, startWith, switchMap, tap } from 'rxjs/operators';
+import { CommonModule } from '@angular/common';
+import { Component, computed, effect, inject, input } from '@angular/core';
 
-import { MarketDataService } from '../market-data.service';
-import { InstrumentResponse, MarketQuote, PlatformErrorResponse } from '../trading.models';
+import { MarketQuotesStore } from '../market-quotes.store';
+import { InstrumentResponse, MarketQuote } from '../trading.models';
 
 export type PriceDirection = 'up' | 'down' | 'flat';
 
@@ -22,23 +19,19 @@ export interface MarketWatchRow {
   styleUrl: './market-watch.component.scss',
 })
 export class MarketWatchComponent {
-  static readonly REFRESH_INTERVAL_MS = 15000;
   // The prices endpoint accepts at most 50 symbols per request
   static readonly MAX_SYMBOLS = 50;
 
-  private readonly marketDataService = inject(MarketDataService);
-  private readonly document = inject(DOCUMENT);
-  private readonly refresh$ = new Subject<void>();
+  private readonly store = inject(MarketQuotesStore);
 
   /** The instruments to quote, or null while they are still loading. */
   readonly instruments = input<InstrumentResponse[] | null>(null);
   /** Symbols the user holds, listed before the rest. */
   readonly heldSymbols = input<string[]>([]);
 
-  readonly quotes = signal<ReadonlyMap<string, MarketQuote>>(new Map());
-  readonly refreshing = signal(false);
-  readonly errorMessage = signal<string | null>(null);
-  readonly lastUpdated = signal<Date | null>(null);
+  readonly refreshing = this.store.refreshing;
+  readonly errorMessage = this.store.errorMessage;
+  readonly lastUpdated = this.store.lastUpdated;
   readonly skeletonRows = [1, 2, 3, 4, 5];
 
   private readonly held = computed(() => new Set(this.heldSymbols()));
@@ -58,7 +51,7 @@ export class MarketWatchComponent {
   /** Held symbols first, then the rest; each group by the biggest move in either direction. */
   readonly rows = computed<MarketWatchRow[]>(() => {
     const held = this.held();
-    const quotes = this.quotes();
+    const quotes = this.store.quotes();
     return (this.watchlist() ?? [])
       .map((instrument) => ({
         instrument,
@@ -74,37 +67,11 @@ export class MarketWatchComponent {
   });
 
   constructor() {
-    const symbols$ = toObservable(this.watchlist).pipe(
-      map((instruments) => instruments?.map((instrument) => instrument.symbol).sort() ?? []),
-      // Reordering the same symbols, e.g. when holdings load, must not trigger an extra fetch
-      distinctUntilChanged((previous, current) => previous.join() === current.join())
-    );
-    const visible$ = fromEvent(this.document, 'visibilitychange').pipe(
-      startWith(null),
-      map(() => !this.document.hidden),
-      distinctUntilChanged()
-    );
-
-    // Poll while the tab is visible; a manual refresh fetches now and restarts the interval
-    combineLatest([symbols$, visible$])
-      .pipe(
-        switchMap(([symbols, visible]) => {
-          if (symbols.length === 0 || !visible) {
-            return EMPTY;
-          }
-          return this.refresh$.pipe(
-            startWith(undefined),
-            switchMap(() => timer(0, MarketWatchComponent.REFRESH_INTERVAL_MS)),
-            switchMap(() => this.fetchQuotes(symbols))
-          );
-        }),
-        takeUntilDestroyed()
-      )
-      .subscribe();
+    effect(() => this.store.watch(this.watchlist()?.map((instrument) => instrument.symbol) ?? []));
   }
 
   refresh(): void {
-    this.refresh$.next();
+    this.store.refresh();
   }
 
   direction(quote: MarketQuote): PriceDirection | null {
@@ -120,27 +87,5 @@ export class MarketWatchComponent {
   // Unknown changes sort last
   private moveSize(quote: MarketQuote | null): number {
     return quote?.changePercent == null ? -1 : Math.abs(quote.changePercent);
-  }
-
-  private fetchQuotes(symbols: string[]): Observable<MarketQuote[]> {
-    this.refreshing.set(true);
-
-    return this.marketDataService.getQuotes(symbols).pipe(
-      tap((quotes) => {
-        this.quotes.set(new Map(quotes.map((quote) => [quote.symbol, quote])));
-        this.errorMessage.set(null);
-        this.lastUpdated.set(new Date());
-      }),
-      catchError((error: unknown) => {
-        this.errorMessage.set(this.readErrorMessage(error));
-        return EMPTY;
-      }),
-      finalize(() => this.refreshing.set(false))
-    );
-  }
-
-  private readErrorMessage(error: unknown): string {
-    const apiError = (error as { error?: Partial<PlatformErrorResponse> } | null)?.error;
-    return apiError?.errorCode && apiError.message ? apiError.message : 'Failed to load market data.';
   }
 }

@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed, discardPeriodicTasks, fakeAsync, tick } from
 import { of, throwError } from 'rxjs';
 
 import { MarketDataService } from '../market-data.service';
+import { MarketQuotesStore } from '../market-quotes.store';
 import { InstrumentResponse, MarketQuote } from '../trading.models';
 import { MarketWatchComponent } from './market-watch.component';
 
@@ -43,7 +44,7 @@ describe('MarketWatchComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [MarketWatchComponent],
-      providers: [{ provide: MarketDataService, useValue: marketDataServiceSpy }],
+      providers: [MarketQuotesStore, { provide: MarketDataService, useValue: marketDataServiceSpy }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MarketWatchComponent);
@@ -110,7 +111,7 @@ describe('MarketWatchComponent', () => {
     expect(rowFor('AAPL').textContent).toContain('$190.00');
 
     marketDataServiceSpy.getQuotes.and.returnValue(of([quote('AAPL', 170, 180)]));
-    tick(MarketWatchComponent.REFRESH_INTERVAL_MS - 1);
+    tick(MarketQuotesStore.REFRESH_INTERVAL_MS - 1);
     expect(marketDataServiceSpy.getQuotes).toHaveBeenCalledTimes(1);
 
     tick(1);
@@ -143,7 +144,7 @@ describe('MarketWatchComponent', () => {
 
     hidden = true;
     document.dispatchEvent(new Event('visibilitychange'));
-    tick(MarketWatchComponent.REFRESH_INTERVAL_MS * 3);
+    tick(MarketQuotesStore.REFRESH_INTERVAL_MS * 3);
     expect(marketDataServiceSpy.getQuotes).toHaveBeenCalledTimes(1);
 
     hidden = false;
@@ -255,7 +256,7 @@ describe('MarketWatchComponent', () => {
     start();
 
     marketDataServiceSpy.getQuotes.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
-    tick(MarketWatchComponent.REFRESH_INTERVAL_MS);
+    tick(MarketQuotesStore.REFRESH_INTERVAL_MS);
     fixture.detectChanges();
 
     expect(text('.error-banner')).toContain('Failed to load market data.');
