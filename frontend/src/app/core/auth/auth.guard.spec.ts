@@ -32,8 +32,10 @@ describe('authGuard', () => {
   it('redirects to login when token is missing or expired', () => {
     authServiceSpy.hasValidAccessToken.and.returnValue(false);
 
-    TestBed.runInInjectionContext(() => authGuard({} as never, {} as never));
+    TestBed.runInInjectionContext(() => authGuard({} as never, { url: '/dashboard' } as never));
 
-    expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login']);
+    expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], {
+      queryParams: { returnUrl: '/dashboard' },
+    });
   });
 });
