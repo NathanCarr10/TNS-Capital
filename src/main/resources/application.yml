@@ -114,6 +114,11 @@ springdoc:
     enabled: true
   api-docs:
     path: /v3/api-docs
+    # The Angular client generator's OpenAPI 3.1 support is beta; 3.0 also matches contracts/auth-api.yaml
+    version: openapi_3_0
+  # Without this the spec lists responses as */*, and the generated Angular
+  # clients then read them as Blobs instead of JSON models
+  default-produces-media-type: application/json
 
 # DEBUG for these packages logs every request and Kafka poll; enable it per run
 # when needed, e.g. LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA=DEBUG

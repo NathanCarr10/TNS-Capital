@@ -1,4 +1,4 @@
-import { PositionResponse } from '../trading.models';
+import { PositionResponse } from '../../../api/trading';
 
 export interface HoldingRow {
   symbol: string;

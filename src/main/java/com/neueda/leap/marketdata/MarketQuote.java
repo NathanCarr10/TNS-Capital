@@ -4,6 +4,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 /**
  * An instrument's latest price and how far it has moved since the previous close.
  *
@@ -17,8 +21,13 @@ import java.time.Instant;
  * @param changePercent change as a percentage of previousClose, to 2 decimal places
  * @param tradedAt      when the last trade happened on the exchange
  */
-public record MarketQuote(String symbol, BigDecimal price, BigDecimal previousClose, BigDecimal change,
-        BigDecimal changePercent, Instant tradedAt) {
+public record MarketQuote(
+        @Schema(requiredMode = REQUIRED) String symbol,
+        @Schema(requiredMode = REQUIRED, nullable = true) BigDecimal price,
+        @Schema(requiredMode = REQUIRED, nullable = true) BigDecimal previousClose,
+        @Schema(requiredMode = REQUIRED, nullable = true) BigDecimal change,
+        @Schema(requiredMode = REQUIRED, nullable = true) BigDecimal changePercent,
+        @Schema(requiredMode = REQUIRED, nullable = true) Instant tradedAt) {
 
     static MarketQuote of(String symbol, PriceQuote quote, DailyCloses closes) {
         if (quote == null) {

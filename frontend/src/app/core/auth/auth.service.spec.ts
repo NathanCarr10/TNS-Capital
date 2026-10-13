@@ -3,6 +3,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { provideApiClients } from '../api/api.providers';
 import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
@@ -13,7 +14,7 @@ describe('AuthService', () => {
     sessionStorage.clear();
 
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting(), provideApiClients()],
     });
 
     authService = TestBed.inject(AuthService);

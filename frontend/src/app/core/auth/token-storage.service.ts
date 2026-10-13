@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import { TokenPair } from './auth.models';
+import { TokenPair } from '../../api/auth';
 
 const ACCESS_TOKEN_KEY = 'tns.accessToken';
 const REFRESH_TOKEN_KEY = 'tns.refreshToken';

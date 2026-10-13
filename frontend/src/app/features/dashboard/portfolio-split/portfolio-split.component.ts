@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, input, signal } from '@angular/core';
 
 import { MarketQuotesStore } from '../market-quotes.store';
-import { PositionResponse } from '../trading.models';
+import { PositionResponse } from '../../../api/trading';
 import { SplitSegment, calculatePortfolioSplit } from './portfolio-split';
 
 interface ActiveSegment {

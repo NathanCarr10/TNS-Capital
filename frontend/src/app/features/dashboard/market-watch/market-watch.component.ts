@@ -3,7 +3,7 @@ import { Component, computed, effect, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { MarketQuotesStore } from '../market-quotes.store';
-import { InstrumentResponse, MarketQuote } from '../trading.models';
+import { InstrumentResponse, MarketQuote } from '../../../api/trading';
 
 export type PriceDirection = 'up' | 'down' | 'flat';
 

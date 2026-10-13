@@ -1,6 +1,6 @@
 /// <reference types="jasmine" />
 
-import { MarketQuote, PositionResponse } from '../trading.models';
+import { MarketQuote, PositionResponse } from '../../../api/trading';
 import { calculatePortfolioMetrics } from './portfolio-metrics';
 
 describe('calculatePortfolioMetrics', () => {

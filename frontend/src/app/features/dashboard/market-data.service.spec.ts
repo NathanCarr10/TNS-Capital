@@ -4,8 +4,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
+import { MarketQuote } from '../../api/trading';
+import { provideApiClients } from '../../core/api/api.providers';
 import { MarketDataService } from './market-data.service';
-import { MarketQuote, PriceBar } from './trading.models';
+import { PriceBar } from './trading.models';
 
 describe('MarketDataService', () => {
   let service: MarketDataService;
@@ -13,7 +15,7 @@ describe('MarketDataService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideApiClients()],
     });
     service = TestBed.inject(MarketDataService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -21,7 +23,7 @@ describe('MarketDataService', () => {
 
   afterEach(() => httpMock.verify());
 
-  it('requests quotes for the given symbols as one comma-separated parameter', () => {
+  it('requests quotes with one symbols parameter per symbol', () => {
     const quotes: MarketQuote[] = [
       {
         symbol: 'AAPL',
@@ -38,7 +40,7 @@ describe('MarketDataService', () => {
 
     const request = httpMock.expectOne((req) => req.url === '/api/v1/prices');
     expect(request.request.method).toBe('GET');
-    expect(request.request.params.get('symbols')).toBe('AAPL,MSFT');
+    expect(request.request.params.getAll('symbols')).toEqual(['AAPL', 'MSFT']);
     request.flush(quotes);
 
     expect(result).toEqual(quotes);

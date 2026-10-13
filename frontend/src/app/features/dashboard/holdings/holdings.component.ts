@@ -3,7 +3,7 @@ import { Component, computed, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { MarketQuotesStore } from '../market-quotes.store';
-import { PositionResponse } from '../trading.models';
+import { PositionResponse } from '../../../api/trading';
 import { HoldingRow, toHoldingRow } from './holding-row';
 
 @Component({
