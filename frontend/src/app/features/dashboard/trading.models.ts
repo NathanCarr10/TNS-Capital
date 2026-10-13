@@ -39,6 +39,18 @@ export interface MarketQuote {
   tradedAt: string | null;
 }
 
+export type BarTimeframe = '15Min' | '1Hour' | '1Day';
+
+/** One OHLC bar (candlestick); time is the start of the bar's period. */
+export interface PriceBar {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 export type OrderSide = 'BUY' | 'SELL';
 
 export interface PlaceOrderRequest {

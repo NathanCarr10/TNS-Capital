@@ -2,6 +2,7 @@
 
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed, discardPeriodicTasks, fakeAsync, tick } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { MarketDataService } from '../market-data.service';
@@ -44,7 +45,7 @@ describe('MarketWatchComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [MarketWatchComponent],
-      providers: [MarketQuotesStore, { provide: MarketDataService, useValue: marketDataServiceSpy }],
+      providers: [provideRouter([]), MarketQuotesStore, { provide: MarketDataService, useValue: marketDataServiceSpy }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MarketWatchComponent);

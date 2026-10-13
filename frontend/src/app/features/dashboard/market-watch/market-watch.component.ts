@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, effect, inject, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { MarketQuotesStore } from '../market-quotes.store';
 import { InstrumentResponse, MarketQuote } from '../trading.models';
@@ -14,7 +15,7 @@ export interface MarketWatchRow {
 
 @Component({
   selector: 'app-market-watch',
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './market-watch.component.html',
   styleUrl: './market-watch.component.scss',
 })
