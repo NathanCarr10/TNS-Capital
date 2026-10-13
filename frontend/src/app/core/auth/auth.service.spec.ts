@@ -39,6 +39,19 @@ describe('AuthService', () => {
     expect(sessionStorage.getItem('tns.refreshToken')).toBe('refresh-token');
   });
 
+  it('posts registration details to the registration endpoint', () => {
+    authService.register({ username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).subscribe();
+
+    const request = httpMock.expectOne('/auth/register');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      username: 'newtrader',
+      password: 'password123',
+      holderName: 'Ada Lovelace',
+    });
+    request.flush({ username: 'newtrader', accountId: 'ACC-U00001' });
+  });
+
   it('clears session and calls logout endpoint when refresh token exists', () => {
     sessionStorage.setItem('tns.accessToken', createJwtWithExpOffset(900));
     sessionStorage.setItem('tns.refreshToken', 'refresh-token');

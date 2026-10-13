@@ -9,6 +9,8 @@ import {
   LoginRequest,
   LogoutResponse,
   PlatformErrorResponse,
+  RegisterRequest,
+  RegisteredUser,
   RefreshRequest,
   TokenPair,
 } from './auth.models';
@@ -32,6 +34,10 @@ export class AuthService {
       }),
       map(() => undefined)
     );
+  }
+
+  register(request: RegisterRequest): Observable<RegisteredUser> {
+    return this.http.post<RegisteredUser>('/auth/register', request);
   }
 
   logout(): Observable<void> {
@@ -97,8 +103,7 @@ export class AuthService {
     }
   }
 
-  static getErrorMessage(error: unknown): string {
-    const defaultMessage = 'Invalid username or password.';
+  static getErrorMessage(error: unknown, defaultMessage = 'Invalid username or password.'): string {
 
     if (!error || typeof error !== 'object') {
       return defaultMessage;
