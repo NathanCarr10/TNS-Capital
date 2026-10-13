@@ -20,16 +20,16 @@
                   <dd>{{ accountDetails.accountNumber }}</dd>
                 </div>
                 <div>
+                  <dt>Status</dt>
+                  <dd>{{ accountDetails.status }}</dd>
+                </div>
+                <div>
                   <dt>Holder Name</dt>
                   <dd>{{ accountDetails.holderName }}</dd>
                 </div>
                 <div>
                   <dt>Cash Balance</dt>
                   <dd>{{ accountDetails.cashBalance | currency:'USD':'symbol':'1.2-2' }}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{{ accountDetails.status }}</dd>
                 </div>
               </dl>
             } @else {
