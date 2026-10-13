@@ -35,4 +35,5 @@ export interface PlatformErrorResponse {
 
 export interface JwtClaims {
   exp?: number;
+  roles?: string[];
 }

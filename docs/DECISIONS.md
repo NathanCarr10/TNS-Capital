@@ -17,6 +17,7 @@ be explained at the showcase and revisited later.
 | 9 | Trading API contract generated live, not a hand-written OpenAPI file | §9.2 task 2 | In place |
 | 10 | Only admins open accounts and manage instruments | §22 | Team decision |
 | 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
+| 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -120,3 +121,25 @@ instruments, and the DLQ endpoints. Any further role rules are to be agreed by t
 `spring-webmvc` 6.2.19. The API uses neither feature, and the only fixes are in Spring 7
 (Spring Boot 4), a major upgrade to plan separately. Each entry has an owner and a review
 date.
+
+## 12. Admin analytics sign-in
+
+The admin analytics dashboard is the Streamlit app in `dashboard/` (spec §7 asks for a Python
+dashboard). The Angular login sends admins there, and its **Trading dashboard** button brings
+them back to the Angular app. Admins have no trading account of their own, so there the
+dashboard becomes a read-only account viewer: the admin picks any account (the API already lets
+admins read every account) and sees its balance, holdings and orders, without the order ticket.
+Whether admins may place orders for traders is left for the team to decide.
+
+The two apps run on different origins, so Streamlit cannot read Angular's session and the admin
+signs in on each. Passing the access token across in the URL was rejected: URLs end up in browser
+history, server logs and `Referer` headers, and the token would stay usable for 15 minutes. The
+safe alternative, a single-use, short-lived code that Streamlit exchanges with the auth service,
+needs new auth service endpoints and a table; it is a possible extension. Until then the second
+sign-in is the deliberate price of never putting a token in a URL. The analytics dashboard
+verifies the token it gets itself (HS256 signature, issuer, `typ`, expiry) and admits only the
+`ADMIN` role.
+
+When a signed-out user opens a protected page, the login sends them back to it afterwards
+(`?returnUrl=`), admins included. That is how the Trading dashboard button, which opens a new
+tab without the Angular session, lands on the account viewer and not back on analytics.
