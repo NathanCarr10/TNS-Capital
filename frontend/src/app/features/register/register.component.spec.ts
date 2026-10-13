@@ -1,7 +1,7 @@
 /// <reference types="jasmine" />
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
@@ -15,16 +15,18 @@ describe('RegisterComponent', () => {
 
   beforeEach(async () => {
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['register']);
-    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate']);
 
     await TestBed.configureTestingModule({
       imports: [RegisterComponent],
       providers: [
         { provide: AuthService, useValue: authServiceSpy },
-        { provide: ActivatedRoute, useValue: {} },
-        { provide: Router, useValue: routerSpy },
+        provideRouter([]),
       ],
     }).compileComponents();
+
+    // The template's routerLink needs the real router, so only its navigation is stubbed
+    routerSpy = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+    spyOn(routerSpy, 'navigate').and.resolveTo(true);
 
     fixture = TestBed.createComponent(RegisterComponent);
     component = fixture.componentInstance;

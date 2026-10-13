@@ -2,7 +2,7 @@
 
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
@@ -19,7 +19,6 @@ describe('LoginComponent', () => {
 
   beforeEach(async () => {
     authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['login', 'isAdmin']);
-    routerSpy = jasmine.createSpyObj<Router>('Router', ['navigate', 'navigateByUrl']);
     queryParams = {};
     analyticsSpy = jasmine.createSpyObj<AnalyticsDashboardService>('AnalyticsDashboardService', ['open']);
 
@@ -27,7 +26,7 @@ describe('LoginComponent', () => {
       imports: [LoginComponent],
       providers: [
         { provide: AuthService, useValue: authServiceSpy },
-        { provide: Router, useValue: routerSpy },
+        provideRouter([]),
         { provide: AnalyticsDashboardService, useValue: analyticsSpy },
         {
           provide: ActivatedRoute,
@@ -35,6 +34,11 @@ describe('LoginComponent', () => {
         },
       ],
     }).compileComponents();
+
+    // The template's routerLinks need the real router, so only its navigation is stubbed
+    routerSpy = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+    spyOn(routerSpy, 'navigate').and.resolveTo(true);
+    spyOn(routerSpy, 'navigateByUrl').and.resolveTo(true);
 
     fixture = TestBed.createComponent(LoginComponent);
     component = fixture.componentInstance;
