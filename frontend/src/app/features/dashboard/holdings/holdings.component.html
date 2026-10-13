@@ -30,7 +30,7 @@
         } @else {
           @for (row of rows(); track row.symbol) {
             <tr>
-              <td class="symbol">{{ row.symbol }}</td>
+              <td class="symbol"><a [routerLink]="['/symbols', row.symbol]">{{ row.symbol }}</a></td>
               <td class="numeric">{{ row.quantity | number }}</td>
               @if (row.value != null) {
                 <td class="numeric value">{{ row.value | currency:'USD':'symbol':'1.2-2' }}</td>
