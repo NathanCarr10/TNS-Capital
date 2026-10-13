@@ -164,6 +164,14 @@
         <app-holdings [positions]="positions()" [error]="positionsError()" />
       </article>
 
+      <article class="split-panel">
+        <app-portfolio-split
+          [positions]="positions()"
+          [cashBalance]="account()?.cashBalance ?? null"
+          [error]="positionsError()"
+        />
+      </article>
+
       <article class="market-panel">
         <app-market-watch
           [instruments]="instrumentsLoading() ? null : instruments()"

@@ -11,6 +11,7 @@ import { HoldingsComponent } from './holdings/holdings.component';
 import { MarketQuotesStore } from './market-quotes.store';
 import { MarketWatchComponent } from './market-watch/market-watch.component';
 import { PerformanceSummaryComponent } from './performance-summary/performance-summary.component';
+import { PortfolioSplitComponent } from './portfolio-split/portfolio-split.component';
 import {
   AccountResponse,
   ArchivedOrderResponse,
@@ -27,7 +28,14 @@ import { TradingService } from './trading.service';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [CommonModule, ReactiveFormsModule, HoldingsComponent, MarketWatchComponent, PerformanceSummaryComponent],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    HoldingsComponent,
+    MarketWatchComponent,
+    PerformanceSummaryComponent,
+    PortfolioSplitComponent,
+  ],
   providers: [MarketQuotesStore],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
