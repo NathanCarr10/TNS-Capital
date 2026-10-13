@@ -1,17 +1,20 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription, forkJoin, of, throwError, timer } from 'rxjs';
-import { catchError, map, switchMap, take, timeout } from 'rxjs/operators';
+import { EMPTY, Subscription, forkJoin, of, throwError, timer } from 'rxjs';
+import { catchError, finalize, map, switchMap, take, tap, timeout } from 'rxjs/operators';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { HoldingsComponent } from './holdings/holdings.component';
+import { MarketDataService } from './market-data.service';
 import { MarketQuotesStore } from './market-quotes.store';
 import { MarketWatchComponent } from './market-watch/market-watch.component';
 import { PerformanceSummaryComponent } from './performance-summary/performance-summary.component';
 import { PortfolioSplitComponent } from './portfolio-split/portfolio-split.component';
+import { SideToggleComponent } from './side-toggle/side-toggle.component';
 import {
   AccountResponse,
   ArchivedOrderResponse,
@@ -35,6 +38,7 @@ import { TradingService } from './trading.service';
     MarketWatchComponent,
     PerformanceSummaryComponent,
     PortfolioSplitComponent,
+    SideToggleComponent,
   ],
   providers: [MarketQuotesStore],
   templateUrl: './dashboard.component.html',
@@ -47,6 +51,7 @@ export class DashboardComponent implements OnDestroy {
   private readonly formBuilder = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly tradingService = inject(TradingService);
+  private readonly marketDataService = inject(MarketDataService);
   private readonly router = inject(Router);
   private pollingSubscription?: Subscription;
 
@@ -62,6 +67,7 @@ export class DashboardComponent implements OnDestroy {
   readonly orderHistoryError = signal<string | null>(null);
   readonly isSubmitting = signal(false);
   readonly isTracking = signal(false);
+  readonly priceLoading = signal(false);
   readonly successMessage = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
 
@@ -70,7 +76,7 @@ export class DashboardComponent implements OnDestroy {
       Validators.required,
       Validators.pattern(/^[A-Z]{1,10}$/),
     ]),
-    side: this.formBuilder.nonNullable.control<OrderSide | ''>('', [Validators.required]),
+    side: this.formBuilder.nonNullable.control<OrderSide>('BUY', [Validators.required]),
     quantity: this.formBuilder.nonNullable.control(1, [Validators.required, Validators.min(1)]),
     price: this.formBuilder.control<number | null>(null, [Validators.min(0.01)]),
   });
@@ -78,6 +84,7 @@ export class DashboardComponent implements OnDestroy {
   constructor() {
     this.loadAccount();
     this.loadInstruments();
+    this.prefillLivePrice();
   }
 
   ngOnDestroy(): void {
@@ -161,6 +168,33 @@ export class DashboardComponent implements OnDestroy {
         this.errorMessage.set(this.readErrorMessage(error, 'Failed to load available instruments.'));
       },
     });
+  }
+
+  // Picking a symbol fills Price with its latest quote; the trader can still edit it before submitting
+  private prefillLivePrice(): void {
+    this.orderForm.controls.symbol.valueChanges
+      .pipe(
+        switchMap((symbol) => {
+          if (!symbol) {
+            this.priceLoading.set(false);
+            return EMPTY;
+          }
+
+          this.priceLoading.set(true);
+          return this.marketDataService.getQuotes([symbol]).pipe(
+            tap((quotes) => {
+              const price = quotes.find((quote) => quote.symbol === symbol)?.price;
+              if (price != null) {
+                this.orderForm.controls.price.setValue(price);
+              }
+            }),
+            catchError(() => EMPTY),
+            finalize(() => this.priceLoading.set(false))
+          );
+        }),
+        takeUntilDestroyed()
+      )
+      .subscribe();
   }
 
   private loadAccount(): void {
@@ -259,7 +293,7 @@ export class DashboardComponent implements OnDestroy {
     const request: PlaceOrderRequest = {
       accountId,
       symbol: normalizedSymbol,
-      side: formValue.side as OrderSide,
+      side: formValue.side,
       quantity: formValue.quantity,
       idempotencyKey: this.generateIdempotencyKey(),
     };

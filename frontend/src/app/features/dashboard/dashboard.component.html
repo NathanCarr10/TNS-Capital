@@ -69,15 +69,8 @@
               <p class="field-error">No tradable instruments available.</p>
             }
 
-            <label for="side">Side</label>
-            <select id="side" formControlName="side">
-              <option value="" disabled>Select side</option>
-              <option value="BUY">BUY</option>
-              <option value="SELL">SELL</option>
-            </select>
-            @if (orderForm.controls.side.touched && orderForm.controls.side.invalid) {
-              <p class="field-error">Side is required.</p>
-            }
+            <label id="side-label">Side</label>
+            <app-side-toggle formControlName="side" labelledBy="side-label" />
 
             <label for="quantity">Quantity</label>
             <input id="quantity" type="number" formControlName="quantity" min="1" step="1" />
@@ -86,7 +79,14 @@
             }
 
             <label for="price">Price</label>
-            <input id="price" type="number" formControlName="price" min="0.01" step="0.01" />
+            <input
+              id="price"
+              type="number"
+              formControlName="price"
+              min="0.01"
+              step="0.01"
+              [placeholder]="priceLoading() ? 'Fetching live price...' : ''"
+            />
             @if (orderForm.controls.price.touched && orderForm.controls.price.invalid) {
               <p class="field-error">Price must be greater than 0.</p>
             }
