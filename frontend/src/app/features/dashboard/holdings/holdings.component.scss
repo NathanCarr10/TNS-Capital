@@ -1,0 +1,147 @@
+:host {
+  display: block;
+}
+
+h2 {
+  margin: 0;
+  color: #174f72;
+}
+
+$header-height: 2.6rem;
+$row-height: 3.2rem;
+$visible-rows: 6;
+
+// Scrolls past $visible-rows holdings so the market data stays in view
+.holdings-table-wrap {
+  margin-top: 0.9rem;
+  max-height: calc(#{$header-height} + #{$visible-rows} * #{$row-height});
+  overflow: auto;
+  border-bottom: 1px solid #deebf3;
+}
+
+.holdings-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 480px;
+
+  th,
+  td {
+    box-sizing: border-box;
+    text-align: left;
+    padding: 0 0.6rem;
+    border-bottom: 1px solid #deebf3;
+    color: #1e425f;
+    white-space: nowrap;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: $header-height;
+    color: #245879;
+    font-size: 0.86rem;
+    font-weight: 700;
+    background: #f5fbff;
+  }
+
+  td {
+    height: $row-height;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .symbol {
+    font-weight: 700;
+    color: #1a405f;
+  }
+
+  .value {
+    font-weight: 650;
+  }
+
+  .return {
+    font-weight: 700;
+  }
+
+  .pnl-up {
+    color: #187246;
+  }
+
+  .pnl-down {
+    color: #b03a4a;
+  }
+
+  .pnl-flat,
+  .pnl-unknown {
+    color: #5a7288;
+  }
+}
+
+.return-percent {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.price-unavailable {
+  display: inline-flex;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid #c9d8e5;
+  color: #35506a;
+  background: #f2f7fb;
+}
+
+.note {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid #cfdee9;
+  background: #f5fbff;
+  color: #3d586f;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.note.error {
+  border-color: #efb0be;
+  color: #9a2541;
+  background: #fff4f7;
+}
+
+.skeleton {
+  display: inline-block;
+  width: 4.5rem;
+  height: 0.9rem;
+  border-radius: 0.4rem;
+  background: linear-gradient(90deg, #e8f0f6 25%, #f5f9fc 50%, #e8f0f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
