@@ -133,7 +133,7 @@
                   @for (row of orderHistory(); track row.id) {
                     <tr>
                       <td>{{ row.dateTime | date:'medium' }}</td>
-                      <td>{{ row.symbol }}</td>
+                      <td><a class="symbol-link" [routerLink]="['/symbols', row.symbol]">{{ row.symbol }}</a></td>
                       <td>
                         <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
                       </td>

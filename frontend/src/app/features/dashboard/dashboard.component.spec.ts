@@ -2,7 +2,7 @@
 
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
@@ -77,7 +77,7 @@ describe('DashboardComponent', () => {
         { provide: TradingService, useValue: tradingServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
         { provide: MarketDataService, useValue: { getQuotes: () => of([]) } },
-        { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
+        provideRouter([]),
       ],
     }).compileComponents();
 
