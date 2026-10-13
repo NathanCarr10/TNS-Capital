@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import {
   AccountResponse,
+  ArchivedOrderResponse,
   InstrumentResponse,
   OrderAcceptedResponse,
   OrderResponse,
@@ -25,6 +26,14 @@ export class TradingService {
 
   getInstruments(): Observable<InstrumentResponse[]> {
     return this.http.get<InstrumentResponse[]>('/api/v1/instruments');
+  }
+
+  getAccountOrders(accountId: number): Observable<OrderResponse[]> {
+    return this.http.get<OrderResponse[]>(`/api/v1/accounts/${accountId}/orders`);
+  }
+
+  getAccountOrderHistory(accountId: number): Observable<ArchivedOrderResponse[]> {
+    return this.http.get<ArchivedOrderResponse[]>(`/api/v1/orders/${accountId}/history`);
   }
 
   placeOrder(request: PlaceOrderRequest): Observable<OrderAcceptedResponse> {

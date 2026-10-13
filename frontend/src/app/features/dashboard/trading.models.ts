@@ -51,6 +51,28 @@ export interface OrderResponse {
   statusReason?: string;
 }
 
+export interface ArchivedOrderResponse {
+  orderId: string;
+  accountId: number;
+  symbol: string;
+  side: OrderSide;
+  quantity: number;
+  price: number;
+  status: 'CANCELLED';
+  orderCreatedOn: string;
+  deletedOn: string;
+}
+
+export interface OrderHistoryRow {
+  id: string;
+  dateTime: string;
+  symbol: string;
+  side: OrderSide;
+  quantity: number;
+  price: number;
+  status: 'FILLED' | 'REJECTED' | 'CANCELLED' | 'NEW';
+}
+
 export interface PlatformErrorResponse {
   errorCode: string;
   message: string;

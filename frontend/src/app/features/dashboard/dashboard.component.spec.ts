@@ -29,6 +29,8 @@ describe('DashboardComponent', () => {
       'getCurrentUserProfile',
       'getAccount',
       'getInstruments',
+      'getAccountOrders',
+      'getAccountOrderHistory',
       'placeOrder',
       'getOrder',
     ]);
@@ -49,6 +51,21 @@ describe('DashboardComponent', () => {
         },
       ])
     );
+    tradingServiceSpy.getAccountOrders.and.returnValue(
+      of([
+        {
+          id: 'ord-history-1',
+          accountId: account.id,
+          symbol: 'AAPL',
+          side: 'BUY',
+          quantity: 10,
+          price: 150,
+          status: 'FILLED',
+          createdOn: new Date('2026-01-01T10:00:00Z').toISOString(),
+        },
+      ])
+    );
+    tradingServiceSpy.getAccountOrderHistory.and.returnValue(of([]));
     authServiceSpy.logout.and.returnValue(of(undefined));
 
     await TestBed.configureTestingModule({
@@ -175,5 +192,61 @@ describe('DashboardComponent', () => {
     component.onSubmit();
 
     expect(component.errorMessage()).toContain('VAL-422');
+  });
+
+  it('loads order history table data', () => {
+    expect(tradingServiceSpy.getAccountOrders).toHaveBeenCalledWith(account.id);
+    expect(component.orderHistory().length).toBe(1);
+    expect(component.orderHistory()[0].symbol).toBe('AAPL');
+  });
+
+  it('shows status badges for FILLED, REJECTED, and CANCELLED', () => {
+    component.orderHistory.set([
+      {
+        id: 'filled-1',
+        dateTime: new Date('2026-01-01T10:00:00Z').toISOString(),
+        symbol: 'AAPL',
+        side: 'BUY',
+        quantity: 10,
+        price: 100,
+        status: 'FILLED',
+      },
+      {
+        id: 'rejected-1',
+        dateTime: new Date('2026-01-01T11:00:00Z').toISOString(),
+        symbol: 'MSFT',
+        side: 'SELL',
+        quantity: 5,
+        price: 120,
+        status: 'REJECTED',
+      },
+      {
+        id: 'cancelled-1',
+        dateTime: new Date('2026-01-01T12:00:00Z').toISOString(),
+        symbol: 'GOOGL',
+        side: 'SELL',
+        quantity: 2,
+        price: 130,
+        status: 'CANCELLED',
+      },
+    ]);
+    component.orderHistoryLoading.set(false);
+    fixture.detectChanges();
+
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('.status-filled')?.textContent).toContain('FILLED');
+    expect(element.querySelector('.status-rejected')?.textContent).toContain('REJECTED');
+    expect(element.querySelector('.status-cancelled')?.textContent).toContain('CANCELLED');
+  });
+
+  it('shows a friendly empty message when history is empty', () => {
+    component.orderHistory.set([]);
+    component.orderHistoryLoading.set(false);
+    component.orderHistoryError.set(null);
+    fixture.detectChanges();
+
+    const element: HTMLElement = fixture.nativeElement;
+    expect(element.textContent).toContain('No previous orders yet. Your completed and cancelled orders will appear here.');
   });
 });

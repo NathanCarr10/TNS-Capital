@@ -4,93 +4,149 @@
     <button type="button" (click)="logout()">Logout</button>
   </header>
 
-  <article class="account-panel">
-    <h2>Account Details</h2>
+  <div class="dashboard-grid">
+    <div class="left-column">
+      <article class="account-panel">
+        <h2>Account Details</h2>
 
-    @if (accountLoading()) {
-      <p class="status">Loading account information...</p>
-    } @else {
-      @if (account(); as accountDetails) {
-        <dl class="account-grid">
-          <div>
-            <dt>Account Number</dt>
-            <dd>{{ accountDetails.accountNumber }}</dd>
-          </div>
-          <div>
-            <dt>Holder Name</dt>
-            <dd>{{ accountDetails.holderName }}</dd>
-          </div>
-          <div>
-            <dt>Cash Balance</dt>
-            <dd>{{ accountDetails.cashBalance | currency:'USD':'symbol':'1.2-2' }}</dd>
-          </div>
-          <div>
-            <dt>Status</dt>
-            <dd>{{ accountDetails.status }}</dd>
-          </div>
-        </dl>
-      } @else {
-        <p class="status error">Account details unavailable.</p>
-      }
-    }
-  </article>
-
-  <article class="order-panel">
-    <h2>Submit Order</h2>
-
-    <form [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
-      <div class="field-grid">
-        <label for="symbol">Instrument Symbol</label>
-        <select id="symbol" formControlName="symbol">
-          <option value="" disabled>Select instrument</option>
-          @for (instrument of instruments(); track instrument.symbol) {
-            <option [value]="instrument.symbol">{{ instrument.symbol }} - {{ instrument.name }}</option>
+        @if (accountLoading()) {
+          <p class="status">Loading account information...</p>
+        } @else {
+          @if (account(); as accountDetails) {
+            <dl class="account-grid">
+              <div>
+                <dt>Account Number</dt>
+                <dd>{{ accountDetails.accountNumber }}</dd>
+              </div>
+              <div>
+                <dt>Holder Name</dt>
+                <dd>{{ accountDetails.holderName }}</dd>
+              </div>
+              <div>
+                <dt>Cash Balance</dt>
+                <dd>{{ accountDetails.cashBalance | currency:'USD':'symbol':'1.2-2' }}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{{ accountDetails.status }}</dd>
+              </div>
+            </dl>
+          } @else {
+            <p class="status error">Account details unavailable.</p>
           }
-        </select>
-        @if (orderForm.controls.symbol.touched && orderForm.controls.symbol.invalid) {
-          <p class="field-error">Instrument symbol is required.</p>
         }
-        @if (instrumentsLoading()) {
-          <p class="status">Loading instruments...</p>
-        }
-        @if (!instrumentsLoading() && instruments().length === 0) {
-          <p class="field-error">No tradable instruments available.</p>
+      </article>
+
+      <article class="order-panel">
+        <h2>Submit Order</h2>
+
+        <form [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
+          <div class="field-grid">
+            <label for="symbol">Instrument Symbol</label>
+            <select id="symbol" formControlName="symbol">
+              <option value="" disabled>Select instrument</option>
+              @for (instrument of instruments(); track instrument.symbol) {
+                <option [value]="instrument.symbol">{{ instrument.symbol }} - {{ instrument.name }}</option>
+              }
+            </select>
+            @if (orderForm.controls.symbol.touched && orderForm.controls.symbol.invalid) {
+              <p class="field-error">Instrument symbol is required.</p>
+            }
+            @if (instrumentsLoading()) {
+              <p class="status">Loading instruments...</p>
+            }
+            @if (!instrumentsLoading() && instruments().length === 0) {
+              <p class="field-error">No tradable instruments available.</p>
+            }
+
+            <label for="side">Side</label>
+            <select id="side" formControlName="side">
+              <option value="" disabled>Select side</option>
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+            </select>
+            @if (orderForm.controls.side.touched && orderForm.controls.side.invalid) {
+              <p class="field-error">Side is required.</p>
+            }
+
+            <label for="quantity">Quantity</label>
+            <input id="quantity" type="number" formControlName="quantity" min="1" step="1" />
+            @if (orderForm.controls.quantity.touched && orderForm.controls.quantity.invalid) {
+              <p class="field-error">Quantity must be greater than 0.</p>
+            }
+
+            <label for="price">Price</label>
+            <input id="price" type="number" formControlName="price" min="0.01" step="0.01" />
+            @if (orderForm.controls.price.touched && orderForm.controls.price.invalid) {
+              <p class="field-error">Price must be greater than 0.</p>
+            }
+          </div>
+
+          <button type="submit" [disabled]="isSubmitDisabled()">
+            {{ isSubmitting() ? 'Submitting...' : (isTracking() ? 'Tracking Order...' : 'Submit Order') }}
+          </button>
+        </form>
+
+        @if (successMessage()) {
+          <p class="status success">{{ successMessage() }}</p>
         }
 
-        <label for="side">Side</label>
-        <select id="side" formControlName="side">
-          <option value="" disabled>Select side</option>
-          <option value="BUY">BUY</option>
-          <option value="SELL">SELL</option>
-        </select>
-        @if (orderForm.controls.side.touched && orderForm.controls.side.invalid) {
-          <p class="field-error">Side is required.</p>
+        @if (errorMessage()) {
+          <p class="status error">{{ errorMessage() }}</p>
         }
+      </article>
+    </div>
 
-        <label for="quantity">Quantity</label>
-        <input id="quantity" type="number" formControlName="quantity" min="1" step="1" />
-        @if (orderForm.controls.quantity.touched && orderForm.controls.quantity.invalid) {
-          <p class="field-error">Quantity must be greater than 0.</p>
+    <article class="history-panel">
+      <h2>Order History</h2>
+
+      @if (orderHistoryLoading()) {
+        <p class="status">Loading order history...</p>
+      } @else {
+        @if (orderHistoryError()) {
+          <p class="status error">{{ orderHistoryError() }}</p>
+        } @else if (orderHistory().length === 0) {
+          <p class="status">No previous orders yet. Your completed and cancelled orders will appear here.</p>
+        } @else {
+          <div class="history-table-wrap">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Date/Time</th>
+                  <th>Symbol</th>
+                  <th>Side</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of orderHistory(); track row.id) {
+                  <tr>
+                    <td>{{ row.dateTime | date:'medium' }}</td>
+                    <td>{{ row.symbol }}</td>
+                    <td>
+                      <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
+                    </td>
+                    <td>{{ row.quantity }}</td>
+                    <td>{{ row.price | currency:'USD':'symbol':'1.2-2' }}</td>
+                    <td>
+                      <span
+                        class="status-badge"
+                        [class.status-filled]="row.status === 'FILLED'"
+                        [class.status-rejected]="row.status === 'REJECTED'"
+                        [class.status-cancelled]="row.status === 'CANCELLED'"
+                      >
+                        {{ row.status }}
+                      </span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
         }
-
-        <label for="price">Price</label>
-        <input id="price" type="number" formControlName="price" min="0.01" step="0.01" />
-        @if (orderForm.controls.price.touched && orderForm.controls.price.invalid) {
-          <p class="field-error">Price must be greater than 0.</p>
-        }
-      </div>
-
-      <button type="submit" [disabled]="isSubmitDisabled()">
-        {{ isSubmitting() ? 'Submitting...' : (isTracking() ? 'Tracking Order...' : 'Submit Order') }}
-      </button>
-    </form>
-
-    @if (successMessage()) {
-      <p class="status success">{{ successMessage() }}</p>
-    }
-
-    @if (errorMessage()) {
-      <p class="status error">{{ errorMessage() }}</p>
-    }
-  </article>
+      }
+    </article>
+  </div>
 </section>

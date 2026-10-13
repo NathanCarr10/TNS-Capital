@@ -3,14 +3,16 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subscription, of, throwError, timer } from 'rxjs';
-import { catchError, switchMap, take, timeout } from 'rxjs/operators';
+import { Subscription, forkJoin, of, throwError, timer } from 'rxjs';
+import { catchError, map, switchMap, take, timeout } from 'rxjs/operators';
 
 import { AuthService } from '../../core/auth/auth.service';
 import {
   AccountResponse,
+  ArchivedOrderResponse,
   InstrumentResponse,
   OrderAcceptedResponse,
+  OrderHistoryRow,
   OrderResponse,
   OrderSide,
   PlaceOrderRequest,
@@ -36,8 +38,11 @@ export class DashboardComponent implements OnDestroy {
 
   readonly account = signal<AccountResponse | null>(null);
   readonly instruments = signal<InstrumentResponse[]>([]);
+  readonly orderHistory = signal<OrderHistoryRow[]>([]);
   readonly accountLoading = signal(true);
   readonly instrumentsLoading = signal(true);
+  readonly orderHistoryLoading = signal(true);
+  readonly orderHistoryError = signal<string | null>(null);
   readonly isSubmitting = signal(false);
   readonly isTracking = signal(false);
   readonly successMessage = signal<string | null>(null);
@@ -162,10 +167,42 @@ export class DashboardComponent implements OnDestroy {
         next: (account) => {
           this.account.set(account);
           this.accountLoading.set(false);
+          this.loadOrderHistory(account.id);
         },
         error: (error: unknown) => {
           this.accountLoading.set(false);
           this.errorMessage.set(this.readErrorMessage(error, 'Failed to load account details.'));
+        },
+      });
+  }
+
+  private loadOrderHistory(accountId: number): void {
+    this.orderHistoryLoading.set(true);
+    this.orderHistoryError.set(null);
+
+    forkJoin({
+      activeOrders: this.tradingService.getAccountOrders(accountId),
+      archivedOrders: this.tradingService.getAccountOrderHistory(accountId),
+    })
+      .pipe(
+        map(({ activeOrders, archivedOrders }) => {
+          const activeRows = activeOrders.map((order) => this.mapActiveOrderToRow(order));
+          const archivedRows = archivedOrders.map((order) => this.mapArchivedOrderToRow(order));
+
+          return [...activeRows, ...archivedRows].sort(
+            (a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()
+          );
+        })
+      )
+      .subscribe({
+        next: (rows) => {
+          this.orderHistory.set(rows);
+          this.orderHistoryLoading.set(false);
+        },
+        error: (error: unknown) => {
+          this.orderHistoryLoading.set(false);
+          this.orderHistory.set([]);
+          this.orderHistoryError.set(this.readErrorMessage(error, 'Failed to load order history.'));
         },
       });
   }
@@ -225,6 +262,10 @@ export class DashboardComponent implements OnDestroy {
             this.isTracking.set(false);
             this.successMessage.set(`Order FILLED. orderId: ${orderId}.`);
             this.errorMessage.set(null);
+            const loadedAccount = this.account();
+            if (loadedAccount) {
+              this.loadOrderHistory(loadedAccount.id);
+            }
             this.pollingSubscription?.unsubscribe();
             return;
           }
@@ -234,6 +275,10 @@ export class DashboardComponent implements OnDestroy {
             this.isTracking.set(false);
             this.successMessage.set(null);
             this.errorMessage.set(this.mapRejectedError(order.statusReason));
+            const loadedAccount = this.account();
+            if (loadedAccount) {
+              this.loadOrderHistory(loadedAccount.id);
+            }
             this.pollingSubscription?.unsubscribe();
           }
         },
@@ -311,5 +356,29 @@ export class DashboardComponent implements OnDestroy {
   private readErrorMessage(error: unknown, fallback: string): string {
     const apiError = this.readApiError(error);
     return apiError?.message ?? fallback;
+  }
+
+  private mapActiveOrderToRow(order: OrderResponse): OrderHistoryRow {
+    return {
+      id: order.id,
+      dateTime: order.createdOn,
+      symbol: order.symbol,
+      side: order.side,
+      quantity: order.quantity,
+      price: order.price,
+      status: order.status,
+    };
+  }
+
+  private mapArchivedOrderToRow(order: ArchivedOrderResponse): OrderHistoryRow {
+    return {
+      id: order.orderId,
+      dateTime: order.orderCreatedOn,
+      symbol: order.symbol,
+      side: order.side,
+      quantity: order.quantity,
+      price: order.price,
+      status: order.status,
+    };
   }
 }
