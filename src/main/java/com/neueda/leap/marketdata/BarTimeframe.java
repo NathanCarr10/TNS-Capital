@@ -12,7 +12,7 @@ import java.util.Arrays;
 public enum BarTimeframe {
     MINUTES_15("15Min", Duration.ofDays(60)),
     HOUR_1("1Hour", Duration.ofDays(250)),
-    DAY_1("1Day", Duration.ofDays(6 * 365));
+    DAY_1("1Day", Duration.ofDays(6L * 365));
 
     private final String value;
     private final Duration lookback;
