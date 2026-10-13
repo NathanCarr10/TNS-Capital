@@ -86,3 +86,42 @@ def value_by_asset_class(trades):
 def not_yet_in_batch(live_orders, batch_trades):
     """Live orders the nightly ETL has not loaded yet: the gap between the two sources."""
     return live_orders[~live_orders["order_id"].isin(batch_trades["order_id"])].reset_index(drop=True)
+
+
+def trades_by_user(trades):
+    """What each user has traded, for the admin view: one row per user, busiest first.
+
+    trades needs a username column (see data.py). fill_rate is NaN for a user
+    with no finished orders yet; top_symbol is the instrument they filled the
+    most value in, or None if nothing filled.
+    """
+    columns = ["username", "holder_name", "account_number", "orders", "filled", "rejected", "fill_rate",
+               "buy_value", "sell_value", "top_symbol", "last_order"]
+    if trades.empty:
+        return pd.DataFrame(columns=columns)
+    done = trades["status"] == "FILLED"
+    flagged = trades.assign(
+        filled=done,
+        rejected=trades["status"] == "REJECTED",
+        finished=trades["status"].isin(FINAL_STATUSES),
+        buy_value=trades["notional"].where(done & (trades["side"] == "BUY"), 0),
+        sell_value=trades["notional"].where(done & (trades["side"] == "SELL"), 0),
+    )
+    keys = ["username", "holder_name", "account_number"]
+    users = flagged.groupby(keys, as_index=False).agg(
+        orders=("order_id", "count"), filled=("filled", "sum"), rejected=("rejected", "sum"),
+        finished=("finished", "sum"), buy_value=("buy_value", "sum"), sell_value=("sell_value", "sum"),
+        last_order=("created_on", "max"))
+    users["fill_rate"] = (users["filled"] / users["finished"]).where(users["finished"] > 0)
+
+    filled_trades = filled(trades)
+    if filled_trades.empty:
+        users["top_symbol"] = None
+    else:
+        by_symbol = filled_trades.groupby(keys + ["symbol"], as_index=False)["notional"].sum()
+        top = by_symbol.sort_values(["notional", "symbol"], ascending=[False, True]).drop_duplicates(keys)
+        users = users.merge(top[keys + ["symbol"]].rename(columns={"symbol": "top_symbol"}), on=keys, how="left")
+        users["top_symbol"] = users["top_symbol"].astype(object).where(users["top_symbol"].notna(), None)
+
+    users = users.sort_values(["orders", "username"], ascending=[False, True]).reset_index(drop=True)
+    return users[columns]

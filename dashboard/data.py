@@ -5,7 +5,9 @@
   are processed.
 
 Both come back as DataFrames with the same trade columns, so the insight
-functions work on either.
+functions work on either. Each trade carries the username of the account's
+owner (users.account_id), or "(no login)" for accounts no user owns, such as
+the seeded ones.
 """
 
 import os
@@ -26,20 +28,25 @@ DB_SETTINGS = {
 }
 
 BATCH_TRADES_SQL = """
-    SELECT f.order_id::text AS order_id, f.account_number, a.holder_name, f.symbol,
+    SELECT f.order_id::text AS order_id, f.account_number, a.holder_name,
+           COALESCE(u.username, '(no login)') AS username, f.symbol,
            i.asset_class, f.side, f.quantity, f.price, f.notional, f.status, f.created_on
     FROM analytics.fact_trades f
     JOIN analytics.dim_account a ON a.account_number = f.account_number
     JOIN analytics.dim_instrument i ON i.symbol = f.symbol
+    LEFT JOIN accounts acc ON acc.account_number = f.account_number
+    LEFT JOIN users u ON u.account_id = acc.id
 """
 
 LIVE_TRADES_SQL = """
-    SELECT o.id::text AS order_id, a.account_number, a.holder_name, o.symbol,
+    SELECT o.id::text AS order_id, a.account_number, a.holder_name,
+           COALESCE(u.username, '(no login)') AS username, o.symbol,
            i.asset_class, o.side, o.quantity, o.price, o.quantity * o.price AS notional,
            o.status, o.created_on
     FROM orders o
     JOIN accounts a ON a.id = o.account_id
     JOIN instruments i ON i.symbol = o.symbol
+    LEFT JOIN users u ON u.account_id = a.id
 """
 
 POSITIONS_SQL = """

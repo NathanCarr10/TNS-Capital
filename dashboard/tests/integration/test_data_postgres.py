@@ -33,6 +33,8 @@ TEST_DATA = """
         ('22222222-2222-2222-2222-222222222222', (SELECT id FROM accounts), 'ACME', 'BUY', 5, 26.00, 'REJECTED', 'k2');
     INSERT INTO positions (account_id, symbol, quantity, average_cost) VALUES
         ((SELECT id FROM accounts), 'ACME', 10, 25.00);
+    INSERT INTO users (username, password_hash, role, account_id) VALUES
+        ('john', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
 """
 
 
@@ -56,6 +58,7 @@ def test_live_source_loads_before_the_etl_has_run(db):
     assert frames["has_batch"] is False
     assert frames["batch"].empty
     assert sorted(frames["live"]["status"]) == ["FILLED", "REJECTED"]
+    assert set(frames["live"]["username"]) == {"john"}
     assert frames["live"]["notional"].sum() == pytest.approx(380.0)  # 10 x 25 + 5 x 26
     assert insights.fill_rate(frames["live"]) == pytest.approx(0.5)
     assert frames["positions"].to_dict("records") == [
@@ -76,5 +79,14 @@ def test_batch_source_loads_once_the_etl_has_run(db):
 
     assert frames["has_batch"] is True
     assert frames["batch"]["order_id"].tolist() == ["11111111-1111-1111-1111-111111111111"]
+    assert frames["batch"]["username"].tolist() == ["john"]
     assert insights.not_yet_in_batch(frames["live"], frames["batch"])["order_id"].tolist() == [
         "22222222-2222-2222-2222-222222222222"]
+
+
+def test_accounts_without_a_login_are_labelled(db):
+    db.execute("DELETE FROM users")
+
+    frames = data.load_all()
+
+    assert set(frames["live"]["username"]) == {"(no login)"}

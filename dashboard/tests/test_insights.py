@@ -8,7 +8,8 @@ import insights
 
 def trade(order_id, account="ACC-1", holder="Ann", symbol="ACME", asset_class="Equity",
           side="BUY", quantity=10, price=5.0, status="FILLED", day="2026-10-01"):
-    return {"order_id": order_id, "account_number": account, "holder_name": holder, "symbol": symbol,
+    return {"order_id": order_id, "account_number": account, "holder_name": holder,
+            "username": holder.lower(), "symbol": symbol,
             "asset_class": asset_class, "side": side, "quantity": quantity, "price": price,
             "notional": quantity * price, "status": status, "created_on": pd.Timestamp(day + " 10:00")}
 
@@ -113,3 +114,38 @@ def test_numbers_are_none_without_trades():
     assert insights.average_trade_size(empty) is None
     assert insights.exposure_by_instrument(pd.DataFrame(
         columns=["symbol", "asset_class", "quantity", "average_cost"])).empty
+
+
+def test_trades_by_user_summarises_each_users_trading(trades):
+    users = insights.trades_by_user(trades).set_index("username")
+
+    assert users.index.tolist() == ["ann", "bob", "cy"]  # busiest first
+    ann, bob, cy = users.loc["ann"], users.loc["bob"], users.loc["cy"]
+    assert (ann.orders, ann.filled, ann.rejected) == (3, 2, 0)
+    assert ann.fill_rate == pytest.approx(2 / 3)  # the cancelled order counts as finished
+    assert (ann.buy_value, ann.sell_value, ann.top_symbol) == (150, 0, "ACME")
+    assert ann.last_order == pd.Timestamp("2026-10-02 10:00")
+    assert (bob.filled, bob.rejected, bob.fill_rate) == (1, 1, 0.5)
+    assert (bob.buy_value, bob.sell_value, bob.top_symbol) == (0, 20, "BOND1")
+    assert pd.isna(cy.fill_rate)  # only a NEW order so far
+    assert cy.top_symbol is None
+
+
+def test_trades_by_user_top_symbol_is_the_most_value_filled():
+    users = insights.trades_by_user(pd.DataFrame([
+        trade("o1", symbol="ACME", quantity=1, price=10.0),
+        trade("o2", symbol="ACME", quantity=1, price=10.0),
+        trade("o3", symbol="BIG", quantity=1, price=15.0),
+    ]))
+
+    assert users.loc[0, "top_symbol"] == "ACME"  # 20 beats 15
+
+
+def test_trades_by_user_with_no_fills_or_trades():
+    no_fills = insights.trades_by_user(pd.DataFrame([trade("o1", status="REJECTED")]))
+    assert no_fills.loc[0, "top_symbol"] is None
+    assert no_fills.loc[0, "fill_rate"] == 0
+
+    empty = insights.trades_by_user(pd.DataFrame(columns=list(trade("x"))))
+    assert empty.empty
+    assert "username" in empty.columns

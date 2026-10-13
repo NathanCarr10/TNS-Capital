@@ -1,39 +1,152 @@
-"""The Streamlit page, rendered headlessly with AppTest and fake data (no database)."""
+"""The Streamlit page, rendered headlessly with AppTest and fake data (no database or auth service)."""
+
+import time
 
 import pandas as pd
 import pytest
 
 pytest.importorskip("streamlit")
+jwt = pytest.importorskip("jwt")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 import streamlit as st  # noqa: E402
 
+import auth  # noqa: E402
 import data  # noqa: E402
 
+SECRET = "test-secret-of-at-least-32-bytes-long!!"
+
 TRADES = pd.DataFrame([
-    {"order_id": "o1", "account_number": "ACC-1", "holder_name": "Ann", "symbol": "ACME", "asset_class": "Equity",
+    {"order_id": "o1", "account_number": "ACC-1", "holder_name": "Ann", "username": "ann", "symbol": "ACME", "asset_class": "Equity",
      "side": "BUY", "quantity": 10, "price": 5.0, "notional": 50.0, "status": "FILLED",
      "created_on": pd.Timestamp("2026-10-01 10:00")},
-    {"order_id": "o2", "account_number": "ACC-2", "holder_name": "Bob", "symbol": "ACME", "asset_class": "Equity",
+    {"order_id": "o2", "account_number": "ACC-2", "holder_name": "Bob", "username": "bob", "symbol": "ACME", "asset_class": "Equity",
      "side": "SELL", "quantity": 2, "price": 6.0, "notional": 12.0, "status": "REJECTED",
      "created_on": pd.Timestamp("2026-10-02 10:00")},
 ])
 POSITIONS = pd.DataFrame([{"symbol": "ACME", "asset_class": "Equity", "quantity": 10, "average_cost": 5.0}])
 
 
+FRAMES = {"live": TRADES, "batch": TRADES.iloc[:1], "positions": POSITIONS, "has_batch": True}
+
+
 @pytest.fixture(autouse=True)
-def fresh_cache():
+def fresh_cache(monkeypatch):
     # The page caches load() for 30 s; each test needs its own data
     st.cache_data.clear()
+    monkeypatch.setenv("JWT_SECRET", SECRET)
 
 
-def run_app(monkeypatch, frames):
+def token(roles=("ADMIN",), sub="admin", expires_in=900):
+    now = int(time.time())
+    claims = {"sub": sub, "roles": list(roles), "typ": "access", "iss": auth.ISSUER, "iat": now,
+              "exp": now + expires_in}
+    return jwt.encode(claims, SECRET, algorithm="HS256")
+
+
+def run_app(monkeypatch, frames, signed_in_with=None):
+    """Render the page; signed in as an admin unless another token (or "" for none) is given."""
     monkeypatch.setattr(data, "load_all", lambda: frames)
-    return AppTest.from_file("../app.py", default_timeout=30).run()
+    app = AppTest.from_file("../app.py", default_timeout=30)
+    signed_in_with = token() if signed_in_with is None else signed_in_with
+    if signed_in_with:
+        app.session_state["token"] = signed_in_with
+    return app.run()
+
+
+def test_asks_for_sign_in_and_loads_no_data_without_a_token(monkeypatch):
+    def must_not_load():
+        raise AssertionError("loaded data before sign-in")
+
+    monkeypatch.setattr(data, "load_all", must_not_load)
+    app = AppTest.from_file("../app.py", default_timeout=30).run()
+
+    assert not app.exception
+    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert not app.metric
+
+
+def test_admin_sign_in_opens_the_dashboard(monkeypatch):
+    monkeypatch.setattr(auth, "login", lambda username, password: token())
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    app.text_input[0].input("admin")
+    app.text_input[1].input("secret")
+    app.button[0].click().run()
+
+    assert not app.exception
+    assert any(metric.label == "Orders" for metric in app.metric)
+    assert "Signed in as **admin**" in app.sidebar.markdown[0].value
+
+
+def test_wrong_password_shows_the_auth_message(monkeypatch):
+    def rejected(username, password):
+        raise auth.AuthError("Invalid username or password.")
+
+    monkeypatch.setattr(auth, "login", rejected)
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    app.text_input[0].input("admin")
+    app.text_input[1].input("wrong")
+    app.button[0].click().run()
+
+    assert app.error[0].value == "Invalid username or password."
+    assert not app.metric
+
+
+def test_a_trader_is_turned_away(monkeypatch):
+    app = run_app(monkeypatch, FRAMES, signed_in_with=token(roles=["USER"], sub="ann"))
+
+    assert "this dashboard is for admins only" in app.error[0].value
+    assert not app.metric
+
+
+def test_an_expired_session_goes_back_to_sign_in(monkeypatch):
+    app = run_app(monkeypatch, FRAMES, signed_in_with=token(expires_in=-60))
+
+    assert "session has expired" in app.warning[0].value
+    assert "token" not in app.session_state
+    assert not app.metric
+
+
+def test_a_forged_token_is_rejected(monkeypatch):
+    now = int(time.time())
+    forged = jwt.encode({"sub": "mallory", "roles": ["ADMIN"], "typ": "access", "iss": auth.ISSUER,
+                         "iat": now, "exp": now + 900}, "some-other-secret-of-32-bytes-long!!", algorithm="HS256")
+    app = run_app(monkeypatch, FRAMES, signed_in_with=forged)
+
+    assert "session is not valid" in app.warning[0].value
+    assert not app.metric
+
+
+def test_sign_out_returns_to_the_form(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    app.sidebar.button[0].click().run()
+
+    assert "token" not in app.session_state
+    assert [field.label for field in app.text_input] == ["Username", "Password"]
+
+
+def test_shows_what_each_user_traded_and_one_users_orders(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    [by_user] = [frame.value for frame in app.dataframe if "fill_rate" in frame.value]
+    assert by_user["username"].tolist() == ["ann", "bob"]
+
+    app.selectbox[0].select("bob").run()
+
+    assert not app.exception
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Their orders"] == "1"
+    assert metrics["Their fill rate"] == "0%"
+    # The ETL-gap table also lists orders, but with their ids
+    [theirs] = [frame.value for frame in app.dataframe if "notional" in frame.value and "order_id" not in frame.value]
+    assert theirs["status"].tolist() == ["REJECTED"]
 
 
 def test_shows_metrics_insights_and_charts(monkeypatch):
-    app = run_app(monkeypatch, {"live": TRADES, "batch": TRADES.iloc[:1], "positions": POSITIONS, "has_batch": True})
+    app = run_app(monkeypatch, FRAMES)
 
     assert not app.exception
     metrics = {metric.label: metric.value for metric in app.metric}
@@ -58,6 +171,8 @@ def test_reports_a_database_error(monkeypatch):
         raise OSError("connection refused")
 
     monkeypatch.setattr(data, "load_all", unreachable)
-    app = AppTest.from_file("../app.py", default_timeout=30).run()
+    app = AppTest.from_file("../app.py", default_timeout=30)
+    app.session_state["token"] = token()
+    app.run()
 
     assert "Could not reach the database" in app.error[0].value
