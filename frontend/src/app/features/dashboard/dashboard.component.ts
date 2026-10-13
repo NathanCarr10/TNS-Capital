@@ -1,12 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription, forkJoin, of, throwError, timer } from 'rxjs';
 import { catchError, map, switchMap, take, timeout } from 'rxjs/operators';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { MarketQuotesStore } from './market-quotes.store';
+import { MarketWatchComponent } from './market-watch/market-watch.component';
+import { PerformanceSummaryComponent } from './performance-summary/performance-summary.component';
 import {
   AccountResponse,
   ArchivedOrderResponse,
@@ -17,12 +20,14 @@ import {
   OrderSide,
   PlaceOrderRequest,
   PlatformErrorResponse,
+  PositionResponse,
 } from './trading.models';
 import { TradingService } from './trading.service';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, MarketWatchComponent, PerformanceSummaryComponent],
+  providers: [MarketQuotesStore],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -39,6 +44,9 @@ export class DashboardComponent implements OnDestroy {
   readonly account = signal<AccountResponse | null>(null);
   readonly instruments = signal<InstrumentResponse[]>([]);
   readonly orderHistory = signal<OrderHistoryRow[]>([]);
+  readonly positions = signal<PositionResponse[] | null>(null);
+  readonly positionsError = signal<string | null>(null);
+  readonly heldSymbols = computed(() => (this.positions() ?? []).map((position) => position.symbol));
   readonly accountLoading = signal(true);
   readonly instrumentsLoading = signal(true);
   readonly orderHistoryLoading = signal(true);
@@ -168,12 +176,36 @@ export class DashboardComponent implements OnDestroy {
           this.account.set(account);
           this.accountLoading.set(false);
           this.loadOrderHistory(account.id);
+          this.loadPositions(account.id);
         },
         error: (error: unknown) => {
           this.accountLoading.set(false);
           this.errorMessage.set(this.readErrorMessage(error, 'Failed to load account details.'));
         },
       });
+  }
+
+  private loadPositions(accountId: number): void {
+    this.tradingService.getAccountPositions(accountId).subscribe({
+      next: (positions) => {
+        this.positions.set(positions.filter((position) => position.quantity > 0));
+        this.positionsError.set(null);
+      },
+      error: (error: unknown) => {
+        this.positions.set([]);
+        this.positionsError.set(this.readErrorMessage(error, 'Failed to load positions.'));
+      },
+    });
+  }
+
+  // A fill moves cash and holdings; reload them without the loading state so the panels do not flicker
+  private refreshAfterFill(accountId: number): void {
+    this.tradingService.getAccount(accountId).subscribe({
+      next: (account) => this.account.set(account),
+      error: () => undefined,
+    });
+    this.loadOrderHistory(accountId);
+    this.loadPositions(accountId);
   }
 
   private loadOrderHistory(accountId: number): void {
@@ -264,7 +296,7 @@ export class DashboardComponent implements OnDestroy {
             this.errorMessage.set(null);
             const loadedAccount = this.account();
             if (loadedAccount) {
-              this.loadOrderHistory(loadedAccount.id);
+              this.refreshAfterFill(loadedAccount.id);
             }
             this.pollingSubscription?.unsubscribe();
             return;

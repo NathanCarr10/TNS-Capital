@@ -21,6 +21,24 @@ export interface InstrumentResponse {
   tradable: boolean;
 }
 
+export interface PositionResponse {
+  accountId: number;
+  symbol: string;
+  quantity: number;
+  averageCost: number;
+  marketValue: number | null;
+}
+
+/** Price fields are null when no live price is available; change fields also when the previous close is unknown. */
+export interface MarketQuote {
+  symbol: string;
+  price: number | null;
+  previousClose: number | null;
+  change: number | null;
+  changePercent: number | null;
+  tradedAt: string | null;
+}
+
 export type OrderSide = 'BUY' | 'SELL';
 
 export interface PlaceOrderRequest {

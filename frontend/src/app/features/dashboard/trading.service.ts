@@ -9,6 +9,7 @@ import {
   OrderAcceptedResponse,
   OrderResponse,
   PlaceOrderRequest,
+  PositionResponse,
   UserProfileResponse,
 } from './trading.models';
 
@@ -26,6 +27,10 @@ export class TradingService {
 
   getInstruments(): Observable<InstrumentResponse[]> {
     return this.http.get<InstrumentResponse[]>('/api/v1/instruments');
+  }
+
+  getAccountPositions(accountId: number): Observable<PositionResponse[]> {
+    return this.http.get<PositionResponse[]>(`/api/v1/accounts/${accountId}/positions`);
   }
 
   getAccountOrders(accountId: number): Observable<OrderResponse[]> {

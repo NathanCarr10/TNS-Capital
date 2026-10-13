@@ -7,6 +7,7 @@ import { of, throwError } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { DashboardComponent } from './dashboard.component';
+import { MarketDataService } from './market-data.service';
 import { TradingService } from './trading.service';
 
 describe('DashboardComponent', () => {
@@ -30,6 +31,7 @@ describe('DashboardComponent', () => {
       'getAccount',
       'getInstruments',
       'getAccountOrders',
+      'getAccountPositions',
       'getAccountOrderHistory',
       'placeOrder',
       'getOrder',
@@ -51,6 +53,7 @@ describe('DashboardComponent', () => {
         },
       ])
     );
+    tradingServiceSpy.getAccountPositions.and.returnValue(of([]));
     tradingServiceSpy.getAccountOrders.and.returnValue(
       of([
         {
@@ -73,6 +76,7 @@ describe('DashboardComponent', () => {
       providers: [
         { provide: TradingService, useValue: tradingServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
+        { provide: MarketDataService, useValue: { getQuotes: () => of([]) } },
         { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
       ],
     }).compileComponents();
@@ -104,6 +108,9 @@ describe('DashboardComponent', () => {
     expect(tradingServiceSpy.placeOrder).toHaveBeenCalled();
     expect(component.successMessage()).toContain('FILLED');
     expect(component.errorMessage()).toBeNull();
+    // The fill moves cash and holdings, so both are reloaded for the performance panel
+    expect(tradingServiceSpy.getAccount).toHaveBeenCalledTimes(2);
+    expect(tradingServiceSpy.getAccountPositions).toHaveBeenCalledTimes(2);
   }));
 
   it('submits a successful SELL order and shows FILLED message', fakeAsync(() => {
