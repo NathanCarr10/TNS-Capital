@@ -12,8 +12,7 @@
     align-items: start;
   }
 
-  .left-column,
-  .right-column {
+  .left-column {
     display: grid;
     gap: 1.2rem;
   }
@@ -87,10 +86,6 @@
 
   .history-panel {
     height: fit-content;
-  }
-
-  .right-column {
-    min-width: 0;
   }
 
   .history-table {

@@ -95,12 +95,6 @@
           <p class="status error">{{ errorMessage() }}</p>
         }
       </article>
-    </div>
-
-    <div class="right-column">
-      <article class="market-panel">
-        <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" />
-      </article>
 
       <article class="history-panel">
         <h2>Order History</h2>
@@ -154,5 +148,9 @@
         }
       </article>
     </div>
+
+    <article class="market-panel">
+      <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" />
+    </article>
   </div>
 </section>
