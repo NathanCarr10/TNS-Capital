@@ -3,6 +3,17 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  holderName?: string;
+}
+
+export interface RegisteredUser {
+  username: string;
+  accountId: string;
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;

@@ -84,9 +84,19 @@
   color: #8f2f2f;
 }
 
+.auth-link {
+  text-align: center;
+  font-size: 0.9rem;
+
+  a {
+    color: #115b8c;
+    font-weight: 600;
+  }
+}
+
 .back-link {
-  display: inline-block;
-  margin-top: 1.2rem;
+  display: block;
+  text-align: center;
   font-size: 0.9rem;
   color: #1a6ea6;
   text-decoration: none;
