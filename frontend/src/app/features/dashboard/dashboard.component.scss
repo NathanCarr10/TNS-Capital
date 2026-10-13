@@ -20,7 +20,7 @@
 
   article {
     margin-top: 1.2rem;
-    max-width: 740px;
+    max-width: 920px;
     border: 1px solid #d6e2ea;
     background: #ffffff;
     border-radius: 0.9rem;
@@ -39,6 +39,92 @@
     }
   }
 
+  .account-grid {
+    margin: 0.9rem 0 0;
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    div {
+      border: 1px solid #dae7f1;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      background: #fafdff;
+    }
+
+    dt {
+      font-size: 0.82rem;
+      color: #5a7288;
+      margin: 0;
+    }
+
+    dd {
+      margin: 0.3rem 0 0;
+      font-weight: 650;
+      color: #1a405f;
+    }
+  }
+
+  .order-panel form {
+    margin-top: 0.8rem;
+  }
+
+  .field-grid {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 0.6rem 0.9rem;
+    align-items: center;
+
+    label {
+      font-weight: 600;
+      color: #1d4f71;
+    }
+
+    input,
+    select {
+      border: 1px solid #c8d9e6;
+      border-radius: 0.6rem;
+      padding: 0.55rem 0.65rem;
+      font: inherit;
+      color: #1a405f;
+      background: #fff;
+    }
+
+    input:focus,
+    select:focus {
+      outline: 2px solid rgba(26, 95, 139, 0.25);
+      outline-offset: 1px;
+      border-color: #1a5f8b;
+    }
+
+    .field-error {
+      grid-column: 2;
+      margin: -0.1rem 0 0.25rem;
+      font-size: 0.84rem;
+      color: #9a2541;
+    }
+  }
+
+  .status {
+    margin-top: 0.9rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.65rem;
+    border: 1px solid #cfdee9;
+    background: #f5fbff;
+  }
+
+  .status.success {
+    border-color: #92dcb2;
+    color: #11683f;
+    background: #ecfaf2;
+  }
+
+  .status.error {
+    border-color: #efb0be;
+    color: #9a2541;
+    background: #fff4f7;
+  }
+
   button {
     border: 1px solid #1a5f8b;
     border-radius: 0.6rem;
@@ -48,5 +134,25 @@
     font-weight: 600;
     padding: 0.6rem 1rem;
     cursor: pointer;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .account-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .field-grid {
+      grid-template-columns: 1fr;
+
+      .field-error {
+        grid-column: 1;
+        margin-top: -0.2rem;
+      }
+    }
   }
 }
