@@ -1,0 +1,56 @@
+<section class="register-page">
+  <div class="register-card">
+    <h1>Create Your Account</h1>
+    <p>Register to access your account and trading tools.</p>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" novalidate>
+      <label for="username">Username</label>
+      <input
+        id="username"
+        type="text"
+        formControlName="username"
+        autocomplete="username"
+        placeholder="Choose a username"
+      />
+
+      <label for="holderName">Account holder name <span>(optional)</span></label>
+      <input
+        id="holderName"
+        type="text"
+        formControlName="holderName"
+        autocomplete="name"
+        placeholder="Enter your name"
+      />
+
+      <label for="password">Password</label>
+      <input
+        id="password"
+        type="password"
+        formControlName="password"
+        autocomplete="new-password"
+        placeholder="At least 8 characters"
+      />
+
+      <label for="confirmPassword">Confirm password</label>
+      <input
+        id="confirmPassword"
+        type="password"
+        formControlName="confirmPassword"
+        autocomplete="new-password"
+        placeholder="Re-enter your password"
+      />
+
+      <p class="field-error" *ngIf="registerForm.invalid && registerForm.touched">
+        Enter a username and passwords with at least 8 characters.
+      </p>
+
+      <p class="server-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+
+      <button type="submit" [disabled]="isSubmitting()">
+        {{ isSubmitting() ? 'Creating Account...' : 'Register' }}
+      </button>
+    </form>
+
+    <p class="auth-link">Already have an account? <a routerLink="/login">Log in</a></p>
+  </div>
+</section>
