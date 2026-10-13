@@ -7,6 +7,7 @@ import { of, throwError } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { DashboardComponent } from './dashboard.component';
+import { MarketDataService } from './market-data.service';
 import { TradingService } from './trading.service';
 
 describe('DashboardComponent', () => {
@@ -73,6 +74,7 @@ describe('DashboardComponent', () => {
       providers: [
         { provide: TradingService, useValue: tradingServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
+        { provide: MarketDataService, useValue: { getQuotes: () => of([]) } },
         { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
       ],
     }).compileComponents();

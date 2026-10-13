@@ -1,0 +1,76 @@
+<div class="panel-header">
+  <h2>Market Data</h2>
+  <div class="panel-actions">
+    @if (lastUpdated(); as updated) {
+      <span class="last-updated">Updated {{ updated | date:'mediumTime' }}</span>
+    }
+    <button type="button" (click)="refresh()" [disabled]="refreshing() || rows().length === 0">
+      {{ refreshing() ? 'Refreshing...' : 'Refresh' }}
+    </button>
+  </div>
+</div>
+
+@if (errorMessage()) {
+  <div class="status error error-banner" role="alert">
+    <span>{{ errorMessage() }}</span>
+    <button type="button" (click)="refresh()" [disabled]="refreshing()">Retry</button>
+  </div>
+}
+
+@if (watchlist()?.length === 0) {
+  <p class="status">No instruments available to quote.</p>
+} @else if (lastUpdated() || !errorMessage()) {
+  <div class="market-table-wrap">
+    <table class="market-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th class="numeric">Price</th>
+          <th class="numeric">Change</th>
+          <th class="numeric">Change %</th>
+        </tr>
+      </thead>
+      <tbody>
+        @if (!lastUpdated()) {
+          @for (row of skeletonRows; track row) {
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton skeleton-wide"></span></td>
+              <td class="numeric"><span class="skeleton"></span></td>
+              <td class="numeric"><span class="skeleton"></span></td>
+              <td class="numeric"><span class="skeleton"></span></td>
+            </tr>
+          }
+        } @else {
+          @for (row of rows(); track row.instrument.symbol) {
+            <tr>
+              <td>
+                <span class="symbol">{{ row.instrument.symbol }}</span>
+                <span class="instrument-name">{{ row.instrument.name }}</span>
+              </td>
+              @if (row.quote?.price != null) {
+                @let quote = row.quote!;
+                @let move = direction(quote);
+                <td class="numeric price">{{ quote.price | currency:row.instrument.currency:'symbol':'1.2-2' }}</td>
+                @if (move) {
+                  <td class="numeric" [class]="'change-' + move">
+                    {{ move === 'up' ? '+' : '' }}{{ quote.change | number:'1.2-2' }}
+                  </td>
+                  <td class="numeric" [class]="'change-' + move">
+                    {{ move === 'up' ? '+' : '' }}{{ quote.changePercent | number:'1.2-2' }}%
+                  </td>
+                } @else {
+                  <td class="numeric change-unknown">&mdash;</td>
+                  <td class="numeric change-unknown">&mdash;</td>
+                }
+              } @else {
+                <td class="numeric" colspan="3">
+                  <span class="price-unavailable">Price unavailable</span>
+                </td>
+              }
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+}

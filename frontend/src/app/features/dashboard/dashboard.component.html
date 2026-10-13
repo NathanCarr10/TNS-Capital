@@ -97,56 +97,62 @@
       </article>
     </div>
 
-    <article class="history-panel">
-      <h2>Order History</h2>
+    <div class="right-column">
+      <article class="market-panel">
+        <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" />
+      </article>
 
-      @if (orderHistoryLoading()) {
-        <p class="status">Loading order history...</p>
-      } @else {
-        @if (orderHistoryError()) {
-          <p class="status error">{{ orderHistoryError() }}</p>
-        } @else if (orderHistory().length === 0) {
-          <p class="status">No previous orders yet. Your completed and cancelled orders will appear here.</p>
+      <article class="history-panel">
+        <h2>Order History</h2>
+
+        @if (orderHistoryLoading()) {
+          <p class="status">Loading order history...</p>
         } @else {
-          <div class="history-table-wrap">
-            <table class="history-table">
-              <thead>
-                <tr>
-                  <th>Date/Time</th>
-                  <th>Symbol</th>
-                  <th>Side</th>
-                  <th>Quantity</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (row of orderHistory(); track row.id) {
+          @if (orderHistoryError()) {
+            <p class="status error">{{ orderHistoryError() }}</p>
+          } @else if (orderHistory().length === 0) {
+            <p class="status">No previous orders yet. Your completed and cancelled orders will appear here.</p>
+          } @else {
+            <div class="history-table-wrap">
+              <table class="history-table">
+                <thead>
                   <tr>
-                    <td>{{ row.dateTime | date:'medium' }}</td>
-                    <td>{{ row.symbol }}</td>
-                    <td>
-                      <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
-                    </td>
-                    <td>{{ row.quantity }}</td>
-                    <td>{{ row.price | currency:'USD':'symbol':'1.2-2' }}</td>
-                    <td>
-                      <span
-                        class="status-badge"
-                        [class.status-filled]="row.status === 'FILLED'"
-                        [class.status-rejected]="row.status === 'REJECTED'"
-                        [class.status-cancelled]="row.status === 'CANCELLED'"
-                      >
-                        {{ row.status }}
-                      </span>
-                    </td>
+                    <th>Date/Time</th>
+                    <th>Symbol</th>
+                    <th>Side</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Status</th>
                   </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  @for (row of orderHistory(); track row.id) {
+                    <tr>
+                      <td>{{ row.dateTime | date:'medium' }}</td>
+                      <td>{{ row.symbol }}</td>
+                      <td>
+                        <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
+                      </td>
+                      <td>{{ row.quantity }}</td>
+                      <td>{{ row.price | currency:'USD':'symbol':'1.2-2' }}</td>
+                      <td>
+                        <span
+                          class="status-badge"
+                          [class.status-filled]="row.status === 'FILLED'"
+                          [class.status-rejected]="row.status === 'REJECTED'"
+                          [class.status-cancelled]="row.status === 'CANCELLED'"
+                        >
+                          {{ row.status }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
         }
-      }
-    </article>
+      </article>
+    </div>
   </div>
 </section>

@@ -1,0 +1,177 @@
+:host {
+  display: block;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+
+  h2 {
+    margin: 0;
+    color: #174f72;
+  }
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.last-updated {
+  font-size: 0.84rem;
+  color: #5a7288;
+}
+
+.market-table-wrap {
+  margin-top: 0.9rem;
+  overflow-x: auto;
+}
+
+.market-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 0.65rem 0.6rem;
+    border-bottom: 1px solid #deebf3;
+    color: #1e425f;
+    white-space: nowrap;
+  }
+
+  th {
+    color: #245879;
+    font-size: 0.86rem;
+    font-weight: 700;
+    background: #f5fbff;
+  }
+
+  .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.symbol {
+  display: block;
+  font-weight: 700;
+  color: #1a405f;
+}
+
+.instrument-name {
+  display: block;
+  font-size: 0.8rem;
+  color: #5a7288;
+}
+
+.price {
+  font-weight: 650;
+}
+
+.market-table td.change-up {
+  color: #187246;
+  font-weight: 700;
+}
+
+.market-table td.change-down {
+  color: #b03a4a;
+  font-weight: 700;
+}
+
+.market-table td.change-flat,
+.market-table td.change-unknown {
+  color: #5a7288;
+}
+
+.price-unavailable {
+  display: inline-flex;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid #c9d8e5;
+  color: #35506a;
+  background: #f2f7fb;
+}
+
+.skeleton {
+  display: inline-block;
+  width: 4.5rem;
+  height: 0.9rem;
+  border-radius: 0.4rem;
+  background: linear-gradient(90deg, #e8f0f6 25%, #f5f9fc 50%, #e8f0f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+.skeleton-wide {
+  width: 7rem;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+.status {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid #cfdee9;
+  background: #f5fbff;
+  color: #3d586f;
+  line-height: 1.5;
+}
+
+.status.error {
+  border-color: #efb0be;
+  color: #9a2541;
+  background: #fff4f7;
+}
+
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+button {
+  border: 1px solid #1a5f8b;
+  border-radius: 0.6rem;
+  background-color: #ffffff;
+  color: #1a5f8b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+}
+
+.error-banner button {
+  border-color: #9a2541;
+  color: #9a2541;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.86rem;
+}

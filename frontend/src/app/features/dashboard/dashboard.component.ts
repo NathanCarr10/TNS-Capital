@@ -7,6 +7,7 @@ import { Subscription, forkJoin, of, throwError, timer } from 'rxjs';
 import { catchError, map, switchMap, take, timeout } from 'rxjs/operators';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { MarketWatchComponent } from './market-watch/market-watch.component';
 import {
   AccountResponse,
   ArchivedOrderResponse,
@@ -22,7 +23,7 @@ import { TradingService } from './trading.service';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, MarketWatchComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })

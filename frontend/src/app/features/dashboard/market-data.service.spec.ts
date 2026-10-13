@@ -1,0 +1,61 @@
+/// <reference types="jasmine" />
+
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+
+import { MarketDataService } from './market-data.service';
+import { MarketQuote } from './trading.models';
+
+describe('MarketDataService', () => {
+  let service: MarketDataService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(MarketDataService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('requests quotes for the given symbols as one comma-separated parameter', () => {
+    const quotes: MarketQuote[] = [
+      {
+        symbol: 'AAPL',
+        price: 190.5,
+        previousClose: 188,
+        change: 2.5,
+        changePercent: 1.33,
+        tradedAt: '2026-10-13T14:30:00Z',
+      },
+    ];
+    let result: MarketQuote[] | undefined;
+
+    service.getQuotes(['AAPL', 'MSFT']).subscribe((response) => (result = response));
+
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/prices');
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.get('symbols')).toBe('AAPL,MSFT');
+    request.flush(quotes);
+
+    expect(result).toEqual(quotes);
+  });
+
+  it('propagates server errors', () => {
+    let status: number | undefined;
+
+    service.getQuotes(['AAPL']).subscribe({ error: (error) => (status = error.status) });
+
+    httpMock
+      .expectOne((req) => req.url === '/api/v1/prices')
+      .flush(
+        { errorCode: 'MKT-503', message: 'Market data is unavailable right now; try again later' },
+        { status: 503, statusText: 'Service Unavailable' }
+      );
+
+    expect(status).toBe(503);
+  });
+});
