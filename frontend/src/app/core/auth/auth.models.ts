@@ -11,7 +11,7 @@ export interface RegisterRequest {
 
 export interface RegisteredUser {
   username: string;
-  accountId: string;
+  accountId: number;
 }
 
 export interface TokenPair {

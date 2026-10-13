@@ -34,7 +34,7 @@ describe('RegisterComponent', () => {
   });
 
   it('submits valid registration details and returns to login', () => {
-    authServiceSpy.register.and.returnValue(of({ username: 'newtrader', accountId: 'ACC-U00001' }));
+    authServiceSpy.register.and.returnValue(of({ username: 'newtrader', accountId: 1 }));
 
     component.registerForm.setValue({
       username: 'newtrader',
