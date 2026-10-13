@@ -12,6 +12,7 @@ export type PriceDirection = 'up' | 'down' | 'flat';
 export interface MarketWatchRow {
   instrument: InstrumentResponse;
   quote: MarketQuote | null;
+  held: boolean;
 }
 
 @Component({
@@ -31,6 +32,8 @@ export class MarketWatchComponent {
 
   /** The instruments to quote, or null while they are still loading. */
   readonly instruments = input<InstrumentResponse[] | null>(null);
+  /** Symbols the user holds, listed before the rest. */
+  readonly heldSymbols = input<string[]>([]);
 
   readonly quotes = signal<ReadonlyMap<string, MarketQuote>>(new Map());
   readonly refreshing = signal(false);
@@ -38,17 +41,43 @@ export class MarketWatchComponent {
   readonly lastUpdated = signal<Date | null>(null);
   readonly skeletonRows = [1, 2, 3, 4, 5];
 
-  readonly watchlist = computed(() => this.instruments()?.slice(0, MarketWatchComponent.MAX_SYMBOLS) ?? null);
-  readonly rows = computed<MarketWatchRow[]>(() =>
-    (this.watchlist() ?? []).map((instrument) => ({
-      instrument,
-      quote: this.quotes().get(instrument.symbol) ?? null,
-    }))
-  );
+  private readonly held = computed(() => new Set(this.heldSymbols()));
+
+  // Held instruments go first so they are never cut off by the symbol limit
+  readonly watchlist = computed(() => {
+    const instruments = this.instruments();
+    if (!instruments) {
+      return null;
+    }
+    const held = this.held();
+    return [...instruments]
+      .sort((a, b) => Number(held.has(b.symbol)) - Number(held.has(a.symbol)))
+      .slice(0, MarketWatchComponent.MAX_SYMBOLS);
+  });
+
+  /** Held symbols first, then the rest; each group by the biggest move in either direction. */
+  readonly rows = computed<MarketWatchRow[]>(() => {
+    const held = this.held();
+    const quotes = this.quotes();
+    return (this.watchlist() ?? [])
+      .map((instrument) => ({
+        instrument,
+        quote: quotes.get(instrument.symbol) ?? null,
+        held: held.has(instrument.symbol),
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.held) - Number(a.held) ||
+          this.moveSize(b.quote) - this.moveSize(a.quote) ||
+          a.instrument.symbol.localeCompare(b.instrument.symbol)
+      );
+  });
 
   constructor() {
     const symbols$ = toObservable(this.watchlist).pipe(
-      map((instruments) => instruments?.map((instrument) => instrument.symbol) ?? [])
+      map((instruments) => instruments?.map((instrument) => instrument.symbol).sort() ?? []),
+      // Reordering the same symbols, e.g. when holdings load, must not trigger an extra fetch
+      distinctUntilChanged((previous, current) => previous.join() === current.join())
     );
     const visible$ = fromEvent(this.document, 'visibilitychange').pipe(
       startWith(null),
@@ -86,6 +115,11 @@ export class MarketWatchComponent {
       return 'up';
     }
     return quote.change < 0 ? 'down' : 'flat';
+  }
+
+  // Unknown changes sort last
+  private moveSize(quote: MarketQuote | null): number {
+    return quote?.changePercent == null ? -1 : Math.abs(quote.changePercent);
   }
 
   private fetchQuotes(symbols: string[]): Observable<MarketQuote[]> {

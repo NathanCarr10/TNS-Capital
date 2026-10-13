@@ -154,6 +154,76 @@ describe('MarketWatchComponent', () => {
     discardPeriodicTasks();
   }));
 
+  it('lists held symbols first, each group ordered by the biggest move up or down', fakeAsync(() => {
+    const more: InstrumentResponse[] = [
+      ...instruments,
+      { symbol: 'NVDA', name: 'NVIDIA Corp.', assetClass: 'EQUITY', currency: 'USD', tradable: true },
+      { symbol: 'AMZN', name: 'Amazon.com Inc.', assetClass: 'EQUITY', currency: 'USD', tradable: true },
+    ];
+    marketDataServiceSpy.getQuotes.and.returnValue(
+      of([
+        quote('AAPL', 101, 100), // held, +1%
+        quote('MSFT', 95, 100), // held, -5%
+        quote('TSLA', 110, 100), // +10%
+        quote('NVDA', 97, 100), // -3%
+        quote('AMZN', null, null), // no price
+      ])
+    );
+
+    fixture.componentRef.setInput('instruments', more);
+    fixture.componentRef.setInput('heldSymbols', ['AAPL', 'MSFT']);
+    fixture.detectChanges();
+    tick();
+    fixture.detectChanges();
+
+    const symbols = Array.from(fixture.nativeElement.querySelectorAll('tbody .symbol') as NodeListOf<HTMLElement>).map(
+      (cell) => cell.textContent!.replace('Held', '').trim()
+    );
+    expect(symbols).toEqual(['MSFT', 'AAPL', 'TSLA', 'NVDA', 'AMZN']);
+    expect(rowFor('MSFT').querySelector('.held-tag')).not.toBeNull();
+    expect(rowFor('TSLA').querySelector('.held-tag')).toBeNull();
+
+    discardPeriodicTasks();
+  }));
+
+  it('does not fetch again when only the holdings change', fakeAsync(() => {
+    marketDataServiceSpy.getQuotes.and.returnValue(of([quote('AAPL', 190, 180)]));
+    start();
+
+    fixture.componentRef.setInput('heldSymbols', ['TSLA']);
+    fixture.detectChanges();
+    tick();
+
+    expect(marketDataServiceSpy.getQuotes).toHaveBeenCalledTimes(1);
+
+    discardPeriodicTasks();
+  }));
+
+  it('sizes the table to show 10 symbols and scrolls the rest', fakeAsync(() => {
+    const many = Array.from({ length: 15 }, (_, index) => ({
+      symbol: `SYM${String(index).padStart(2, '0')}`,
+      name: `Instrument ${index}`,
+      assetClass: 'EQUITY',
+      currency: 'USD',
+      tradable: true,
+    }));
+    marketDataServiceSpy.getQuotes.and.returnValue(of(many.map((instrument) => quote(instrument.symbol, 100, 100))));
+    fixture.componentRef.setInput('instruments', many);
+    fixture.detectChanges();
+    tick();
+    fixture.detectChanges();
+
+    const wrap = fixture.nativeElement.querySelector('.market-table-wrap') as HTMLElement;
+    const rows = fixture.nativeElement.querySelectorAll('tbody tr') as NodeListOf<HTMLElement>;
+    const wrapBottom = wrap.getBoundingClientRect().bottom;
+
+    expect(wrap.scrollHeight).toBeGreaterThan(wrap.clientHeight);
+    expect(rows[9].getBoundingClientRect().bottom).toBeLessThanOrEqual(wrapBottom + 1);
+    expect(rows[10].getBoundingClientRect().top).toBeGreaterThanOrEqual(wrapBottom - 2);
+
+    discardPeriodicTasks();
+  }));
+
   it('shows an error banner with a Retry button that reloads the prices', fakeAsync(() => {
     marketDataServiceSpy.getQuotes.and.returnValue(
       throwError(

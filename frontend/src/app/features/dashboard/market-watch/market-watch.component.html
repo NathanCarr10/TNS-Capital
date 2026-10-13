@@ -44,7 +44,12 @@
           @for (row of rows(); track row.instrument.symbol) {
             <tr>
               <td>
-                <span class="symbol">{{ row.instrument.symbol }}</span>
+                <span class="symbol">
+                  {{ row.instrument.symbol }}
+                  @if (row.held) {
+                    <span class="held-tag">Held</span>
+                  }
+                </span>
                 <span class="instrument-name">{{ row.instrument.name }}</span>
               </td>
               @if (row.quote?.price != null) {

@@ -40,6 +40,7 @@ export class DashboardComponent implements OnDestroy {
   readonly account = signal<AccountResponse | null>(null);
   readonly instruments = signal<InstrumentResponse[]>([]);
   readonly orderHistory = signal<OrderHistoryRow[]>([]);
+  readonly heldSymbols = signal<string[]>([]);
   readonly accountLoading = signal(true);
   readonly instrumentsLoading = signal(true);
   readonly orderHistoryLoading = signal(true);
@@ -169,12 +170,25 @@ export class DashboardComponent implements OnDestroy {
           this.account.set(account);
           this.accountLoading.set(false);
           this.loadOrderHistory(account.id);
+          this.loadPositions(account.id);
         },
         error: (error: unknown) => {
           this.accountLoading.set(false);
           this.errorMessage.set(this.readErrorMessage(error, 'Failed to load account details.'));
         },
       });
+  }
+
+  private loadPositions(accountId: number): void {
+    this.tradingService.getAccountPositions(accountId).subscribe({
+      next: (positions) => {
+        this.heldSymbols.set(
+          positions.filter((position) => position.quantity > 0).map((position) => position.symbol)
+        );
+      },
+      // Holdings only order the market data table, so a failure here is not worth a banner
+      error: () => this.heldSymbols.set([]),
+    });
   }
 
   private loadOrderHistory(accountId: number): void {
@@ -266,6 +280,7 @@ export class DashboardComponent implements OnDestroy {
             const loadedAccount = this.account();
             if (loadedAccount) {
               this.loadOrderHistory(loadedAccount.id);
+              this.loadPositions(loadedAccount.id);
             }
             this.pollingSubscription?.unsubscribe();
             return;

@@ -150,7 +150,10 @@
     </div>
 
     <article class="market-panel">
-      <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" />
+      <app-market-watch
+        [instruments]="instrumentsLoading() ? null : instruments()"
+        [heldSymbols]="heldSymbols()"
+      />
     </article>
   </div>
 </section>

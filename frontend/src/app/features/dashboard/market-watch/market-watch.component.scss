@@ -26,30 +26,51 @@
   color: #5a7288;
 }
 
+$header-height: 2.6rem;
+$row-height: 3.6rem;
+$visible-rows: 10;
+
+// Fixed row heights so the scroll area shows exactly $visible-rows rows
 .market-table-wrap {
   margin-top: 0.9rem;
-  overflow-x: auto;
+  max-height: calc(#{$header-height} + #{$visible-rows} * #{$row-height});
+  overflow: auto;
+  border-bottom: 1px solid #deebf3;
 }
 
 .market-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   min-width: 420px;
 
   th,
   td {
+    box-sizing: border-box;
     text-align: left;
-    padding: 0.65rem 0.6rem;
+    padding: 0 0.6rem;
     border-bottom: 1px solid #deebf3;
     color: #1e425f;
     white-space: nowrap;
   }
 
   th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    height: $header-height;
     color: #245879;
     font-size: 0.86rem;
     font-weight: 700;
     background: #f5fbff;
+  }
+
+  td {
+    height: $row-height;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
   }
 
   .numeric {
@@ -62,6 +83,19 @@
   display: block;
   font-weight: 700;
   color: #1a405f;
+}
+
+.held-tag {
+  display: inline-flex;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+  border: 1px solid #a9c8de;
+  color: #1a5f8b;
+  background: #eef6fc;
 }
 
 .instrument-name {

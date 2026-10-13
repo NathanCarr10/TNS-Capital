@@ -31,6 +31,7 @@ describe('DashboardComponent', () => {
       'getAccount',
       'getInstruments',
       'getAccountOrders',
+      'getAccountPositions',
       'getAccountOrderHistory',
       'placeOrder',
       'getOrder',
@@ -52,6 +53,7 @@ describe('DashboardComponent', () => {
         },
       ])
     );
+    tradingServiceSpy.getAccountPositions.and.returnValue(of([]));
     tradingServiceSpy.getAccountOrders.and.returnValue(
       of([
         {
