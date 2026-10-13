@@ -1,0 +1,189 @@
+<section class="details-shell">
+  <nav class="breadcrumb">
+    <a routerLink="/dashboard">&larr; Dashboard</a>
+  </nav>
+
+  @if (notFound()) {
+    <article>
+      <h1>{{ symbol() }}</h1>
+      <p class="note error">No instrument with the symbol {{ symbol() }} exists.</p>
+    </article>
+  } @else {
+    <article class="quote-panel">
+      <div class="quote-header">
+        <div class="title">
+          <h1>{{ symbol() }}</h1>
+          @if (instrument(); as details) {
+            <p class="instrument-name">{{ details.name }}</p>
+            <div class="tags">
+              <span class="tag">{{ details.assetClass }}</span>
+              <span class="tag">{{ details.currency }}</span>
+              @if (!details.tradable) {
+                <span class="tag tag-muted">Not tradable</span>
+              }
+              @if (holding()) {
+                <span class="tag tag-held">Held</span>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="quote">
+          @if (quoteLoading()) {
+            <span class="skeleton skeleton-price" aria-hidden="true"></span>
+            <span class="skeleton" aria-hidden="true"></span>
+          } @else if (quote()?.price != null) {
+            @let current = quote()!;
+            @let move = trend(current.change);
+            <strong class="price">{{ current.price | currency:currency():'symbol':'1.2-2' }}</strong>
+            @if (current.change != null) {
+              <span class="change" [class]="'change change-' + move">
+                {{ move === 'up' ? '+' : '' }}{{ current.change | number:'1.2-2' }}
+                ({{ move === 'up' ? '+' : '' }}{{ current.changePercent | number:'1.2-2' }}%)
+                <span class="change-label">today</span>
+              </span>
+            } @else {
+              <span class="change change-flat">Change unavailable</span>
+            }
+          } @else if (!quoteError()) {
+            <span class="price-unavailable">Price unavailable</span>
+          }
+        </div>
+      </div>
+
+      @if (quoteError()) {
+        <div class="note error error-banner" role="alert">
+          <span>{{ quoteError() }}</span>
+          <button type="button" (click)="refreshQuote()">Retry</button>
+        </div>
+      }
+
+      <dl class="stats">
+        <div>
+          <dt>Previous Close</dt>
+          <dd>
+            @if (quote()?.previousClose != null) {
+              {{ quote()!.previousClose | currency:currency():'symbol':'1.2-2' }}
+            } @else {
+              &mdash;
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Change</dt>
+          <dd [class]="'change-' + trend(quote()?.change ?? null)">
+            @if (quote()?.change != null) {
+              {{ quote()!.change! > 0 ? '+' : '' }}{{ quote()!.change | currency:currency():'symbol':'1.2-2' }}
+            } @else {
+              &mdash;
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Change %</dt>
+          <dd [class]="'change-' + trend(quote()?.changePercent ?? null)">
+            @if (quote()?.changePercent != null) {
+              {{ quote()!.changePercent! > 0 ? '+' : '' }}{{ quote()!.changePercent | number:'1.2-2' }}%
+            } @else {
+              &mdash;
+            }
+          </dd>
+        </div>
+        <div>
+          <dt>Last Trade</dt>
+          <dd>
+            @if (quote()?.tradedAt) {
+              {{ quote()!.tradedAt | date:'MMM d, HH:mm:ss' }}
+            } @else {
+              &mdash;
+            }
+          </dd>
+        </div>
+      </dl>
+
+      @if (lastUpdated(); as updated) {
+        <p class="last-updated">Updated {{ updated | date:'mediumTime' }} &middot; refreshes every 15 seconds</p>
+      }
+    </article>
+
+    @if (holding(); as position) {
+      <article class="holding-panel">
+        <h2>Your Position</h2>
+        <dl class="stats">
+          <div>
+            <dt>Quantity</dt>
+            <dd>{{ position.quantity | number }}</dd>
+          </div>
+          <div>
+            <dt>Avg Price</dt>
+            <dd>{{ position.averageCost | currency:currency():'symbol':'1.2-2' }}</dd>
+          </div>
+          <div>
+            <dt>Cost Basis</dt>
+            <dd>{{ position.quantity * position.averageCost | currency:currency():'symbol':'1.2-2' }}</dd>
+          </div>
+          <div>
+            <dt>Market Value</dt>
+            <dd>
+              @if (position.value != null) {
+                {{ position.value | currency:currency():'symbol':'1.2-2' }}
+              } @else {
+                <span class="price-unavailable">Price unavailable</span>
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Unrealised Return</dt>
+            @if (position.unrealisedReturn != null) {
+              @let move = trend(position.unrealisedReturn);
+              <dd [class]="'change-' + move">
+                {{ move === 'up' ? '+' : '' }}{{ position.unrealisedReturn | currency:currency():'symbol':'1.2-2' }}
+                @if (position.unrealisedReturnPercent != null) {
+                  <span class="return-percent">
+                    {{ move === 'up' ? '+' : '' }}{{ position.unrealisedReturnPercent | number:'1.2-2' }}%
+                  </span>
+                }
+              </dd>
+            } @else {
+              <dd class="change-flat">&mdash;</dd>
+            }
+          </div>
+        </dl>
+      </article>
+    } @else if (positionsError()) {
+      <article class="holding-panel">
+        <h2>Your Position</h2>
+        <p class="note error">{{ positionsError() }}</p>
+      </article>
+    }
+
+    <article class="chart-panel">
+      <div class="panel-header">
+        <h2>Price History</h2>
+        <div class="timeframes" role="group" aria-label="Bar size">
+          @for (option of timeframes; track option.value) {
+            <button
+              type="button"
+              [class.selected]="timeframe() === option.value"
+              [attr.aria-pressed]="timeframe() === option.value"
+              (click)="selectTimeframe(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          }
+        </div>
+      </div>
+
+      @if (barsLoading()) {
+        <div class="chart-skeleton skeleton" aria-hidden="true"></div>
+      } @else if (barsError()) {
+        <div class="note error error-banner" role="alert">
+          <span>{{ barsError() }}</span>
+          <button type="button" (click)="retryBars()">Retry</button>
+        </div>
+      } @else {
+        <app-candlestick-chart [bars]="bars()" [timeframe]="timeframe()" />
+      }
+    </article>
+  }
+</section>

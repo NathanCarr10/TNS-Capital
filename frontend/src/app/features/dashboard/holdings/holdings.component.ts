@@ -1,22 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { MarketQuotesStore } from '../market-quotes.store';
 import { PositionResponse } from '../trading.models';
-
-export interface HoldingRow {
-  symbol: string;
-  quantity: number;
-  averageCost: number;
-  /** Quantity at the latest price; null when the symbol has no live price. */
-  value: number | null;
-  unrealisedReturn: number | null;
-  unrealisedReturnPercent: number | null;
-}
+import { HoldingRow, toHoldingRow } from './holding-row';
 
 @Component({
   selector: 'app-holdings',
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   templateUrl: './holdings.component.html',
   styleUrl: './holdings.component.scss',
 })
@@ -41,20 +33,7 @@ export class HoldingsComponent {
   readonly rows = computed<HoldingRow[]>(() => {
     const quotes = this.store.quotes();
     return (this.positions() ?? [])
-      .map((position) => {
-        const price = quotes.get(position.symbol)?.price;
-        const cost = position.quantity * position.averageCost;
-        const value = price != null ? position.quantity * price : null;
-        const unrealisedReturn = value != null ? value - cost : null;
-        return {
-          symbol: position.symbol,
-          quantity: position.quantity,
-          averageCost: position.averageCost,
-          value,
-          unrealisedReturn,
-          unrealisedReturnPercent: unrealisedReturn != null && cost > 0 ? (unrealisedReturn * 100) / cost : null,
-        };
-      })
+      .map((position) => toHoldingRow(position, quotes.get(position.symbol)?.price))
       .sort((a, b) => (b.value ?? -1) - (a.value ?? -1) || a.symbol.localeCompare(b.symbol));
   });
 

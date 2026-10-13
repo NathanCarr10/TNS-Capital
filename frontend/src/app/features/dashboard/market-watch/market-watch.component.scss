@@ -85,6 +85,17 @@ $visible-rows: 10;
   color: #1a405f;
 }
 
+.symbol-link {
+  display: block;
+  text-decoration: none;
+
+  &:hover .symbol,
+  &:focus-visible .symbol {
+    color: #1a5f8b;
+    text-decoration: underline;
+  }
+}
+
 .held-tag {
   display: inline-flex;
   margin-left: 0.35rem;

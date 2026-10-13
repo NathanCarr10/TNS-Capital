@@ -10,3 +10,8 @@ html, body {
 * {
   box-sizing: border-box;
 }
+
+// Symbols link to their details page while reading as plain table text
+a.symbol-link {
+  color: inherit;
+}

@@ -2,6 +2,7 @@
 
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { MarketQuotesStore } from '../market-quotes.store';
 import { MarketQuote, PositionResponse } from '../trading.models';
@@ -48,7 +49,7 @@ describe('HoldingsComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [HoldingsComponent],
-      providers: [{ provide: MarketQuotesStore, useValue: store }],
+      providers: [provideRouter([]), { provide: MarketQuotesStore, useValue: store }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(HoldingsComponent);

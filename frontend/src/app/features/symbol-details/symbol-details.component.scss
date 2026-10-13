@@ -1,0 +1,300 @@
+.details-shell {
+  display: grid;
+  gap: 1.2rem;
+  align-content: start;
+  min-height: 100vh;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 0 0, rgba(9, 78, 115, 0.2), transparent 30%),
+    linear-gradient(180deg, #f8fbff 0%, #ecf4f0 100%);
+}
+
+.breadcrumb a {
+  color: #1a5f8b;
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+article {
+  min-width: 0;
+  border: 1px solid #d6e2ea;
+  background: #ffffff;
+  border-radius: 0.9rem;
+  padding: 1.25rem;
+  box-shadow: 0 12px 25px rgba(18, 57, 86, 0.08);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  color: #123956;
+}
+
+h2 {
+  margin: 0;
+  color: #174f72;
+}
+
+.quote-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+}
+
+.instrument-name {
+  margin: 0.2rem 0 0;
+  color: #3d586f;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.tag {
+  display: inline-flex;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid #c9d8e5;
+  color: #35506a;
+  background: #f2f7fb;
+}
+
+.tag-held {
+  border-color: #a9c8de;
+  color: #1a5f8b;
+  background: #eef6fc;
+}
+
+.tag-muted {
+  color: #6b7f90;
+}
+
+.quote {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.price {
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  font-weight: 700;
+  color: #1a405f;
+}
+
+.change {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.change-label {
+  font-weight: 500;
+  color: #5a7288;
+}
+
+.change-up {
+  color: #187246;
+}
+
+.change-down {
+  color: #b03a4a;
+}
+
+.change-flat {
+  color: #5a7288;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0 0;
+
+  div {
+    border: 1px solid #dae7f1;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: #fafdff;
+  }
+
+  dt {
+    font-size: 0.86rem;
+    color: #5a7288;
+  }
+
+  dd {
+    margin: 0.3rem 0 0;
+    font-size: 1.15rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: #1a405f;
+
+    &.change-up {
+      color: #187246;
+    }
+
+    &.change-down {
+      color: #b03a4a;
+    }
+
+    &.change-flat {
+      color: #5a7288;
+    }
+  }
+}
+
+.return-percent {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.last-updated {
+  margin: 0.8rem 0 0;
+  font-size: 0.84rem;
+  color: #5a7288;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.timeframes {
+  display: inline-flex;
+  padding: 0.2rem;
+  border: 1px solid #c9d8e5;
+  border-radius: 0.6rem;
+  background: #f5fbff;
+
+  button {
+    border: none;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: #35506a;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 700;
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+
+    &.selected {
+      background: #1a5f8b;
+      color: #ffffff;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #1a405f;
+      outline-offset: 1px;
+    }
+  }
+}
+
+.price-unavailable {
+  display: inline-flex;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid #c9d8e5;
+  color: #35506a;
+  background: #f2f7fb;
+}
+
+.note {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid #cfdee9;
+  background: #f5fbff;
+  color: #3d586f;
+  line-height: 1.5;
+}
+
+.note.error {
+  border-color: #efb0be;
+  color: #9a2541;
+  background: #fff4f7;
+}
+
+.error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+
+  button {
+    border: 1px solid #9a2541;
+    border-radius: 0.6rem;
+    background: #ffffff;
+    color: #9a2541;
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    padding: 0.35rem 0.8rem;
+    cursor: pointer;
+  }
+}
+
+.skeleton {
+  display: inline-block;
+  width: 7rem;
+  height: 1rem;
+  border-radius: 0.4rem;
+  background: linear-gradient(90deg, #e8f0f6 25%, #f5f9fc 50%, #e8f0f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-price {
+  width: 9rem;
+  height: 2.2rem;
+}
+
+// Same height as the chart's readout and plot, so loading does not shift the page
+.chart-skeleton {
+  display: block;
+  width: 100%;
+  height: calc(340px + 2.1rem);
+  border-radius: 0.6rem;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .details-shell {
+    padding: 1rem;
+  }
+
+  .quote {
+    justify-items: start;
+  }
+}

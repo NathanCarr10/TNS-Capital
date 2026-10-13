@@ -5,7 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 
 import { MarketDataService } from './market-data.service';
-import { MarketQuote } from './trading.models';
+import { MarketQuote, PriceBar } from './trading.models';
 
 describe('MarketDataService', () => {
   let service: MarketDataService;
@@ -57,5 +57,22 @@ describe('MarketDataService', () => {
       );
 
     expect(status).toBe(503);
+  });
+
+  it('requests bars of one symbol with the timeframe and limit', () => {
+    const bars: PriceBar[] = [
+      { time: '2026-10-12T04:00:00Z', open: 188, high: 191, low: 187, close: 190.5, volume: 1200 },
+    ];
+    let result: PriceBar[] | undefined;
+
+    service.getBars('AAPL', '1Hour', 120).subscribe((response) => (result = response));
+
+    const request = httpMock.expectOne((req) => req.url === '/api/v1/prices/AAPL/bars');
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.get('timeframe')).toBe('1Hour');
+    expect(request.request.params.get('limit')).toBe('120');
+    request.flush(bars);
+
+    expect(result).toEqual(bars);
   });
 });
