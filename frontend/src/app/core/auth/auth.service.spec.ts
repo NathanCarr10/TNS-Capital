@@ -50,7 +50,7 @@ describe('AuthService', () => {
       password: 'password123',
       holderName: 'Ada Lovelace',
     });
-    request.flush({ username: 'newtrader', accountId: 'ACC-U00001' });
+    request.flush({ username: 'newtrader', accountId: 1 });
   });
 
   it('clears session and calls logout endpoint when refresh token exists', () => {
