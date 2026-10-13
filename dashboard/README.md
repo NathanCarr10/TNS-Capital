@@ -20,6 +20,11 @@ signature with the shared `JWT_SECRET`, issuer `urn:tns-capital:auth-service`, `
 and expiry. Only a token whose `roles` include `ADMIN` gets past the sign-in form. A trader
 who signs in is turned away, and no data is loaded until an admin is signed in.
 
+Admins who sign in through the Angular trading app are sent here, and the sidebar's
+**Trading dashboard** button takes them back to it, where they can view any account
+read-only. The two apps run on different origins, so the admin signs in here separately;
+see decision 12 in [docs/DECISIONS.md](../docs/DECISIONS.md).
+
 The token is checked again on every interaction, so when it expires (15 minutes) the page
 goes back to the sign-in form. The seeded admin is `admin` / `adminPassword`.
 
@@ -93,6 +98,7 @@ streamlit run app.py         # reads DB_USER and DB_PASSWORD from the repo's .en
 | `DB_USER`, `DB_PASSWORD` | from `.env` |
 | `DASHBOARD_AUTH_URL` | `http://localhost:4000` (compose: `http://auth-service:4000`) |
 | `JWT_SECRET` | from `.env`; must be the auth service's secret |
+| `DASHBOARD_TRADING_URL` | `http://localhost:4200/dashboard`: the Angular trading app |
 
 The auth service has to be running to sign in: `docker compose up -d auth-service`.
 

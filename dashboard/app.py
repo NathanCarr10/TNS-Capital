@@ -6,6 +6,8 @@ the auth service and only a token with the ADMIN role opens the page.
 Run with:  streamlit run app.py
 """
 
+import os
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -17,6 +19,8 @@ import insights
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
+# The Angular trading app; admins can view any account there, read-only
+TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "http://localhost:4200/dashboard")
 ASSET_CLASS_LABEL = "Asset class"
 
 
@@ -83,6 +87,8 @@ def require_admin():
 admin = require_admin()
 with st.sidebar:
     st.write(f"Signed in as **{admin['sub']}**")
+    st.link_button("Trading dashboard", TRADING_DASHBOARD_URL,
+                   help="View any trader's account, read-only, in the trading app")
     st.button("Sign out", on_click=sign_out)
 
 try:

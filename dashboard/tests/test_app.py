@@ -124,6 +124,14 @@ def test_a_forged_token_is_rejected(monkeypatch):
     assert not app.metric
 
 
+def test_links_back_to_the_trading_dashboard(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    [link] = app.sidebar.get("link_button")
+    assert link.proto.label == "Trading dashboard"
+    assert link.proto.url == "http://localhost:4200/dashboard"
+
+
 def test_sign_out_returns_to_the_form(monkeypatch):
     app = run_app(monkeypatch, FRAMES)
 
