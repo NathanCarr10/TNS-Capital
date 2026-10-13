@@ -39,6 +39,19 @@ describe('AuthService', () => {
     expect(sessionStorage.getItem('tns.refreshToken')).toBe('refresh-token');
   });
 
+  it('posts registration details to the registration endpoint', () => {
+    authService.register({ username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).subscribe();
+
+    const request = httpMock.expectOne('/auth/register');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      username: 'newtrader',
+      password: 'password123',
+      holderName: 'Ada Lovelace',
+    });
+    request.flush({ username: 'newtrader', accountId: 'ACC-U00001' });
+  });
+
   it('clears session and calls logout endpoint when refresh token exists', () => {
     sessionStorage.setItem('tns.accessToken', createJwtWithExpOffset(900));
     sessionStorage.setItem('tns.refreshToken', 'refresh-token');
@@ -65,12 +78,33 @@ describe('AuthService', () => {
 
     expect(authService.hasValidAccessToken()).toBeTrue();
   });
+
+  it('recognises an admin from the roles claim', () => {
+    sessionStorage.setItem('tns.accessToken', createJwtWithExpOffset(120, ['ADMIN']));
+
+    expect(authService.isAdmin()).toBeTrue();
+  });
+
+  it('does not treat a trader as an admin', () => {
+    sessionStorage.setItem('tns.accessToken', createJwtWithExpOffset(120, ['USER']));
+
+    expect(authService.isAdmin()).toBeFalse();
+  });
+
+  it('does not treat a missing or unreadable token as an admin', () => {
+    expect(authService.isAdmin()).toBeFalse();
+
+    sessionStorage.setItem('tns.accessToken', 'not-a-jwt');
+
+    expect(authService.isAdmin()).toBeFalse();
+  });
 });
 
-function createJwtWithExpOffset(offsetInSeconds: number): string {
+function createJwtWithExpOffset(offsetInSeconds: number, roles?: string[]): string {
   const header = base64UrlEncode({ alg: 'HS256', typ: 'JWT' });
   const payload = base64UrlEncode({
     sub: 'admin',
+    roles,
     exp: Math.floor(Date.now() / 1000) + offsetInSeconds,
   });
 

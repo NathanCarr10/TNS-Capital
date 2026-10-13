@@ -9,6 +9,8 @@ import {
   LoginRequest,
   LogoutResponse,
   PlatformErrorResponse,
+  RegisterRequest,
+  RegisteredUser,
   RefreshRequest,
   TokenPair,
 } from './auth.models';
@@ -32,6 +34,10 @@ export class AuthService {
       }),
       map(() => undefined)
     );
+  }
+
+  register(request: RegisterRequest): Observable<RegisteredUser> {
+    return this.http.post<RegisteredUser>('/auth/register', request);
   }
 
   logout(): Observable<void> {
@@ -74,6 +80,12 @@ export class AuthService {
     return claims.exp > nowInSeconds;
   }
 
+  /** True when the stored access token carries the ADMIN role. */
+  isAdmin(): boolean {
+    const token = this.tokenStorage.accessToken;
+    return token ? (this.decodeClaims(token).roles ?? []).includes('ADMIN') : false;
+  }
+
   private clearSession(): void {
     this.tokenStorage.clearTokens();
     this.authState$.next(false);
@@ -97,8 +109,7 @@ export class AuthService {
     }
   }
 
-  static getErrorMessage(error: unknown): string {
-    const defaultMessage = 'Invalid username or password.';
+  static getErrorMessage(error: unknown, defaultMessage = 'Invalid username or password.'): string {
 
     if (!error || typeof error !== 'object') {
       return defaultMessage;

@@ -1,13 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
+import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
   selector: 'app-login',
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })
@@ -15,6 +16,8 @@ export class LoginComponent {
   private readonly formBuilder = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly analyticsDashboard = inject(AnalyticsDashboardService);
 
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -36,12 +39,27 @@ export class LoginComponent {
     this.authService.login(this.loginForm.getRawValue()).subscribe({
       next: () => {
         this.isSubmitting.set(false);
-        void this.router.navigate(['/dashboard']);
+        const returnUrl = this.safeReturnUrl();
+        if (returnUrl) {
+          void this.router.navigateByUrl(returnUrl);
+        } else if (this.authService.isAdmin()) {
+          this.analyticsDashboard.open();
+        } else {
+          void this.router.navigate(['/dashboard']);
+        }
       },
       error: (error: unknown) => {
         this.isSubmitting.set(false);
         this.errorMessage.set(AuthService.getErrorMessage(error));
       },
     });
+  }
+
+  // Only a path in this app (the router never leaves it); anything else gets the normal landing page
+  private safeReturnUrl(): string | null {
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    return returnUrl?.startsWith('/') && !returnUrl.startsWith('//') && !returnUrl.startsWith('/login')
+      ? returnUrl
+      : null;
   }
 }
