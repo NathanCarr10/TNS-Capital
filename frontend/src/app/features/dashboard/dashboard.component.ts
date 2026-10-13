@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subscription, forkJoin, of, throwError, timer } from 'rxjs';
 import { catchError, finalize, map, switchMap, take, tap, timeout } from 'rxjs/operators';
 
@@ -36,6 +36,7 @@ import { TradingService } from './trading.service';
   imports: [
     CommonModule,
     ReactiveFormsModule,
+    RouterLink,
     AdminAccountBarComponent,
     HoldingsComponent,
     MarketWatchComponent,
