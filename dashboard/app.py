@@ -17,6 +17,7 @@ import insights
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
+ASSET_CLASS_LABEL = "Asset class"
 
 
 @st.cache_data(ttl=30)
@@ -150,13 +151,13 @@ left.plotly_chart(px.bar(top_accounts, x="orders", y="holder_name", orientation=
                   width="stretch")
 right.plotly_chart(px.bar(exposure, x="symbol", y="exposure", color="asset_class",
                           title="Exposure by instrument (cost basis)",
-                          labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": "Asset class"}),
+                          labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": ASSET_CLASS_LABEL}),
                    width="stretch")
 
 mix = insights.value_by_asset_class(trades)
 st.plotly_chart(px.bar(mix, x="asset_class", y="value", color="side", barmode="group",
                        title="Buy and sell value by asset class",
-                       labels={"value": VALUE_LABEL, "asset_class": "Asset class", "side": "Side"}),
+                       labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}),
                 width="stretch")
 
 with st.expander("Orders not yet loaded by the ETL"):
@@ -252,7 +253,7 @@ else:
         col3.metric("Their average trade size", money(insights.average_trade_size(theirs)))
         st.plotly_chart(px.bar(insights.value_by_asset_class(theirs), x="asset_class", y="value", color="side",
                                barmode="group", title=f"What {chosen} has bought and sold",
-                               labels={"value": VALUE_LABEL, "asset_class": "Asset class", "side": "Side"}),
+                               labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}),
                         width="stretch")
         st.dataframe(theirs.sort_values("created_on", ascending=False)
                      [["created_on", "symbol", "side", "quantity", "price", "notional", "status"]],

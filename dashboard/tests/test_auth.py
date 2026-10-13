@@ -52,8 +52,10 @@ def test_rejects_bad_tokens(bad_token, message):
 def test_refuses_to_check_tokens_without_a_secret(monkeypatch):
     monkeypatch.delenv("JWT_SECRET")
 
+    valid = token()
+
     with pytest.raises(auth.AuthError, match="missing JWT_SECRET"):
-        auth.verify(token())
+        auth.verify(valid)
 
 
 class FakeResponse:
