@@ -5,7 +5,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { MarketQuotesStore } from '../market-quotes.store';
-import { MarketQuote, PositionResponse } from '../trading.models';
+import { MarketQuote, PositionResponse } from '../../../api/trading';
 import { HoldingsComponent } from './holdings.component';
 
 describe('HoldingsComponent', () => {

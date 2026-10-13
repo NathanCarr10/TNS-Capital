@@ -1,56 +1,61 @@
-import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { AuthenticationService, CurrentUser } from '../../api/auth';
 import {
+  AccountControllerService,
   AccountResponse,
-  ArchivedOrderResponse,
+  InstrumentControllerService,
   InstrumentResponse,
-  OrderAcceptedResponse,
+  OrderControllerService,
+  OrderHistoryResponse,
   OrderResponse,
   PlaceOrderRequest,
+  PlaceOrderResponse,
   PositionResponse,
-  UserProfileResponse,
-} from './trading.models';
+} from '../../api/trading';
 
 @Injectable({ providedIn: 'root' })
 export class TradingService {
-  private readonly http = inject(HttpClient);
+  private readonly authApi = inject(AuthenticationService);
+  private readonly accountApi = inject(AccountControllerService);
+  private readonly instrumentApi = inject(InstrumentControllerService);
+  private readonly orderApi = inject(OrderControllerService);
 
-  getCurrentUserProfile(): Observable<UserProfileResponse> {
-    return this.http.get<UserProfileResponse>('/auth/me');
+  getCurrentUserProfile(): Observable<CurrentUser> {
+    return this.authApi.me();
   }
 
   /** Every account for an admin; a trader gets only their own. */
   getAccounts(): Observable<AccountResponse[]> {
-    return this.http.get<AccountResponse[]>('/api/v1/accounts');
+    return this.accountApi.getAllAccounts();
   }
 
   getAccount(accountId: number): Observable<AccountResponse> {
-    return this.http.get<AccountResponse>(`/api/v1/accounts/${accountId}`);
+    return this.accountApi.getAccount(accountId);
   }
 
   getInstruments(): Observable<InstrumentResponse[]> {
-    return this.http.get<InstrumentResponse[]>('/api/v1/instruments');
+    return this.instrumentApi.getAllInstruments();
   }
 
   getAccountPositions(accountId: number): Observable<PositionResponse[]> {
-    return this.http.get<PositionResponse[]>(`/api/v1/accounts/${accountId}/positions`);
+    return this.accountApi.getAccountPositions1(accountId);
   }
 
   getAccountOrders(accountId: number): Observable<OrderResponse[]> {
-    return this.http.get<OrderResponse[]>(`/api/v1/accounts/${accountId}/orders`);
+    return this.accountApi.getAccountOrders(accountId);
   }
 
-  getAccountOrderHistory(accountId: number): Observable<ArchivedOrderResponse[]> {
-    return this.http.get<ArchivedOrderResponse[]>(`/api/v1/orders/${accountId}/history`);
+  getAccountOrderHistory(accountId: number): Observable<OrderHistoryResponse[]> {
+    return this.orderApi.getAccountOrderHistory(accountId);
   }
 
-  placeOrder(request: PlaceOrderRequest): Observable<OrderAcceptedResponse> {
-    return this.http.post<OrderAcceptedResponse>('/api/v1/orders', request);
+  placeOrder(request: PlaceOrderRequest): Observable<PlaceOrderResponse> {
+    return this.orderApi.placeOrder(request);
   }
 
   getOrder(orderId: string): Observable<OrderResponse> {
-    return this.http.get<OrderResponse>(`/api/v1/orders/${orderId}`);
+    return this.orderApi.getOrder(orderId);
   }
 }

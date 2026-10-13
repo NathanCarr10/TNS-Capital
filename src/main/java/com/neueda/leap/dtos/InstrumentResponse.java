@@ -1,9 +1,13 @@
 package com.neueda.leap.dtos;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
+
 public record InstrumentResponse(
-        String symbol,
-        String name,
-        String assetClass,
-        String currency,
-        boolean tradable) {
+        @Schema(requiredMode = REQUIRED) String symbol,
+        @Schema(requiredMode = REQUIRED) String name,
+        @Schema(requiredMode = REQUIRED) String assetClass,
+        @Schema(requiredMode = REQUIRED) String currency,
+        @Schema(requiredMode = REQUIRED) boolean tradable) {
 }

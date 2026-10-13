@@ -12,6 +12,26 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+## API clients
+
+The services and models in `src/app/api/` are generated from the OpenAPI specs in `../contracts/` and are not committed:
+
+| Spec | Generated into | Used by |
+| --- | --- | --- |
+| `contracts/auth-api.yaml` | `src/app/api/auth` | `core/auth/auth.service.ts`, `features/dashboard/trading.service.ts` |
+| `contracts/trading-api.json` | `src/app/api/trading` | `features/dashboard/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices) |
+
+`npm start`, `npm run build`, `npm test` and `npm run typecheck` regenerate them first. Generating needs Java 11+.
+
+When a backend API changes:
+
+```bash
+npm run fetch:trading-spec   # needs the Spring Boot app on :3000 (TRADING_API_URL to override)
+npm run typecheck            # regenerates, then fails on any code that no longer matches
+```
+
+Auth spec changes are made by hand in `contracts/auth-api.yaml`. Which response fields are required or nullable comes from `@Schema` on the backend DTOs. Call the APIs through the generated services, never with `HttpClient` directly. `core/api/api-types.spec.ts` checks that the generated types still reject invalid requests.
+
 ## Admins and the analytics dashboard
 
 Signing in as an admin opens the analytics dashboard (the Streamlit app in `dashboard/`,

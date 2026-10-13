@@ -17,18 +17,17 @@ import { MarketWatchComponent } from './market-watch/market-watch.component';
 import { PerformanceSummaryComponent } from './performance-summary/performance-summary.component';
 import { PortfolioSplitComponent } from './portfolio-split/portfolio-split.component';
 import { SideToggleComponent } from './side-toggle/side-toggle.component';
+import { PlatformErrorResponse } from '../../api/auth';
 import {
   AccountResponse,
-  ArchivedOrderResponse,
   InstrumentResponse,
-  OrderAcceptedResponse,
-  OrderHistoryRow,
+  OrderHistoryResponse,
   OrderResponse,
-  OrderSide,
   PlaceOrderRequest,
-  PlatformErrorResponse,
+  PlaceOrderResponse,
   PositionResponse,
-} from './trading.models';
+} from '../../api/trading';
+import { OrderHistoryRow, OrderSide } from './trading.models';
 import { TradingService } from './trading.service';
 
 @Component({
@@ -150,7 +149,7 @@ export class DashboardComponent implements OnDestroy {
     const request = this.buildRequest(loadedAccount.id);
 
     this.tradingService.placeOrder(request).subscribe({
-      next: (accepted: OrderAcceptedResponse) => {
+      next: (accepted: PlaceOrderResponse) => {
         this.isSubmitting.set(false);
         this.isTracking.set(true);
         const acceptedStatus = accepted.status || 'ACCEPTED';
@@ -500,7 +499,7 @@ export class DashboardComponent implements OnDestroy {
     };
   }
 
-  private mapArchivedOrderToRow(order: ArchivedOrderResponse): OrderHistoryRow {
+  private mapArchivedOrderToRow(order: OrderHistoryResponse): OrderHistoryRow {
     return {
       id: order.orderId,
       dateTime: order.orderCreatedOn,
