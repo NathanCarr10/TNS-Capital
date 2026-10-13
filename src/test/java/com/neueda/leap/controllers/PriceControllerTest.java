@@ -52,14 +52,16 @@ class PriceControllerTest {
     @Test
     @DisplayName("Rejects a quote request with an unknown symbol")
     void rejectsUnknownSymbol() {
-        assertThrows(InstrumentNotFoundException.class, () -> controller.getQuotes(List.of("AAPL", "NOPE")));
+        List<String> symbols = List.of("AAPL", "NOPE");
+        assertThrows(InstrumentNotFoundException.class, () -> controller.getQuotes(symbols));
         verifyNoInteractions(marketDataService);
     }
 
     @Test
     @DisplayName("Rejects a quote request with no symbols or too many")
     void rejectsSymbolCount() {
-        assertThrows(IllegalArgumentException.class, () -> controller.getQuotes(List.of(" ")));
+        List<String> blank = List.of(" ");
+        assertThrows(IllegalArgumentException.class, () -> controller.getQuotes(blank));
         List<String> tooMany = Collections.nCopies(PriceController.MAX_SYMBOLS + 1, "X")
                 .stream().map(s -> s + Math.random()).toList();
         assertThrows(IllegalArgumentException.class, () -> controller.getQuotes(tooMany));

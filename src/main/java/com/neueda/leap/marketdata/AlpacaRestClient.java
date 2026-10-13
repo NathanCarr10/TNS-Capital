@@ -30,6 +30,8 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 public class AlpacaRestClient {
+    private static final String SYMBOLS_PARAM = "symbols";
+
     private final AlpacaProperties properties;
     private final RestClient restClient;
 
@@ -55,7 +57,7 @@ public class AlpacaRestClient {
         try {
             LatestTradesResponse response = restClient.get()
                     .uri(uri -> uri.path("/v2/stocks/trades/latest")
-                            .queryParam("symbols", String.join(",", symbols))
+                            .queryParam(SYMBOLS_PARAM, String.join(",", symbols))
                             .queryParam("feed", properties.feed())
                             .build())
                     .retrieve()
@@ -87,7 +89,7 @@ public class AlpacaRestClient {
         try {
             Map<String, Snapshot> response = restClient.get()
                     .uri(uri -> uri.path("/v2/stocks/snapshots")
-                            .queryParam("symbols", String.join(",", symbols))
+                            .queryParam(SYMBOLS_PARAM, String.join(",", symbols))
                             .queryParam("feed", properties.feed())
                             .build())
                     .retrieve()
@@ -122,7 +124,7 @@ public class AlpacaRestClient {
         try {
             BarsResponse response = restClient.get()
                     .uri(uri -> uri.path("/v2/stocks/bars")
-                            .queryParam("symbols", symbol)
+                            .queryParam(SYMBOLS_PARAM, symbol)
                             .queryParam("timeframe", timeframe.value())
                             .queryParam("start", start.toString())
                             .queryParam("limit", limit)
