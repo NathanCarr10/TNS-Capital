@@ -1,0 +1,53 @@
+.side-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 12rem;
+  padding: 0.2rem;
+  border: 1px solid #c8d9e6;
+  border-radius: 999px;
+  background: #f5fbff;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0.2rem auto 0.2rem 0.2rem;
+    width: calc(50% - 0.2rem);
+    border-radius: 999px;
+    background: #187246;
+    transition:
+      transform 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  &.sell::before {
+    transform: translateX(100%);
+    background: #b03a4a;
+  }
+
+  button {
+    position: relative;
+    padding: 0.4rem 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #1d4f71;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color 0.2s ease;
+
+    &.selected {
+      color: #fff;
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba(26, 95, 139, 0.4);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+}

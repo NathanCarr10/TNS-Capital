@@ -256,4 +256,37 @@ describe('DashboardComponent', () => {
     const element: HTMLElement = fixture.nativeElement;
     expect(element.textContent).toContain('No previous orders yet. Your completed and cancelled orders will appear here.');
   });
+
+  it('fills Price with the live quote when a symbol is picked', () => {
+    const marketData = TestBed.inject(MarketDataService);
+    spyOn(marketData, 'getQuotes').and.returnValue(
+      of([
+        {
+          symbol: 'AAPL',
+          price: 187.42,
+          previousClose: 185,
+          change: 2.42,
+          changePercent: 1.31,
+          tradedAt: null,
+        },
+      ])
+    );
+
+    component.orderForm.controls.symbol.setValue('AAPL');
+
+    expect(marketData.getQuotes).toHaveBeenCalledWith(['AAPL']);
+    expect(component.orderForm.controls.price.value).toBe(187.42);
+    expect(component.priceLoading()).toBeFalse();
+  });
+
+  it('keeps the entered price when the live quote cannot be loaded', () => {
+    const marketData = TestBed.inject(MarketDataService);
+    spyOn(marketData, 'getQuotes').and.returnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    component.orderForm.controls.price.setValue(150);
+
+    component.orderForm.controls.symbol.setValue('AAPL');
+
+    expect(component.orderForm.controls.price.value).toBe(150);
+    expect(component.priceLoading()).toBeFalse();
+  });
 });
