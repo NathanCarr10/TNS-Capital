@@ -7,7 +7,9 @@ import { Router } from '@angular/router';
 import { EMPTY, Subscription, forkJoin, of, throwError, timer } from 'rxjs';
 import { catchError, finalize, map, switchMap, take, tap, timeout } from 'rxjs/operators';
 
+import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { AdminAccountBarComponent } from './admin-account-bar/admin-account-bar.component';
 import { HoldingsComponent } from './holdings/holdings.component';
 import { MarketDataService } from './market-data.service';
 import { MarketQuotesStore } from './market-quotes.store';
@@ -16,7 +18,15 @@ import { PerformanceSummaryComponent } from './performance-summary/performance-s
 import { PortfolioSplitComponent } from './portfolio-split/portfolio-split.component';
 import { SideToggleComponent } from './side-toggle/side-toggle.component';
 import { PlatformErrorResponse } from '../../api/auth';
-import { AccountResponse, InstrumentResponse, OrderHistoryResponse, OrderResponse, PlaceOrderRequest, PlaceOrderResponse, PositionResponse } from '../../api/trading';
+import {
+  AccountResponse,
+  InstrumentResponse,
+  OrderHistoryResponse,
+  OrderResponse,
+  PlaceOrderRequest,
+  PlaceOrderResponse,
+  PositionResponse,
+} from '../../api/trading';
 import { OrderHistoryRow, OrderSide } from './trading.models';
 import { TradingService } from './trading.service';
 
@@ -25,6 +35,7 @@ import { TradingService } from './trading.service';
   imports: [
     CommonModule,
     ReactiveFormsModule,
+    AdminAccountBarComponent,
     HoldingsComponent,
     MarketWatchComponent,
     PerformanceSummaryComponent,
@@ -44,7 +55,12 @@ export class DashboardComponent implements OnDestroy {
   private readonly tradingService = inject(TradingService);
   private readonly marketDataService = inject(MarketDataService);
   private readonly router = inject(Router);
+  private readonly analyticsDashboard = inject(AnalyticsDashboardService);
   private pollingSubscription?: Subscription;
+
+  /** Admins have no account of their own: they pick any account and view it read-only. */
+  readonly isAdmin = this.authService.isAdmin();
+  readonly adminAccounts = signal<AccountResponse[]>([]);
 
   readonly account = signal<AccountResponse | null>(null);
   readonly instruments = signal<InstrumentResponse[]>([]);
@@ -73,9 +89,30 @@ export class DashboardComponent implements OnDestroy {
   });
 
   constructor() {
-    this.loadAccount();
+    if (this.isAdmin) {
+      this.loadAdminAccounts();
+    } else {
+      this.loadAccount();
+    }
     this.loadInstruments();
     this.prefillLivePrice();
+  }
+
+  openAnalytics(): void {
+    this.analyticsDashboard.open();
+  }
+
+  /** Admin view: switch to another account. */
+  viewAccount(accountId: number): void {
+    this.accountLoading.set(true);
+    this.errorMessage.set(null);
+    this.tradingService.getAccount(accountId).subscribe({
+      next: (account) => this.showAccount(account),
+      error: (error: unknown) => {
+        this.accountLoading.set(false);
+        this.errorMessage.set(this.readErrorMessage(error, 'Failed to load account details.'));
+      },
+    });
   }
 
   ngOnDestroy(): void {
@@ -90,6 +127,9 @@ export class DashboardComponent implements OnDestroy {
   }
 
   onSubmit(): void {
+    if (this.isAdmin) {
+      return; // the admin view is read-only
+    }
     const loadedAccount = this.account();
     if (!loadedAccount) {
       this.errorMessage.set('Account information is unavailable. Please log in again.');
@@ -206,17 +246,39 @@ export class DashboardComponent implements OnDestroy {
         })
       )
       .subscribe({
-        next: (account) => {
-          this.account.set(account);
-          this.accountLoading.set(false);
-          this.loadOrderHistory(account.id);
-          this.loadPositions(account.id);
-        },
+        next: (account) => this.showAccount(account),
         error: (error: unknown) => {
           this.accountLoading.set(false);
           this.errorMessage.set(this.readErrorMessage(error, 'Failed to load account details.'));
         },
       });
+  }
+
+  private loadAdminAccounts(): void {
+    this.accountLoading.set(true);
+    this.tradingService.getAccounts().subscribe({
+      next: (accounts) => {
+        const sorted = [...accounts].sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
+        this.adminAccounts.set(sorted);
+        if (sorted.length === 0) {
+          this.accountLoading.set(false);
+          this.errorMessage.set('There are no trading accounts yet.');
+          return;
+        }
+        this.showAccount(sorted[0]);
+      },
+      error: (error: unknown) => {
+        this.accountLoading.set(false);
+        this.errorMessage.set(this.readErrorMessage(error, 'Failed to load accounts.'));
+      },
+    });
+  }
+
+  private showAccount(account: AccountResponse): void {
+    this.account.set(account);
+    this.accountLoading.set(false);
+    this.loadOrderHistory(account.id);
+    this.loadPositions(account.id);
   }
 
   private loadPositions(accountId: number): void {

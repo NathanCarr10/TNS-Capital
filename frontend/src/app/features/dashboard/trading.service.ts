@@ -26,6 +26,11 @@ export class TradingService {
     return this.authApi.me();
   }
 
+  /** Every account for an admin; a trader gets only their own. */
+  getAccounts(): Observable<AccountResponse[]> {
+    return this.accountApi.getAllAccounts();
+  }
+
   getAccount(accountId: number): Observable<AccountResponse> {
     return this.accountApi.getAccount(accountId);
   }

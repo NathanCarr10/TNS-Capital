@@ -32,6 +32,17 @@ npm run typecheck            # regenerates, then fails on any code that no longe
 
 Auth spec changes are made by hand in `contracts/auth-api.yaml`. Which response fields are required or nullable comes from `@Schema` on the backend DTOs. Call the APIs through the generated services, never with `HttpClient` directly. `core/api/api-types.spec.ts` checks that the generated types still reject invalid requests.
 
+## Admins and the analytics dashboard
+
+Signing in as an admin opens the analytics dashboard (the Streamlit app in `dashboard/`,
+`docker compose up -d dashboard`), where the admin signs in again; its **Trading dashboard**
+button comes back here. Admins have no trading account, so for them `/dashboard` is a read-only
+account viewer: an account picker and an **Analytics** button in the header, no order ticket.
+If a signed-out user opens a protected page, the login returns them to it (`?returnUrl=`).
+The analytics address is `ANALYTICS_DASHBOARD_URL` in
+`src/app/core/analytics/analytics-dashboard.service.ts`. Why admins sign in twice: see
+decision 12 in [docs/DECISIONS.md](../docs/DECISIONS.md).
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:

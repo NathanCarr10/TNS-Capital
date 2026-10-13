@@ -1,8 +1,23 @@
 <section class="dashboard-shell">
   <header>
-    <h1>Trader Dashboard</h1>
+    <h1>{{ isAdmin ? 'Account Viewer' : 'Trader Dashboard' }}</h1>
+    @if (isAdmin) {
+      <app-admin-account-bar
+        [accounts]="adminAccounts()"
+        [selectedId]="account()?.id ?? null"
+        (accountChange)="viewAccount($event)"
+        (openAnalytics)="openAnalytics()"
+      />
+    }
     <button type="button" (click)="logout()">Logout</button>
   </header>
+
+  @if (isAdmin) {
+    <p class="status">Admin view: read-only. Orders can only be placed by the account's owner.</p>
+    @if (errorMessage()) {
+      <p class="status error">{{ errorMessage() }}</p>
+    }
+  }
 
   <div class="dashboard-grid">
     <div class="column">
@@ -47,64 +62,66 @@
         </article>
       </div>
 
-      <article class="order-panel">
-        <h2>Submit Order</h2>
+      @if (!isAdmin) {
+        <article class="order-panel">
+          <h2>Submit Order</h2>
 
-        <form [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
-          <div class="field-grid">
-            <label for="symbol">Instrument Symbol</label>
-            <select id="symbol" formControlName="symbol">
-              <option value="" disabled>Select instrument</option>
-              @for (instrument of instruments(); track instrument.symbol) {
-                <option [value]="instrument.symbol">{{ instrument.symbol }} - {{ instrument.name }}</option>
+          <form [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
+            <div class="field-grid">
+              <label for="symbol">Instrument Symbol</label>
+              <select id="symbol" formControlName="symbol">
+                <option value="" disabled>Select instrument</option>
+                @for (instrument of instruments(); track instrument.symbol) {
+                  <option [value]="instrument.symbol">{{ instrument.symbol }} - {{ instrument.name }}</option>
+                }
+              </select>
+              @if (orderForm.controls.symbol.touched && orderForm.controls.symbol.invalid) {
+                <p class="field-error">Instrument symbol is required.</p>
               }
-            </select>
-            @if (orderForm.controls.symbol.touched && orderForm.controls.symbol.invalid) {
-              <p class="field-error">Instrument symbol is required.</p>
-            }
-            @if (instrumentsLoading()) {
-              <p class="status">Loading instruments...</p>
-            }
-            @if (!instrumentsLoading() && instruments().length === 0) {
-              <p class="field-error">No tradable instruments available.</p>
-            }
+              @if (instrumentsLoading()) {
+                <p class="status">Loading instruments...</p>
+              }
+              @if (!instrumentsLoading() && instruments().length === 0) {
+                <p class="field-error">No tradable instruments available.</p>
+              }
 
-            <label id="side-label">Side</label>
-            <app-side-toggle formControlName="side" labelledBy="side-label" />
+              <label id="side-label">Side</label>
+              <app-side-toggle formControlName="side" labelledBy="side-label" />
 
-            <label for="quantity">Quantity</label>
-            <input id="quantity" type="number" formControlName="quantity" min="1" step="1" />
-            @if (orderForm.controls.quantity.touched && orderForm.controls.quantity.invalid) {
-              <p class="field-error">Quantity must be greater than 0.</p>
-            }
+              <label for="quantity">Quantity</label>
+              <input id="quantity" type="number" formControlName="quantity" min="1" step="1" />
+              @if (orderForm.controls.quantity.touched && orderForm.controls.quantity.invalid) {
+                <p class="field-error">Quantity must be greater than 0.</p>
+              }
 
-            <label for="price">Price</label>
-            <input
-              id="price"
-              type="number"
-              formControlName="price"
-              min="0.01"
-              step="0.01"
-              [placeholder]="priceLoading() ? 'Fetching live price...' : ''"
-            />
-            @if (orderForm.controls.price.touched && orderForm.controls.price.invalid) {
-              <p class="field-error">Price must be greater than 0.</p>
-            }
-          </div>
+              <label for="price">Price</label>
+              <input
+                id="price"
+                type="number"
+                formControlName="price"
+                min="0.01"
+                step="0.01"
+                [placeholder]="priceLoading() ? 'Fetching live price...' : ''"
+              />
+              @if (orderForm.controls.price.touched && orderForm.controls.price.invalid) {
+                <p class="field-error">Price must be greater than 0.</p>
+              }
+            </div>
 
-          <button type="submit" [disabled]="isSubmitDisabled()">
-            {{ isSubmitting() ? 'Submitting...' : (isTracking() ? 'Tracking Order...' : 'Submit Order') }}
-          </button>
-        </form>
+            <button type="submit" [disabled]="isSubmitDisabled()">
+              {{ isSubmitting() ? 'Submitting...' : (isTracking() ? 'Tracking Order...' : 'Submit Order') }}
+            </button>
+          </form>
 
-        @if (successMessage()) {
-          <p class="status success">{{ successMessage() }}</p>
-        }
+          @if (successMessage()) {
+            <p class="status success">{{ successMessage() }}</p>
+          }
 
-        @if (errorMessage()) {
-          <p class="status error">{{ errorMessage() }}</p>
-        }
-      </article>
+          @if (errorMessage()) {
+            <p class="status error">{{ errorMessage() }}</p>
+          }
+        </article>
+      }
 
       <article class="history-panel">
         <h2>Order History</h2>

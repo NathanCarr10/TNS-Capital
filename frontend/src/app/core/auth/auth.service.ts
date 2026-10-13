@@ -72,6 +72,12 @@ export class AuthService {
     return claims.exp > nowInSeconds;
   }
 
+  /** True when the stored access token carries the ADMIN role. */
+  isAdmin(): boolean {
+    const token = this.tokenStorage.accessToken;
+    return token ? (this.decodeClaims(token).roles ?? []).includes('ADMIN') : false;
+  }
+
   private clearSession(): void {
     this.tokenStorage.clearTokens();
     this.authState$.next(false);

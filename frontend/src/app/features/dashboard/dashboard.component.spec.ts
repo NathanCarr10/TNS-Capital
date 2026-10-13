@@ -6,6 +6,7 @@ import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { AccountResponse, PlaceOrderResponse } from '../../api/trading';
+import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { DashboardComponent } from './dashboard.component';
 import { MarketDataService } from './market-data.service';
@@ -16,6 +17,7 @@ describe('DashboardComponent', () => {
   let component: DashboardComponent;
   let tradingServiceSpy: jasmine.SpyObj<TradingService>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
+  let analyticsSpy: jasmine.SpyObj<AnalyticsDashboardService>;
 
   const account: AccountResponse = {
     id: 11,
@@ -29,6 +31,7 @@ describe('DashboardComponent', () => {
   beforeEach(async () => {
     tradingServiceSpy = jasmine.createSpyObj<TradingService>('TradingService', [
       'getCurrentUserProfile',
+      'getAccounts',
       'getAccount',
       'getInstruments',
       'getAccountOrders',
@@ -37,7 +40,8 @@ describe('DashboardComponent', () => {
       'placeOrder',
       'getOrder',
     ]);
-    authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['logout']);
+    authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['logout', 'isAdmin']);
+    analyticsSpy = jasmine.createSpyObj<AnalyticsDashboardService>('AnalyticsDashboardService', ['open']);
 
     tradingServiceSpy.getCurrentUserProfile.and.returnValue(
       of({ username: 'myuser', roles: ['USER'], accountId: account.id })
@@ -77,6 +81,7 @@ describe('DashboardComponent', () => {
       providers: [
         { provide: TradingService, useValue: tradingServiceSpy },
         { provide: AuthService, useValue: authServiceSpy },
+        { provide: AnalyticsDashboardService, useValue: analyticsSpy },
         { provide: MarketDataService, useValue: { getQuotes: () => of([]) } },
         { provide: Router, useValue: jasmine.createSpyObj<Router>('Router', ['navigate']) },
       ],
@@ -289,6 +294,83 @@ describe('DashboardComponent', () => {
 
     expect(component.orderForm.controls.price.value).toBe(150);
     expect(component.priceLoading()).toBeFalse();
+  });
+
+  it('does not show admin controls to a trader', () => {
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('#admin-account')).toBeNull();
+    expect(element.querySelector('.order-panel')).not.toBeNull();
+    expect(tradingServiceSpy.getAccounts).not.toHaveBeenCalled();
+  });
+
+  describe('for an admin', () => {
+    const otherAccount = { ...account, id: 12, accountNumber: 'ACC-U000012', holderName: 'Trader Two' };
+
+    function createAdminDashboard(): HTMLElement {
+      authServiceSpy.isAdmin.and.returnValue(true);
+      tradingServiceSpy.getAccounts.and.returnValue(of([otherAccount, account]));
+      tradingServiceSpy.getAccountOrders.calls.reset();
+      fixture = TestBed.createComponent(DashboardComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      return fixture.nativeElement;
+    }
+
+    it('lists every account and shows the first one, read-only', () => {
+      const element = createAdminDashboard();
+
+      expect(tradingServiceSpy.getAccounts).toHaveBeenCalled();
+      const options = Array.from(element.querySelectorAll('#admin-account option')).map((option) =>
+        option.textContent?.trim()
+      );
+      expect(options).toEqual(['ACC-U000011 - Trader One', 'ACC-U000012 - Trader Two']);
+      expect(component.account()?.id).toBe(account.id);
+      expect(tradingServiceSpy.getAccountOrders).toHaveBeenCalledWith(account.id);
+      expect(element.querySelector('.order-panel')).toBeNull();
+      expect(element.textContent).toContain('Admin view: read-only');
+    });
+
+    it('switches to the chosen account', () => {
+      tradingServiceSpy.getAccount.and.returnValue(of(otherAccount));
+      const element = createAdminDashboard();
+
+      const select = element.querySelector<HTMLSelectElement>('#admin-account')!;
+      select.value = String(otherAccount.id);
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      expect(tradingServiceSpy.getAccount).toHaveBeenCalledWith(otherAccount.id);
+      expect(tradingServiceSpy.getAccountOrders).toHaveBeenCalledWith(otherAccount.id);
+      expect(component.account()?.holderName).toBe('Trader Two');
+    });
+
+    it('opens the analytics dashboard', () => {
+      const element = createAdminDashboard();
+
+      Array.from(element.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === 'Analytics')!
+        .click();
+
+      expect(analyticsSpy.open).toHaveBeenCalled();
+    });
+
+    it('does not place orders', () => {
+      createAdminDashboard();
+
+      component.onSubmit();
+
+      expect(tradingServiceSpy.placeOrder).not.toHaveBeenCalled();
+    });
+
+    it('says so when there are no accounts', () => {
+      authServiceSpy.isAdmin.and.returnValue(true);
+      tradingServiceSpy.getAccounts.and.returnValue(of([]));
+      fixture = TestBed.createComponent(DashboardComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.errorMessage()).toBe('There are no trading accounts yet.');
+    });
   });
 });
 
