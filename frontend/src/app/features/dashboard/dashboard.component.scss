@@ -50,26 +50,6 @@
     }
   }
 
-  .overview-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.2rem;
-  }
-
-  // Too narrow for the performance tiles side by side with the account
-  @container (max-width: 640px) {
-    .account-grid {
-      grid: auto-flow / 1fr;
-    }
-  }
-
-  // Both panels' cards stretch to the height of the taller panel
-  .account-panel,
-  .performance-panel {
-    display: flex;
-    flex-direction: column;
-  }
-
   // Filled column by column: account number and status, then holder and cash
   .account-grid {
     margin: 0.9rem 0 0;
@@ -79,9 +59,7 @@
     grid: repeat(2, 1fr) / auto-flow minmax(0, 1fr);
 
     div {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      align-content: center;
       border: 1px solid #dae7f1;
       border-radius: 0.75rem;
       padding: 0.75rem;
@@ -253,11 +231,7 @@
 
   @media (max-width: 760px) {
     .dashboard-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .overview-row {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .field-grid {
@@ -268,5 +242,25 @@
         margin-top: -0.2rem;
       }
     }
+  }
+}
+
+// Outside .dashboard-shell to keep the compiled styles within the component budget
+.overview-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+
+  // Both panels' cards stretch to the height of the taller panel
+  > article {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Too narrow for the performance tiles side by side with the account
+@container (max-width: 640px) {
+  .overview-row {
+    grid-template-columns: 1fr;
   }
 }
