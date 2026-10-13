@@ -34,6 +34,10 @@ goes back to the sign-in form. The seeded admin is `admin` / `adminPassword`.
 | Average trade size | `average_trade_size` |
 | Buy and sell value by asset class | `value_by_asset_class` |
 | Trading by user: orders, fill rate, bought and sold value, top instrument, last order | `trades_by_user` |
+| Why orders are rejected, grouped into categories | `rejection_reasons`, `rejected_orders` |
+| Time from order to fill: median, 95th percentile, slowest fills | `fill_time_summary`, `fill_times` |
+| Stuck orders: still NEW after 5 minutes | `stuck_orders` |
+| Dead-letter queue by failure type: total, awaiting review, retryable | `dlq_summary` |
 
 Below the per-user table, choose a user to see their fill rate, average trade size, buy/sell
 mix and every order they placed. Each trade is labelled with the username that owns the
@@ -41,6 +45,23 @@ account (`users.account_id`); accounts no user owns, such as the seeded ones, sh
 `(no login)`.
 
 The top of the page also states the main findings in plain sentences.
+
+## Operations
+
+Two sections always use the live tables, whichever source is selected, because the batch
+schema has no rejection reasons or execution times:
+
+- **Why orders are rejected.** `orders.status_reason` is free text with symbols and
+  amounts in it ("Cannot sell 20 of MSFT, only 0 available"), so `rejection_category`
+  groups reasons by keyword: insufficient funds, insufficient holdings, account not
+  active, instrument not tradable, no live price, system failure, or Other. A chart shows
+  the count per category and a table lists each rejected order with its full reason.
+- **Order pipeline health.** Time to fill is measured from `orders.created_on` to the
+  order's first row in `executions`. Orders still `NEW` after 5 minutes are flagged as
+  stuck, since the executor normally settles an order within seconds; that usually means
+  the Kafka consumer or the broker simulator is down. The dead-letter queue
+  (`dlq_messages`) is summarised by failure type. It is read-only here: retrying and
+  dismissing messages stays with the DLQ admin API.
 
 ## Files
 

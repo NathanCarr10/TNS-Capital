@@ -19,15 +19,20 @@ SECRET = "test-secret-of-at-least-32-bytes-long!!"
 TRADES = pd.DataFrame([
     {"order_id": "o1", "account_number": "ACC-1", "holder_name": "Ann", "username": "ann", "symbol": "ACME", "asset_class": "Equity",
      "side": "BUY", "quantity": 10, "price": 5.0, "notional": 50.0, "status": "FILLED",
-     "created_on": pd.Timestamp("2026-10-01 10:00")},
+     "created_on": pd.Timestamp("2026-10-01 10:00"), "status_reason": None,
+     "filled_on": pd.Timestamp("2026-10-01 10:00:02")},
     {"order_id": "o2", "account_number": "ACC-2", "holder_name": "Bob", "username": "bob", "symbol": "ACME", "asset_class": "Equity",
      "side": "SELL", "quantity": 2, "price": 6.0, "notional": 12.0, "status": "REJECTED",
-     "created_on": pd.Timestamp("2026-10-02 10:00")},
+     "created_on": pd.Timestamp("2026-10-02 10:00"), "status_reason": "Cannot sell 2 of ACME, only 0 available",
+     "filled_on": None},
 ])
 POSITIONS = pd.DataFrame([{"symbol": "ACME", "asset_class": "Equity", "quantity": 10, "average_cost": 5.0}])
 
 
-FRAMES = {"live": TRADES, "batch": TRADES.iloc[:1], "positions": POSITIONS, "has_batch": True}
+DLQ = pd.DataFrame([{"id": "d1", "order_id": "o2", "failure_type": "NON_RETRYABLE_InsufficientHoldingsException",
+                     "failure_reason": "Cannot sell 2 of ACME", "status": "PENDING", "is_retryable": False,
+                     "retry_count": 0, "created_on": pd.Timestamp("2026-10-02 10:00"), "resolved_on": None}])
+FRAMES = {"live": TRADES, "batch": TRADES.iloc[:1], "positions": POSITIONS, "dlq": DLQ, "has_batch": True}
 
 
 @pytest.fixture(autouse=True)
@@ -154,11 +159,11 @@ def test_shows_metrics_insights_and_charts(monkeypatch):
     assert metrics["Fill rate"] == "50%"
     assert metrics["Orders not yet in batch"] == "1"
     assert "**Ann** (ACC-1) is the most active account" in app.markdown[0].value
-    assert len(app.get("plotly_chart")) == 5
+    assert len(app.get("plotly_chart")) == 6
 
 
 def test_switching_to_batch_warns_before_the_first_etl_run(monkeypatch):
-    app = run_app(monkeypatch, {"live": TRADES, "batch": TRADES.iloc[0:0], "positions": POSITIONS, "has_batch": False})
+    app = run_app(monkeypatch, {**FRAMES, "batch": TRADES.iloc[0:0], "has_batch": False})
 
     app.radio[0].set_value(app.radio[0].options[1]).run()
 
@@ -176,3 +181,39 @@ def test_reports_a_database_error(monkeypatch):
     app.run()
 
     assert "Could not reach the database" in app.error[0].value
+
+
+def test_shows_why_orders_are_rejected(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    [rejected] = [frame.value for frame in app.dataframe if "category" in frame.value]
+    assert rejected[["username", "category"]].values.tolist() == [["bob", "Insufficient holdings"]]
+
+
+def test_shows_pipeline_health(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Median time to fill"] == "2.0 s"
+    assert metrics["Stuck orders"] == "0"
+    assert metrics["Dead letters awaiting review"] == "1"
+    [dlq] = [frame.value for frame in app.dataframe if "failure_type" in frame.value]
+    assert dlq["pending"].tolist() == [1]
+    assert not app.warning
+
+
+def test_warns_about_stuck_orders(monkeypatch):
+    stuck = {**TRADES.iloc[0].to_dict(), "order_id": "o3", "status": "NEW", "filled_on": None,
+             "created_on": pd.Timestamp("2026-01-01 09:00")}
+    app = run_app(monkeypatch, {**FRAMES, "live": pd.DataFrame([*TRADES.to_dict("records"), stuck])})
+
+    assert {metric.label: metric.value for metric in app.metric}["Stuck orders"] == "1"
+    assert "1 order(s) have been waiting" in app.warning[0].value
+
+
+def test_operations_sections_with_no_rejections_or_dead_letters(monkeypatch):
+    app = run_app(monkeypatch, {**FRAMES, "live": TRADES.iloc[:1], "dlq": DLQ.iloc[0:0]})
+
+    assert not app.exception
+    assert "No orders have been rejected." in [info.value for info in app.info]
+    assert {metric.label: metric.value for metric in app.metric}["Dead letters awaiting review"] == "0"

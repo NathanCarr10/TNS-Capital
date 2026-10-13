@@ -6,6 +6,7 @@ the auth service and only a token with the ADMIN role opens the page.
 Run with:  streamlit run app.py
 """
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -29,6 +30,15 @@ def money(value):
 
 def percent(value):
     return "n/a" if value is None else f"{value:.0%}"
+
+
+def duration(seconds):
+    return "n/a" if seconds is None else f"{seconds:.1f} s"
+
+
+def utc_now():
+    """Now as a naive UTC timestamp, to compare with the database's UTC timestamps."""
+    return pd.Timestamp.now(tz="UTC").tz_localize(None)
 
 
 def sign_out():
@@ -151,6 +161,68 @@ st.plotly_chart(px.bar(mix, x="asset_class", y="value", color="side", barmode="g
 
 with st.expander("Orders not yet loaded by the ETL"):
     st.dataframe(gap, width="stretch")
+
+# Operations: always from the live tables, since the batch source has no reasons or fill times
+live = frames["live"]
+st.subheader("Why orders are rejected")
+st.caption("From the live trading tables, whichever data source is selected above.")
+reasons = insights.rejection_reasons(live)
+if reasons.empty:
+    st.info("No orders have been rejected.")
+else:
+    left, right = st.columns(2)
+    left.plotly_chart(px.bar(reasons, x="orders", y="category", orientation="h", hover_data=["share"],
+                             title="Rejected orders by reason", labels={"orders": "Orders", "category": ""}),
+                      width="stretch")
+    right.dataframe(
+        insights.rejected_orders(live)[["created_on", "username", "symbol", "side", "quantity", "category",
+                                        "status_reason"]],
+        width="stretch", hide_index=True,
+        column_config={"created_on": st.column_config.DatetimeColumn("When (UTC)", format="D MMM, HH:mm:ss"),
+                       "username": "User", "symbol": "Instrument", "side": "Side", "quantity": "Quantity",
+                       "category": "Reason", "status_reason": "Details"})
+
+st.subheader("Order pipeline health")
+st.caption("From the live trading tables. Dead letters are read-only here: "
+           "retry or dismiss them through the DLQ admin API.")
+timing = insights.fill_time_summary(live) or {"median": None, "p95": None}
+stuck = insights.stuck_orders(live, utc_now())
+dlq = frames["dlq"]
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Median time to fill", duration(timing["median"]),
+            help="From order to first execution, over filled orders")
+col2.metric("Slowest 5% take over", duration(timing["p95"]), help="95th percentile time to fill")
+col3.metric("Stuck orders", f"{len(stuck):,}",
+            help=f"NEW for over {insights.STUCK_AFTER.seconds // 60} minutes; the executor settles orders in seconds")
+col4.metric("Dead letters awaiting review", f"{int((dlq['status'] == 'PENDING').sum()):,}",
+            help=f"{len(dlq):,} dead letters in total")
+if not stuck.empty:
+    st.warning(f"{len(stuck)} order(s) have been waiting for over {insights.STUCK_AFTER.seconds // 60} minutes. "
+               "Check the Kafka consumer and the broker simulator.")
+    st.dataframe(stuck[["created_on", "minutes", "username", "symbol", "side", "quantity", "order_id"]],
+                 width="stretch", hide_index=True,
+                 column_config={"created_on": st.column_config.DatetimeColumn("Placed (UTC)"),
+                                "minutes": st.column_config.NumberColumn("Waiting (min)", format="%.0f")})
+
+left, right = st.columns(2)
+with left:
+    st.markdown("**Slowest fills**")
+    slowest = insights.fill_times(live).head(5)
+    if slowest.empty:
+        st.caption("No timed fills yet.")
+    else:
+        st.dataframe(slowest[["seconds", "username", "symbol", "side", "quantity", "created_on"]],
+                     width="stretch", hide_index=True,
+                     column_config={"seconds": st.column_config.NumberColumn("Seconds", format="%.1f"),
+                                    "created_on": st.column_config.DatetimeColumn("Placed (UTC)")})
+with right:
+    st.markdown("**Dead-letter queue by failure type**")
+    if dlq.empty:
+        st.caption("No message has failed processing.")
+    else:
+        st.dataframe(insights.dlq_summary(dlq), width="stretch", hide_index=True,
+                     column_config={"failure_type": "Failure type", "messages": "Messages",
+                                    "pending": "Awaiting review", "retryable": "Retryable"})
 
 # What each user has traded
 st.subheader("Trading by user")

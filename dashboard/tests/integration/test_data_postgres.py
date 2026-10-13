@@ -33,6 +33,14 @@ TEST_DATA = """
         ('22222222-2222-2222-2222-222222222222', (SELECT id FROM accounts), 'ACME', 'BUY', 5, 26.00, 'REJECTED', 'k2');
     INSERT INTO positions (account_id, symbol, quantity, average_cost) VALUES
         ((SELECT id FROM accounts), 'ACME', 10, 25.00);
+    UPDATE orders SET status_reason = 'Insufficient funds for buy order'
+        WHERE id = '22222222-2222-2222-2222-222222222222';
+    INSERT INTO executions (id, order_id, quantity, price, venue, executed_on)
+        SELECT gen_random_uuid(), id, 10, 25.00, 'SIM', created_on + INTERVAL '2 seconds'
+        FROM orders WHERE id = '11111111-1111-1111-1111-111111111111';
+    INSERT INTO dlq_messages (original_order_id, original_message, failure_reason, failure_type, is_retryable)
+        VALUES ('22222222-2222-2222-2222-222222222222', '{}', 'Insufficient funds for buy order',
+                'NON_RETRYABLE_InsufficientFundsException', FALSE);
     INSERT INTO users (username, password_hash, role, account_id) VALUES
         ('john', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
 """
@@ -59,6 +67,10 @@ def test_live_source_loads_before_the_etl_has_run(db):
     assert frames["batch"].empty
     assert sorted(frames["live"]["status"]) == ["FILLED", "REJECTED"]
     assert set(frames["live"]["username"]) == {"john"}
+    assert insights.rejection_reasons(frames["live"])["category"].tolist() == ["Insufficient funds"]
+    assert insights.fill_time_summary(frames["live"])["median"] == pytest.approx(2.0)
+    assert insights.dlq_summary(frames["dlq"]).to_dict("records") == [
+        {"failure_type": "NON_RETRYABLE_InsufficientFundsException", "messages": 1, "pending": 1, "retryable": 0}]
     assert frames["live"]["notional"].sum() == pytest.approx(380.0)  # 10 x 25 + 5 x 26
     assert insights.fill_rate(frames["live"]) == pytest.approx(0.5)
     assert frames["positions"].to_dict("records") == [
@@ -80,6 +92,7 @@ def test_batch_source_loads_once_the_etl_has_run(db):
     assert frames["has_batch"] is True
     assert frames["batch"]["order_id"].tolist() == ["11111111-1111-1111-1111-111111111111"]
     assert frames["batch"]["username"].tolist() == ["john"]
+    assert insights.rejection_reasons(frames["batch"]).empty  # reasons are only in the live source
     assert insights.not_yet_in_batch(frames["live"], frames["batch"])["order_id"].tolist() == [
         "22222222-2222-2222-2222-222222222222"]
 

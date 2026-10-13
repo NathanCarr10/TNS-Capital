@@ -5,6 +5,8 @@ be unit tested without a database or a browser. Trades have the columns of
 analytics.fact_trades (see etl/schema.sql), plus asset_class.
 """
 
+from datetime import timedelta
+
 import pandas as pd
 
 FINAL_STATUSES = ["FILLED", "REJECTED", "CANCELLED"]
@@ -125,3 +127,87 @@ def trades_by_user(trades):
 
     users = users.sort_values(["orders", "username"], ascending=[False, True]).reset_index(drop=True)
     return users[columns]
+
+
+# Rejection reasons are free text with symbols, accounts and amounts in them
+# ("Cannot sell 20 of MSFT, only 0 available"), so they are grouped by keyword.
+REJECTION_CATEGORIES = [
+    ("Insufficient funds", ("insufficient funds",)),
+    ("Insufficient holdings", ("insufficient holdings", "no position", "cannot sell")),
+    ("Account not active", ("not active", "suspended", "account not found")),
+    ("Instrument not tradable", ("not tradable", "instrument not found")),
+    ("No live price", ("no live price",)),
+    ("System failure", ("could not be queued",)),
+]
+
+
+def rejection_category(reason):
+    """The category a rejection reason falls in; "Other" if no keyword matches."""
+    if not isinstance(reason, str) or not reason.strip():
+        return "No reason recorded"
+    text = reason.lower()
+    for category, keywords in REJECTION_CATEGORIES:
+        if any(keyword in text for keyword in keywords):
+            return category
+    return "Other"
+
+
+def rejected_orders(trades):
+    """Rejected orders with their reason's category, newest first. Needs status_reason (live source)."""
+    rejected = trades[trades["status"] == "REJECTED"]
+    rejected = rejected.assign(category=rejected["status_reason"].map(rejection_category))
+    return rejected.sort_values("created_on", ascending=False).reset_index(drop=True)
+
+
+def rejection_reasons(trades):
+    """How many rejections fall in each category, with their share, biggest first."""
+    rejected = rejected_orders(trades)
+    if rejected.empty:
+        return pd.DataFrame(columns=["category", "orders", "share"])
+    reasons = rejected["category"].value_counts().rename_axis("category").reset_index(name="orders")
+    reasons["share"] = reasons["orders"] / reasons["orders"].sum()
+    return reasons.sort_values(["orders", "category"], ascending=[False, True]).reset_index(drop=True)
+
+
+def fill_times(trades):
+    """Filled orders with seconds from order to first execution (filled_on, live source), slowest first.
+
+    Orders without an execution row, or whose execution predates the order
+    (seed data), are left out.
+    """
+    done = filled(trades).dropna(subset=["filled_on"])
+    seconds = (pd.to_datetime(done["filled_on"]) - pd.to_datetime(done["created_on"])).dt.total_seconds()
+    timed = done.assign(seconds=seconds)
+    timed = timed[timed["seconds"] >= 0]
+    return timed.sort_values("seconds", ascending=False).reset_index(drop=True)
+
+
+def fill_time_summary(trades):
+    """Median and 95th percentile seconds from order to fill, or None if nothing filled yet."""
+    seconds = fill_times(trades)["seconds"]
+    if seconds.empty:
+        return None
+    return {"orders": len(seconds), "median": float(seconds.median()), "p95": float(seconds.quantile(0.95))}
+
+
+STUCK_AFTER = timedelta(minutes=5)
+
+
+def stuck_orders(trades, now, after=STUCK_AFTER):
+    """NEW orders older than `after`: the executor should have settled them within seconds.
+
+    now is a naive UTC timestamp, like created_on. Oldest first, with their age in minutes.
+    """
+    waiting = trades[(trades["status"] == "NEW") & (pd.to_datetime(trades["created_on"]) < now - after)]
+    waiting = waiting.assign(minutes=(now - pd.to_datetime(waiting["created_on"])).dt.total_seconds() / 60)
+    return waiting.sort_values("minutes", ascending=False).reset_index(drop=True)
+
+
+def dlq_summary(dlq):
+    """Dead-letter messages per failure type: total, still PENDING, and how many can be retried."""
+    if dlq.empty:
+        return pd.DataFrame(columns=["failure_type", "messages", "pending", "retryable"])
+    flagged = dlq.assign(pending=dlq["status"] == "PENDING", retryable=dlq["is_retryable"].astype(bool))
+    summary = flagged.groupby("failure_type", as_index=False).agg(
+        messages=("id", "count"), pending=("pending", "sum"), retryable=("retryable", "sum"))
+    return summary.sort_values(["messages", "failure_type"], ascending=[False, True]).reset_index(drop=True)
