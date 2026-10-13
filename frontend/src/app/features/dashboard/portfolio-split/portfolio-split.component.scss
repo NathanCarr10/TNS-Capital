@@ -1,0 +1,157 @@
+// Categorical slots in the order validated for colour-blind separation, then neutrals for Other and cash
+:host {
+  display: block;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-other: #898781;
+  --series-cash: #c3c2b7;
+}
+
+h2 {
+  margin: 0;
+  color: #174f72;
+}
+
+.split-chart {
+  position: relative;
+  margin-top: 0.9rem;
+}
+
+// The 2px gap in the card colour separates the segments; only the bar's outer ends are rounded
+.split-bar {
+  display: flex;
+  gap: 2px;
+  height: 1.25rem;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.segment {
+  flex-basis: 0;
+  // Keeps a tiny holding visible and hoverable
+  min-width: 4px;
+  cursor: default;
+  transition: opacity 120ms ease;
+
+  &:focus-visible {
+    outline: 2px solid #1a405f;
+    outline-offset: -2px;
+  }
+}
+
+.split-bar.has-active .segment:not(.active) {
+  opacity: 0.45;
+}
+
+.split-tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  transform: translateX(-50%);
+  z-index: 2;
+  width: max-content;
+  max-width: 10rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #d6e2ea;
+  border-radius: 0.6rem;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(18, 57, 86, 0.14);
+  pointer-events: none;
+}
+
+.tooltip-value {
+  display: block;
+  color: #1a405f;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: #5a7288;
+}
+
+.line-key {
+  width: 0.75rem;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.84rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+
+.legend-label {
+  color: #1e425f;
+  font-weight: 600;
+}
+
+.legend-percent {
+  color: #5a7288;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 0.9rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.65rem;
+  border: 1px solid #cfdee9;
+  background: #f5fbff;
+  color: #3d586f;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.note.error {
+  border-color: #efb0be;
+  color: #9a2541;
+  background: #fff4f7;
+}
+
+.skeleton {
+  margin-top: 0.9rem;
+  background: linear-gradient(90deg, #e8f0f6 25%, #f5f9fc 50%, #e8f0f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+
+  .segment {
+    transition: none;
+  }
+}

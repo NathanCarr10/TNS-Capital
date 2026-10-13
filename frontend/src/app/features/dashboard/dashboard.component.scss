@@ -12,7 +12,7 @@
     align-items: start;
   }
 
-  .left-column {
+  .column {
     display: grid;
     gap: 1.2rem;
     container-type: inline-size;
@@ -67,12 +67,13 @@
     }
 
     dt {
-      font-size: 0.82rem;
+      font-size: 0.9rem;
       color: #5a7288;
       margin: 0;
     }
 
     dd {
+      font-size: 1.3rem;
       margin: 0.3rem 0 0;
       font-weight: 650;
       color: #1a405f;

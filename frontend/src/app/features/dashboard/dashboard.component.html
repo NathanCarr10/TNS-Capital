@@ -5,7 +5,7 @@
   </header>
 
   <div class="dashboard-grid">
-    <div class="left-column">
+    <div class="column">
       <div class="overview-row">
         <article class="account-panel">
           <h2>Account Details</h2>
@@ -159,11 +159,25 @@
       </article>
     </div>
 
-    <article class="market-panel">
-      <app-market-watch
-        [instruments]="instrumentsLoading() ? null : instruments()"
-        [heldSymbols]="heldSymbols()"
-      />
-    </article>
+    <div class="column">
+      <article class="holdings-panel">
+        <app-holdings [positions]="positions()" [error]="positionsError()" />
+      </article>
+
+      <article class="split-panel">
+        <app-portfolio-split
+          [positions]="positions()"
+          [cashBalance]="account()?.cashBalance ?? null"
+          [error]="positionsError()"
+        />
+      </article>
+
+      <article class="market-panel">
+        <app-market-watch
+          [instruments]="instrumentsLoading() ? null : instruments()"
+          [heldSymbols]="heldSymbols()"
+        />
+      </article>
+    </div>
   </div>
 </section>
