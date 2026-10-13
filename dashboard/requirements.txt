@@ -5,6 +5,7 @@ plotly==7.1.0
 pandas==2.3.3
 psycopg2-binary==2.9.13
 python-dotenv==1.2.3
+PyJWT==2.15.1
 
 altair==6.3.0                     # via streamlit
 attrs==26.1.0                     # via jsonschema
@@ -26,7 +27,7 @@ pydeck==0.9.3                     # via streamlit
 python-dateutil==2.9.0.post0      # via pandas
 pytz==2026.5                      # via pandas
 referencing==0.37.0               # via jsonschema
-requests==2.34.2                  # via streamlit
+requests==2.34.2                  # via streamlit, and auth.py calls the auth service
 rpds-py==2026.9.1                 # via jsonschema
 six==1.17.0                       # via python-dateutil
 toml==0.10.2                      # via streamlit

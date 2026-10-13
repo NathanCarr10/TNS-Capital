@@ -1,17 +1,27 @@
 """TNS Capital trading dashboard (Streamlit).
 
+It shows every user's trades, so it is for admins only: users sign in through
+the auth service and only a token with the ADMIN role opens the page.
+
 Run with:  streamlit run app.py
 """
 
+import os
+
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+import auth
 import data
 import insights
 
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
+# The Angular trading app; admins can view any account there, read-only
+TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "http://localhost:4200/dashboard")
+ASSET_CLASS_LABEL = "Asset class"
 
 
 @st.cache_data(ttl=30)
@@ -26,6 +36,60 @@ def money(value):
 def percent(value):
     return "n/a" if value is None else f"{value:.0%}"
 
+
+def duration(seconds):
+    return "n/a" if seconds is None else f"{seconds:.1f} s"
+
+
+def utc_now():
+    """Now as a naive UTC timestamp, to compare with the database's UTC timestamps."""
+    return pd.Timestamp.now(tz="UTC").tz_localize(None)
+
+
+def sign_out():
+    st.session_state.pop("token", None)
+
+
+def require_admin():
+    """Stop the page unless an admin is signed in; show the sign-in form if nobody is."""
+    token = st.session_state.get("token")
+    if token:
+        try:
+            claims = auth.verify(token)  # every rerun, so an expired session ends here
+        except auth.AuthError as error:
+            sign_out()
+            st.session_state["auth_message"] = str(error)
+        else:
+            if auth.is_admin(claims):
+                return claims
+            st.error(f"Signed in as {claims['sub']}, but this dashboard is for admins only.")
+            st.button("Sign out", on_click=sign_out)
+            st.stop()
+
+    st.title("TNS Capital trading dashboard")
+    st.caption("Admins only. Sign in with your TNS Capital account.")
+    if message := st.session_state.pop("auth_message", None):
+        st.warning(message)
+    with st.form("sign_in"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Sign in")
+    if submitted:
+        try:
+            st.session_state["token"] = auth.login(username, password)
+        except auth.AuthError as error:
+            st.error(str(error))
+        else:
+            st.rerun()
+    st.stop()
+
+
+admin = require_admin()
+with st.sidebar:
+    st.write(f"Signed in as **{admin['sub']}**")
+    st.link_button("Trading dashboard", TRADING_DASHBOARD_URL,
+                   help="View any trader's account, read-only, in the trading app")
+    st.button("Sign out", on_click=sign_out)
 
 try:
     frames = load()
@@ -93,14 +157,110 @@ left.plotly_chart(px.bar(top_accounts, x="orders", y="holder_name", orientation=
                   width="stretch")
 right.plotly_chart(px.bar(exposure, x="symbol", y="exposure", color="asset_class",
                           title="Exposure by instrument (cost basis)",
-                          labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": "Asset class"}),
+                          labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": ASSET_CLASS_LABEL}),
                    width="stretch")
 
 mix = insights.value_by_asset_class(trades)
 st.plotly_chart(px.bar(mix, x="asset_class", y="value", color="side", barmode="group",
                        title="Buy and sell value by asset class",
-                       labels={"value": VALUE_LABEL, "asset_class": "Asset class", "side": "Side"}),
+                       labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}),
                 width="stretch")
 
 with st.expander("Orders not yet loaded by the ETL"):
     st.dataframe(gap, width="stretch")
+
+# Operations: always from the live tables, since the batch source has no reasons or fill times
+live = frames["live"]
+st.subheader("Why orders are rejected")
+st.caption("From the live trading tables, whichever data source is selected above.")
+reasons = insights.rejection_reasons(live)
+if reasons.empty:
+    st.info("No orders have been rejected.")
+else:
+    left, right = st.columns(2)
+    left.plotly_chart(px.bar(reasons, x="orders", y="category", orientation="h", hover_data=["share"],
+                             title="Rejected orders by reason", labels={"orders": "Orders", "category": ""}),
+                      width="stretch")
+    right.dataframe(
+        insights.rejected_orders(live)[["created_on", "username", "symbol", "side", "quantity", "category",
+                                        "status_reason"]],
+        width="stretch", hide_index=True,
+        column_config={"created_on": st.column_config.DatetimeColumn("When (UTC)", format="D MMM, HH:mm:ss"),
+                       "username": "User", "symbol": "Instrument", "side": "Side", "quantity": "Quantity",
+                       "category": "Reason", "status_reason": "Details"})
+
+st.subheader("Order pipeline health")
+st.caption("From the live trading tables. Dead letters are read-only here: "
+           "retry or dismiss them through the DLQ admin API.")
+timing = insights.fill_time_summary(live) or {"median": None, "p95": None}
+stuck = insights.stuck_orders(live, utc_now())
+dlq = frames["dlq"]
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Median time to fill", duration(timing["median"]),
+            help="From order to first execution, over filled orders")
+col2.metric("Slowest 5% take over", duration(timing["p95"]), help="95th percentile time to fill")
+col3.metric("Stuck orders", f"{len(stuck):,}",
+            help=f"NEW for over {insights.STUCK_AFTER.seconds // 60} minutes; the executor settles orders in seconds")
+col4.metric("Dead letters awaiting review", f"{int((dlq['status'] == 'PENDING').sum()):,}",
+            help=f"{len(dlq):,} dead letters in total")
+if not stuck.empty:
+    st.warning(f"{len(stuck)} order(s) have been waiting for over {insights.STUCK_AFTER.seconds // 60} minutes. "
+               "Check the Kafka consumer and the broker simulator.")
+    st.dataframe(stuck[["created_on", "minutes", "username", "symbol", "side", "quantity", "order_id"]],
+                 width="stretch", hide_index=True,
+                 column_config={"created_on": st.column_config.DatetimeColumn("Placed (UTC)"),
+                                "minutes": st.column_config.NumberColumn("Waiting (min)", format="%.0f")})
+
+left, right = st.columns(2)
+with left:
+    st.markdown("**Slowest fills**")
+    slowest = insights.fill_times(live).head(5)
+    if slowest.empty:
+        st.caption("No timed fills yet.")
+    else:
+        st.dataframe(slowest[["seconds", "username", "symbol", "side", "quantity", "created_on"]],
+                     width="stretch", hide_index=True,
+                     column_config={"seconds": st.column_config.NumberColumn("Seconds", format="%.1f"),
+                                    "created_on": st.column_config.DatetimeColumn("Placed (UTC)")})
+with right:
+    st.markdown("**Dead-letter queue by failure type**")
+    if dlq.empty:
+        st.caption("No message has failed processing.")
+    else:
+        st.dataframe(insights.dlq_summary(dlq), width="stretch", hide_index=True,
+                     column_config={"failure_type": "Failure type", "messages": "Messages",
+                                    "pending": "Awaiting review", "retryable": "Retryable"})
+
+# What each user has traded
+st.subheader("Trading by user")
+by_user = insights.trades_by_user(trades)
+if by_user.empty:
+    st.info("No user has placed an order yet.")
+else:
+    st.dataframe(
+        by_user, width="stretch", hide_index=True,
+        column_config={
+            "username": "User", "holder_name": "Holder", "account_number": "Account",
+            "orders": "Orders", "filled": "Filled", "rejected": "Rejected",
+            "fill_rate": st.column_config.NumberColumn("Fill rate", format="percent"),
+            "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
+            "sell_value": st.column_config.NumberColumn("Sold ($)", format="dollar"),
+            "top_symbol": "Top instrument",
+            "last_order": st.column_config.DatetimeColumn("Last order", format="D MMM YYYY, HH:mm"),
+        })
+
+    chosen = st.selectbox("See one user's orders", by_user["username"].tolist(), index=None,
+                          placeholder="Choose a user")
+    if chosen is not None:
+        theirs = trades[trades["username"] == chosen]
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Their orders", f"{len(theirs):,}")
+        col2.metric("Their fill rate", percent(insights.fill_rate(theirs)))
+        col3.metric("Their average trade size", money(insights.average_trade_size(theirs)))
+        st.plotly_chart(px.bar(insights.value_by_asset_class(theirs), x="asset_class", y="value", color="side",
+                               barmode="group", title=f"What {chosen} has bought and sold",
+                               labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}),
+                        width="stretch")
+        st.dataframe(theirs.sort_values("created_on", ascending=False)
+                     [["created_on", "symbol", "side", "quantity", "price", "notional", "status"]],
+                     width="stretch", hide_index=True)

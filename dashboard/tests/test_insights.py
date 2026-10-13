@@ -1,5 +1,7 @@
 """Unit tests for the dashboard insights: small hand-made DataFrames, no database."""
 
+from datetime import timedelta
+
 import pandas as pd
 import pytest
 
@@ -7,10 +9,14 @@ import insights
 
 
 def trade(order_id, account="ACC-1", holder="Ann", symbol="ACME", asset_class="Equity",
-          side="BUY", quantity=10, price=5.0, status="FILLED", day="2026-10-01"):
-    return {"order_id": order_id, "account_number": account, "holder_name": holder, "symbol": symbol,
+          side="BUY", quantity=10, price=5.0, status="FILLED", day="2026-10-01", reason=None, filled_after=None):
+    created_on = pd.Timestamp(day + " 10:00")
+    filled_on = None if filled_after is None else created_on + timedelta(seconds=filled_after)
+    return {"order_id": order_id, "account_number": account, "holder_name": holder,
+            "username": holder.lower(), "symbol": symbol,
             "asset_class": asset_class, "side": side, "quantity": quantity, "price": price,
-            "notional": quantity * price, "status": status, "created_on": pd.Timestamp(day + " 10:00")}
+            "notional": quantity * price, "status": status, "created_on": created_on,
+            "status_reason": reason, "filled_on": filled_on}
 
 
 @pytest.fixture
@@ -113,3 +119,134 @@ def test_numbers_are_none_without_trades():
     assert insights.average_trade_size(empty) is None
     assert insights.exposure_by_instrument(pd.DataFrame(
         columns=["symbol", "asset_class", "quantity", "average_cost"])).empty
+
+
+def test_trades_by_user_summarises_each_users_trading(trades):
+    users = insights.trades_by_user(trades).set_index("username")
+
+    assert users.index.tolist() == ["ann", "bob", "cy"]  # busiest first
+    ann, bob, cy = users.loc["ann"], users.loc["bob"], users.loc["cy"]
+    assert (ann.orders, ann.filled, ann.rejected) == (3, 2, 0)
+    assert ann.fill_rate == pytest.approx(2 / 3)  # the cancelled order counts as finished
+    assert (ann.buy_value, ann.sell_value, ann.top_symbol) == (150, 0, "ACME")
+    assert ann.last_order == pd.Timestamp("2026-10-02 10:00")
+    assert (bob.filled, bob.rejected, bob.fill_rate) == (1, 1, 0.5)
+    assert (bob.buy_value, bob.sell_value, bob.top_symbol) == (0, 20, "BOND1")
+    assert pd.isna(cy.fill_rate)  # only a NEW order so far
+    assert cy.top_symbol is None
+
+
+def test_trades_by_user_top_symbol_is_the_most_value_filled():
+    users = insights.trades_by_user(pd.DataFrame([
+        trade("o1", symbol="ACME", quantity=1, price=10.0),
+        trade("o2", symbol="ACME", quantity=1, price=10.0),
+        trade("o3", symbol="BIG", quantity=1, price=15.0),
+    ]))
+
+    assert users.loc[0, "top_symbol"] == "ACME"  # 20 beats 15
+
+
+def test_trades_by_user_with_no_fills_or_trades():
+    no_fills = insights.trades_by_user(pd.DataFrame([trade("o1", status="REJECTED")]))
+    assert no_fills.loc[0, "top_symbol"] is None
+    assert no_fills.loc[0, "fill_rate"] == 0
+
+    empty = insights.trades_by_user(pd.DataFrame(columns=list(trade("x"))))
+    assert empty.empty
+    assert "username" in empty.columns
+
+
+@pytest.mark.parametrize("reason, category", [
+    ("Insufficient funds for buy order", "Insufficient funds"),
+    ("Insufficient holdings for symbol: TSLA", "Insufficient holdings"),
+    ("No position for symbol: TSLA", "Insufficient holdings"),
+    ("Cannot sell 20 of MSFT, only 0 available", "Insufficient holdings"),
+    ("Account ACC-1003 is suspended", "Account not active"),
+    ("Account not active: 7", "Account not active"),
+    ("Instrument ARKK is not tradable", "Instrument not tradable"),
+    ("No live price for ACME", "No live price"),
+    ("Could not be queued for execution: timeout", "System failure"),
+    ("NullPointerException", "Other"),
+    (None, "No reason recorded"),
+    ("  ", "No reason recorded"),
+])
+def test_rejection_category_groups_free_text_reasons(reason, category):
+    assert insights.rejection_category(reason) == category
+
+
+def test_rejection_reasons_counts_only_rejected_orders():
+    reasons = insights.rejection_reasons(pd.DataFrame([
+        trade("o1", status="REJECTED", reason="Insufficient funds for buy order"),
+        trade("o2", status="REJECTED", reason="Insufficient funds for buy order", day="2026-10-02"),
+        trade("o3", status="REJECTED", reason="Cannot sell 20 of MSFT, only 0 available"),
+        trade("o4", status="CANCELLED", reason="Cancelled by trader"),
+        trade("o5"),
+    ]))
+
+    assert reasons.to_dict("records") == [
+        {"category": "Insufficient funds", "orders": 2, "share": pytest.approx(2 / 3)},
+        {"category": "Insufficient holdings", "orders": 1, "share": pytest.approx(1 / 3)},
+    ]
+
+
+def test_rejected_orders_are_newest_first_with_their_category():
+    rejected = insights.rejected_orders(pd.DataFrame([
+        trade("old", status="REJECTED", reason="No live price for ACME", day="2026-10-01"),
+        trade("new", status="REJECTED", reason="Insufficient funds for buy order", day="2026-10-03"),
+    ]))
+
+    assert rejected[["order_id", "category"]].values.tolist() == [
+        ["new", "Insufficient funds"], ["old", "No live price"]]
+
+
+def test_no_rejections():
+    assert insights.rejection_reasons(pd.DataFrame([trade("o1")])).empty
+
+
+def test_fill_times_skip_untimed_and_seeded_fills():
+    trades = pd.DataFrame([
+        trade("quick", filled_after=1.5),
+        trade("slow", filled_after=12),
+        trade("seeded", filled_after=-3600),            # seed execution older than its order
+        trade("no-execution"),
+        trade("rejected", status="REJECTED", filled_after=1),
+    ])
+
+    assert insights.fill_times(trades)["order_id"].tolist() == ["slow", "quick"]
+    summary = insights.fill_time_summary(trades)
+    assert summary["orders"] == 2
+    assert summary["median"] == pytest.approx(6.75)
+    assert summary["p95"] == pytest.approx(11.475)
+
+
+def test_fill_time_summary_is_none_before_any_timed_fill():
+    assert insights.fill_time_summary(pd.DataFrame([trade("o1")])) is None
+
+
+def test_stuck_orders_are_new_orders_older_than_the_threshold():
+    trades = pd.DataFrame([trade("waiting", status="NEW"), trade("filled"), trade("just-placed", status="NEW")])
+    trades.loc[2, "created_on"] = pd.Timestamp("2026-10-01 10:28")  # the others were placed at 10:00
+
+    stuck = insights.stuck_orders(trades, now=pd.Timestamp("2026-10-01 10:30"))
+
+    assert stuck["order_id"].tolist() == ["waiting"]
+    assert stuck.loc[0, "minutes"] == pytest.approx(30)
+
+
+def test_dlq_summary_counts_pending_and_retryable_per_failure_type():
+    dlq = pd.DataFrame([
+        {"id": "d1", "failure_type": "NON_RETRYABLE_InsufficientFundsException", "status": "PENDING",
+         "is_retryable": False},
+        {"id": "d2", "failure_type": "TimeoutException", "status": "PENDING", "is_retryable": True},
+        {"id": "d3", "failure_type": "TimeoutException", "status": "RESOLVED", "is_retryable": True},
+    ])
+
+    assert insights.dlq_summary(dlq).to_dict("records") == [
+        {"failure_type": "TimeoutException", "messages": 2, "pending": 1, "retryable": 2},
+        {"failure_type": "NON_RETRYABLE_InsufficientFundsException", "messages": 1, "pending": 1, "retryable": 0},
+    ]
+
+
+def test_dlq_summary_when_nothing_failed():
+    empty = insights.dlq_summary(pd.DataFrame(columns=["id", "failure_type", "status", "is_retryable"]))
+    assert empty.empty
