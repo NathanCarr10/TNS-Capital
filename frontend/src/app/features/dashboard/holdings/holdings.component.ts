@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, input } from '@angular/core';
 
 import { MarketQuotesStore } from '../market-quotes.store';
-import { PositionResponse } from '../trading.models';
+import { PositionResponse } from '../../../api/trading';
 
 export interface HoldingRow {
   symbol: string;

@@ -5,6 +5,7 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
+import { AccountResponse, PlaceOrderResponse } from '../../api/trading';
 import { AuthService } from '../../core/auth/auth.service';
 import { DashboardComponent } from './dashboard.component';
 import { MarketDataService } from './market-data.service';
@@ -16,7 +17,7 @@ describe('DashboardComponent', () => {
   let tradingServiceSpy: jasmine.SpyObj<TradingService>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
 
-  const account = {
+  const account: AccountResponse = {
     id: 11,
     accountNumber: 'ACC-U000011',
     holderName: 'Trader One',
@@ -87,7 +88,7 @@ describe('DashboardComponent', () => {
   });
 
   it('submits a successful BUY order and shows FILLED message', fakeAsync(() => {
-    tradingServiceSpy.placeOrder.and.returnValue(of({ orderId: 'ord-buy', status: 'ACCEPTED' }));
+    tradingServiceSpy.placeOrder.and.returnValue(of(accepted('ord-buy')));
     tradingServiceSpy.getOrder.and.returnValue(
       of({
         id: 'ord-buy',
@@ -114,7 +115,7 @@ describe('DashboardComponent', () => {
   }));
 
   it('submits a successful SELL order and shows FILLED message', fakeAsync(() => {
-    tradingServiceSpy.placeOrder.and.returnValue(of({ orderId: 'ord-sell', status: 'ACCEPTED' }));
+    tradingServiceSpy.placeOrder.and.returnValue(of(accepted('ord-sell')));
     tradingServiceSpy.getOrder.and.returnValue(
       of({
         id: 'ord-sell',
@@ -157,7 +158,7 @@ describe('DashboardComponent', () => {
   });
 
   it('shows rejected error message for insufficient funds', fakeAsync(() => {
-    tradingServiceSpy.placeOrder.and.returnValue(of({ orderId: 'ord-rej', status: 'ACCEPTED' }));
+    tradingServiceSpy.placeOrder.and.returnValue(of(accepted('ord-rej')));
     tradingServiceSpy.getOrder.and.returnValue(
       of({
         id: 'ord-rej',
@@ -290,3 +291,7 @@ describe('DashboardComponent', () => {
     expect(component.priceLoading()).toBeFalse();
   });
 });
+
+function accepted(orderId: string): PlaceOrderResponse {
+  return { orderId, status: 'ACCEPTED', price: null, message: 'Order accepted for processing.' };
+}

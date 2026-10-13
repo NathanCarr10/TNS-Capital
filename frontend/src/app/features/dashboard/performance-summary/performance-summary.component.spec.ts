@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { MarketQuotesStore } from '../market-quotes.store';
-import { MarketQuote, PositionResponse } from '../trading.models';
+import { MarketQuote, PositionResponse } from '../../../api/trading';
 import { PerformanceSummaryComponent } from './performance-summary.component';
 
 describe('PerformanceSummaryComponent', () => {

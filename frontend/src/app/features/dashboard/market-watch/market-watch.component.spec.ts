@@ -6,7 +6,7 @@ import { of, throwError } from 'rxjs';
 
 import { MarketDataService } from '../market-data.service';
 import { MarketQuotesStore } from '../market-quotes.store';
-import { InstrumentResponse, MarketQuote } from '../trading.models';
+import { InstrumentResponse, MarketQuote } from '../../../api/trading';
 import { MarketWatchComponent } from './market-watch.component';
 
 describe('MarketWatchComponent', () => {

@@ -1,4 +1,4 @@
-import { MarketQuote, PositionResponse } from '../trading.models';
+import { MarketQuote, PositionResponse } from '../../../api/trading';
 
 export type SplitColor = 'series-1' | 'series-2' | 'series-3' | 'series-4' | 'series-other' | 'series-cash';
 

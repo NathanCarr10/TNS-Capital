@@ -1,4 +1,4 @@
-import { MarketQuote, PositionResponse } from '../trading.models';
+import { MarketQuote, PositionResponse } from '../../../api/trading';
 
 export interface PortfolioMetrics {
   /** Latest value minus cost of the priced positions; null when none is priced. */
