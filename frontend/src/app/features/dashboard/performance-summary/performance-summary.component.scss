@@ -30,7 +30,7 @@ h2 {
   }
 
   dt {
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     color: #5a7288;
     margin: 0;
   }
@@ -44,7 +44,7 @@ h2 {
   dd {
     margin: 0.35rem 0 0;
     // Shrinks in narrow tiles so a five-figure amount still fits
-    font-size: clamp(1rem, 15cqi, 1.3rem);
+    font-size: clamp(1.3rem, 15cqi, 1.3rem);
     font-weight: 700;
     color: #1a405f;
     font-variant-numeric: tabular-nums;
