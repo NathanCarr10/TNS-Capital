@@ -16,6 +16,9 @@ pipeline {
         SEMGREP_IMAGE  = "semgrep/semgrep:1.99.0"
         TRIVY_IMAGE    = "aquasec/trivy:0.57.1"
 
+        // Node and a matching headless Chromium for the Angular tests, pinned the same way
+        PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.64.0-noble"
+
         // All scan reports land here and are archived with the build.
         REPORTS_DIR = "security-reports"
     }
@@ -152,6 +155,25 @@ pipeline {
                     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
                         -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:20-alpine \
                         sh -c "npm ci --no-audit --no-fund && npm test"
+                '''
+            }
+        }
+
+        stage('Frontend Tests') {
+            steps {
+                // The Angular unit tests in headless Chromium, then a production build so a
+                // compile error fails here. npm's pretest/prebuild hooks first generate the API
+                // clients in src/app/api from contracts/, which needs Java: the JDK21 tool is
+                // mounted read-only, since the Playwright image ships Chromium but no JDK.
+                sh '''
+                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+                        -v "$JAVA_HOME":/opt/jdk:ro -e JAVA_HOME=/opt/jdk \
+                        -v "$WORKSPACE":/repo -w /repo/frontend $PLAYWRIGHT_IMAGE \
+                        bash -c 'export PATH="$JAVA_HOME/bin:$PATH" \
+                            CHROME_BIN="$(ls -d /ms-playwright/chromium-*/chrome-linux64/chrome | head -n 1)" \
+                            && npm ci --no-audit --no-fund \
+                            && npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox \
+                            && npm run build'
                 '''
             }
         }
