@@ -1,0 +1,161 @@
+:host {
+  display: block;
+  --ma-0: var(--accent);
+  --ma-1: var(--sidebar);
+}
+
+:host-context([data-theme='dark']) {
+  --ma-1: #cad2c5;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.9rem;
+  min-height: 1.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+
+  div {
+    display: flex;
+    gap: 0.3rem;
+  }
+
+  dt {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .readout-time dd {
+    font-weight: 700;
+  }
+}
+
+.bar-up {
+  color: var(--positive);
+}
+
+.bar-down {
+  color: var(--negative);
+}
+
+.bar-flat {
+  color: var(--text-muted);
+}
+
+.chart-frame {
+  position: relative;
+  width: 100%;
+}
+
+.chart {
+  display: block;
+  font-family: inherit;
+  touch-action: pan-y;
+  cursor: crosshair;
+
+  &:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+.grid {
+  stroke: var(--grid);
+  stroke-dasharray: 4 4;
+}
+
+.axis {
+  stroke: var(--border-strong);
+}
+
+.axis-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.crosshair,
+.close-line {
+  stroke: var(--text-muted);
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.close-line {
+  stroke-dasharray: 2 3;
+  opacity: 0.6;
+}
+
+.candle {
+  shape-rendering: crispEdges;
+  transition: opacity 120ms ease;
+
+  &.dimmed {
+    opacity: 0.5;
+  }
+}
+
+@each $direction in up, down {
+  .candle-#{$direction} {
+    .wick,
+    .body {
+      stroke: var(--candle-#{$direction});
+      fill: var(--candle-#{$direction});
+    }
+
+    .volume {
+      fill: var(--candle-#{$direction});
+    }
+  }
+
+  .close-tag.candle-#{$direction} rect {
+    fill: var(--candle-#{$direction});
+  }
+}
+
+.wick {
+  stroke-width: 1;
+}
+
+.body {
+  stroke-width: 0;
+}
+
+.volume {
+  opacity: 0.22;
+}
+
+.overlay {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.overlay-0 {
+  stroke: var(--ma-0);
+}
+
+.overlay-1 {
+  stroke: var(--ma-1);
+}
+
+.close-tag {
+  pointer-events: none;
+
+  text {
+    font-size: 11px;
+    font-weight: 700;
+    fill: #ffffff;
+    font-variant-numeric: tabular-nums;
+  }
+}
