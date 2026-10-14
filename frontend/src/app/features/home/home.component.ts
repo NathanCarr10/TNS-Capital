@@ -1,7 +1,5 @@
-import { Component, inject } from '@angular/core';
+import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
-
-import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 
 @Component({
   selector: 'app-home',
@@ -10,10 +8,5 @@ import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashbo
   styleUrl: './home.component.scss',
 })
 export class HomeComponent {
-  private readonly analyticsDashboard = inject(AnalyticsDashboardService);
-
-  // The analytics dashboard has its own admin sign-in, so admins go straight there
-  openAdminDashboard(): void {
-    this.analyticsDashboard.open();
-  }
+  readonly analyticsDashboardUrl = 'http://localhost:8501/';
 }

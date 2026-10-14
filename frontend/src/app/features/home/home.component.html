@@ -1,20 +1,19 @@
 <section class="home-page">
   <header class="home-header">
     <h1>TNS Capital</h1>
-    <p>Choose how you want to sign in.</p>
+    <p>Professional trading made simple.</p>
   </header>
 
-  <div class="home-options">
-    <a class="home-option" routerLink="/login">
-      <h2>Trader</h2>
-      <p>Place orders, watch the market and track your portfolio.</p>
-      <span class="home-action">Log in as a trader</span>
-    </a>
+  <a class="trader-entry" routerLink="/login">
+    <div class="trader-copy">
+      <h2>Trading Portal</h2>
+      <p>Execute orders, monitor real-time market activity, and manage portfolio performance.</p>
+    </div>
+    <span class="home-action">Sign In to Trade <span aria-hidden="true">&rarr;</span></span>
+  </a>
 
-    <button type="button" class="home-option" (click)="openAdminDashboard()">
-      <h2>Admin</h2>
-      <p>Analytics on what users have traded, rejections and pipeline health.</p>
-      <span class="home-action">Log in as an admin</span>
-    </button>
+  <div class="admin-access">
+    <span>Operations access</span>
+    <a [href]="analyticsDashboardUrl">Open admin analytics</a>
   </div>
 </section>
