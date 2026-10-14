@@ -50,7 +50,32 @@
       <span class="muted">Cash balance</span>
       <strong class="num">{{ details.cashBalance | currency:'USD':'symbol':'1.2-2' }}</strong>
       <span class="available">Available to trade</span>
+      @if (!isAdmin) {
+        <button class="btn btn-primary deposit-toggle" type="button" (click)="toggleDeposit()">
+          {{ depositOpen() ? 'Cancel' : 'Deposit cash' }}
+        </button>
+      }
     </div>
+    @if (!isAdmin && depositOpen()) {
+      <form class="deposit-form" [formGroup]="depositForm" (ngSubmit)="submitDeposit()" novalidate>
+        <label for="deposit-amount">Amount</label>
+        <div class="deposit-fields">
+          <input id="deposit-amount" class="input num" type="number" formControlName="amount" min="0.01" step="0.01" />
+          <button class="btn btn-primary" type="submit" [disabled]="depositLoading()">
+            {{ depositLoading() ? 'Depositing...' : 'Confirm deposit' }}
+          </button>
+        </div>
+        @if (depositForm.controls.amount.invalid && depositForm.controls.amount.touched) {
+          <p class="form-error" role="alert">Enter an amount greater than $0.00.</p>
+        }
+        @if (depositMessage()) {
+          <p class="form-success" role="status">{{ depositMessage() }}</p>
+        }
+        @if (depositError()) {
+          <p class="form-error" role="alert">{{ depositError() }}</p>
+        }
+      </form>
+    }
   } @else {
     <p class="eyebrow">Account details</p>
     <p class="note error">Account details unavailable.</p>

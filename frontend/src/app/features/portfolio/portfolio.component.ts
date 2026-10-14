@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
@@ -18,6 +20,7 @@ import { PortfolioValueChartComponent } from './portfolio-value/portfolio-value-
   selector: 'app-portfolio',
   imports: [
     CommonModule,
+    ReactiveFormsModule,
     RouterLink,
     IconComponent,
     AdminAccountBarComponent,
@@ -34,6 +37,7 @@ import { PortfolioValueChartComponent } from './portfolio-value/portfolio-value-
 export class PortfolioComponent {
   private readonly store = inject(AccountStore);
   private readonly analyticsDashboard = inject(AnalyticsDashboardService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly today = new Date();
   readonly isAdmin = this.store.isAdmin;
@@ -47,6 +51,13 @@ export class PortfolioComponent {
   readonly instruments = this.store.tradableInstruments;
   readonly instrumentsLoading = computed(() => this.store.instruments() === null);
   readonly cashBalance = computed(() => this.account()?.cashBalance ?? null);
+  readonly depositOpen = signal(false);
+  readonly depositLoading = signal(false);
+  readonly depositMessage = signal<string | null>(null);
+  readonly depositError = signal<string | null>(null);
+  readonly depositForm = inject(FormBuilder).nonNullable.group({
+    amount: [0, [Validators.required, Validators.min(0.01)]],
+  });
 
   /** First name of the account holder, for the greeting. */
   readonly firstName = computed(() => this.account()?.holderName.split(/\s+/)[0] ?? '');
@@ -57,5 +68,36 @@ export class PortfolioComponent {
 
   openAnalytics(): void {
     this.analyticsDashboard.open();
+  }
+
+  toggleDeposit(): void {
+    this.depositOpen.update((open) => !open);
+    this.depositMessage.set(null);
+    this.depositError.set(null);
+  }
+
+  submitDeposit(): void {
+    if (this.depositForm.invalid || this.depositLoading()) {
+      this.depositForm.markAllAsTouched();
+      return;
+    }
+
+    this.depositLoading.set(true);
+    this.depositMessage.set(null);
+    this.depositError.set(null);
+    this.store
+      .deposit(this.depositForm.controls.amount.value)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.depositLoading.set(false);
+          this.depositMessage.set('Cash deposited successfully.');
+          this.depositForm.reset({ amount: 0 });
+        },
+        error: () => {
+          this.depositLoading.set(false);
+          this.depositError.set('Could not deposit cash. Please try again.');
+        },
+      });
   }
 }
