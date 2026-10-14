@@ -81,7 +81,9 @@ schema has no rejection reasons or execution times:
 ## Running it
 
 With Docker, it runs as the `dashboard` service: `docker compose up -d dashboard`, then
-open http://localhost:8501 (change the port with `DASHBOARD_PORT`). Run the ETL once
+open it through the trading app at http://localhost:4200/analytics/, or directly at
+http://localhost:8501/analytics/ (change the port with `DASHBOARD_PORT`). The `/analytics` base path
+is set in [.streamlit/config.toml](.streamlit/config.toml) so the app's nginx can forward that path here. Run the ETL once
 (`python etl/pipeline.py`) to fill the batch source.
 
 Locally:
@@ -98,7 +100,7 @@ streamlit run app.py         # reads DB_USER and DB_PASSWORD from the repo's .en
 | `DB_USER`, `DB_PASSWORD` | from `.env` |
 | `DASHBOARD_AUTH_URL` | `http://localhost:4000` (compose: `http://auth-service:4000`) |
 | `JWT_SECRET` | from `.env`; must be the auth service's secret |
-| `DASHBOARD_TRADING_URL` | `http://localhost:4200/dashboard`: the Angular trading app |
+| `DASHBOARD_TRADING_URL` | `/dashboard`: the Angular trading app, on the same origin when opened through it |
 
 The auth service has to be running to sign in: `docker compose up -d auth-service`.
 

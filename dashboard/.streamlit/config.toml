@@ -1,0 +1,4 @@
+# Served under /analytics/ so the Angular app's nginx (and `ng serve`'s proxy) can forward
+# that path here: admins reach the dashboard on the app's own origin, not on a second port.
+[server]
+baseUrlPath = "analytics"

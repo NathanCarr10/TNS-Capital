@@ -18,6 +18,7 @@ be explained at the showcase and revisited later.
 | 10 | Only admins open accounts and manage instruments | §22 | Team decision |
 | 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
+| 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -131,8 +132,9 @@ dashboard becomes a read-only account viewer: the admin picks any account (the A
 admins read every account) and sees its balance, holdings and orders, without the order ticket.
 Whether admins may place orders for traders is left for the team to decide.
 
-The two apps run on different origins, so Streamlit cannot read Angular's session and the admin
-signs in on each. Passing the access token across in the URL was rejected: URLs end up in browser
+Streamlit's session lives in its Python server and cannot read the Angular app's token, which
+is kept in the browser tab's `sessionStorage`, so the admin signs in on each (even though both
+are now served on one origin, see 13). Passing the access token across in the URL was rejected: URLs end up in browser
 history, server logs and `Referer` headers, and the token would stay usable for 15 minutes. The
 safe alternative, a single-use, short-lived code that Streamlit exchanges with the auth service,
 needs new auth service endpoints and a table; it is a possible extension. Until then the second
@@ -143,3 +145,15 @@ verifies the token it gets itself (HS256 signature, issuer, `typ`, expiry) and a
 When a signed-out user opens a protected page, the login sends them back to it afterwards
 (`?returnUrl=`), admins included. That is how the Trading dashboard button, which opens a new
 tab without the Angular session, lands on the account viewer and not back on analytics.
+
+## 13. Analytics dashboard under `/analytics/`
+
+The Angular app's nginx (and `ng serve`'s `proxy.conf.json`) forwards `/analytics/` to the
+Streamlit container, which runs with the base path `analytics` (`dashboard/.streamlit/config.toml`),
+WebSocket included. The Admin card, the admin login and the Analytics button all go to that
+relative path. Linking to `http://localhost:8501` only worked when the browser ran on the Docker
+host with that port open: through a forwarded or remote address it gave "page not found", and a
+browser in the end-to-end tests could not reach it either. The same pattern carries over to the
+sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. The
+Streamlit **Trading dashboard** button is the relative `/dashboard` for the same reason. Port 8501
+stays published for direct access (`http://localhost:8501/analytics/`).

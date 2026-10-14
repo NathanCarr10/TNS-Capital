@@ -19,8 +19,9 @@ import insights
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
-# The Angular trading app; admins can view any account there, read-only
-TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "http://localhost:4200/dashboard")
+# The Angular trading app; admins can view any account there, read-only. Relative, since
+# admins reach this page through the Angular app's origin (/analytics/)
+TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "/dashboard")
 ASSET_CLASS_LABEL = "Asset class"
 
 
