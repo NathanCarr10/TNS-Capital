@@ -31,6 +31,7 @@ flowchart LR
     client([Client / Bruno / Swagger UI])
 
     subgraph stack[docker-compose stack]
+        web[Frontend<br/>Angular + nginx · :4200]
         auth[auth-service<br/>NestJS · :4000]
         app[Trading API<br/>Spring Boot · :3000]
         broker[Broker Simulator<br/>Spring Boot · internal]
@@ -41,6 +42,9 @@ flowchart LR
         ui[Kafka UI · :8090]
     end
 
+    client -- "browser" --> web
+    web -- "/auth" --> auth
+    web -- "/api" --> app
     client -- "register / login" --> auth
     client -- "Bearer JWT" --> app
     auth --> pg
@@ -189,7 +193,7 @@ Edit `.env` and set:
 | `JWT_REFRESH_SECRET` | Reserved for the auth service and never given to the API. Nothing reads it yet (refresh tokens are random values stored as hashes), but set it to a different random value with `openssl rand -hex 32`. |
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
-`DASHBOARD_PORT` (default `8501`) and
+`DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `4200`) and
 `AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute).
 
 ### 3. Start the stack
@@ -215,6 +219,7 @@ API's startup with `docker compose logs -f app`.
 
 | Service | URL | Notes |
 |---|---|---|
+| Web app | http://localhost:4200 | Angular frontend; nginx forwards `/api` and `/auth` to the services |
 | Trading API | http://localhost:3000 | All endpoints need a bearer token |
 | Swagger UI | http://localhost:3000/swagger-ui.html | Public. Click **Authorize** and paste an access token |
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
@@ -468,7 +473,7 @@ for the quality gate.
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
-| Port already in use (3000, 4000, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard). |
+| Port already in use (3000, 4000, 4200, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |
 | Order stays `NEW` | Check the consumer with `docker compose logs app`, and the `orders` topic in Kafka UI. |
