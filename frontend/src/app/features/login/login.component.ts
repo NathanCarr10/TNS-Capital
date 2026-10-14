@@ -45,7 +45,7 @@ export class LoginComponent {
         } else if (this.authService.isAdmin()) {
           this.analyticsDashboard.open();
         } else {
-          void this.router.navigate(['/dashboard']);
+          void this.router.navigate(['/portfolio']);
         }
       },
       error: (error: unknown) => {
