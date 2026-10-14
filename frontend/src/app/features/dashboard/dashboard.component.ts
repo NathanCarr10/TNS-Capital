@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subscription, forkJoin, of, throwError, timer } from 'rxjs';
 import { catchError, finalize, map, switchMap, take, tap, timeout } from 'rxjs/operators';
@@ -78,6 +78,20 @@ export class DashboardComponent implements OnDestroy {
   readonly priceLoading = signal(false);
   readonly successMessage = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
+
+  private readonly twoDecimalPlacesValidator = (control: AbstractControl<number | null>): ValidationErrors | null => {
+    const amount = control.value;
+    return amount == null || Number.isInteger(amount * 100) ? null : { twoDecimalPlaces: true };
+  };
+
+  readonly depositForm = this.formBuilder.group({
+    amount: this.formBuilder.control<number | null>(null, [
+      Validators.required,
+      Validators.min(0.01),
+      Validators.max(1_000_000_000),
+      this.twoDecimalPlacesValidator,
+    ]),
+  });
 
   readonly orderForm = this.formBuilder.group({
     symbol: this.formBuilder.nonNullable.control('', [
@@ -160,6 +174,51 @@ export class DashboardComponent implements OnDestroy {
         this.isSubmitting.set(false);
         this.isTracking.set(false);
         this.errorMessage.set(this.mapImmediateError(error));
+      },
+    });
+  }
+
+  onDeposit(): void {
+    if (this.isAdmin) {
+      return;
+    }
+
+    const loadedAccount = this.account();
+    if (!loadedAccount) {
+      this.errorMessage.set('Account information is unavailable. Please log in again.');
+      return;
+    }
+
+    if (loadedAccount.status !== 'ACTIVE') {
+      this.depositForm.markAllAsTouched();
+      this.errorMessage.set('Deposits are unavailable because this account is not active.');
+      return;
+    }
+
+    if (this.depositForm.invalid || this.isSubmitting()) {
+      this.depositForm.markAllAsTouched();
+      return;
+    }
+
+    const amount = this.depositForm.controls.amount.value;
+    if (amount == null) {
+      return;
+    }
+
+    this.successMessage.set(null);
+    this.errorMessage.set(null);
+    this.isSubmitting.set(true);
+
+    this.tradingService.deposit(loadedAccount.id, { amount }).subscribe({
+      next: (updatedAccount) => {
+        this.account.set(updatedAccount);
+        this.isSubmitting.set(false);
+        this.depositForm.reset();
+        this.successMessage.set(`Deposit of ${amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} completed.`);
+      },
+      error: (error: unknown) => {
+        this.isSubmitting.set(false);
+        this.errorMessage.set(this.mapDepositError(error));
       },
     });
   }
@@ -444,6 +503,25 @@ export class DashboardComponent implements OnDestroy {
     }
 
     return this.readErrorMessage(error, 'Order submission failed.');
+  }
+
+  private mapDepositError(error: unknown): string {
+    const apiError = this.readApiError(error);
+    const code = apiError?.errorCode;
+    if (code === 'ACC-404') {
+      return 'Account not found (ACC-404).';
+    }
+    if (code === 'ACC-403') {
+      return 'You are not authorized to deposit into this account (ACC-403).';
+    }
+    if (code === 'ACC-409') {
+      return 'Deposits are unavailable because this account is not active (ACC-409).';
+    }
+    if (code === 'VAL-422') {
+      return 'Invalid deposit amount (VAL-422). Enter an amount from $0.01 to $1,000,000,000.00 with no more than two decimal places.';
+    }
+
+    return this.readErrorMessage(error, 'Deposit failed.');
   }
 
   private mapRejectedError(statusReason?: string): string {

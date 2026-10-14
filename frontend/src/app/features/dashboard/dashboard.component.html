@@ -63,6 +63,38 @@
       </div>
 
       @if (!isAdmin) {
+        <article class="deposit-panel">
+          <h2>Fund Account</h2>
+
+          <form [formGroup]="depositForm" (ngSubmit)="onDeposit()" novalidate>
+            <div class="field-grid">
+              <label for="deposit-amount">Deposit Amount</label>
+              <input
+                id="deposit-amount"
+                type="number"
+                formControlName="amount"
+                min="0.01"
+                max="1000000000"
+                step="0.01"
+                placeholder="0.00"
+              />
+              @if (depositForm.controls.amount.touched && depositForm.controls.amount.hasError('required')) {
+                <p class="field-error">Deposit amount is required.</p>
+              } @else if (depositForm.controls.amount.touched && depositForm.controls.amount.hasError('min')) {
+                <p class="field-error">Deposit amount must be greater than zero.</p>
+              } @else if (depositForm.controls.amount.touched && depositForm.controls.amount.hasError('max')) {
+                <p class="field-error">Deposit amount cannot exceed $1,000,000,000.00.</p>
+              } @else if (depositForm.controls.amount.touched && depositForm.controls.amount.hasError('twoDecimalPlaces')) {
+                <p class="field-error">Deposit amount can have no more than two decimal places.</p>
+              }
+            </div>
+
+            <button type="submit" [disabled]="depositForm.invalid || isSubmitting() || accountLoading() || !account()">
+              {{ isSubmitting() ? 'Depositing...' : 'Deposit Funds' }}
+            </button>
+          </form>
+        </article>
+
         <article class="order-panel">
           <h2>Submit Order</h2>
 
