@@ -1,0 +1,68 @@
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" routerLink="/portfolio" aria-label="TNS Capital home">
+      <span class="brand-mark" aria-hidden="true">T</span>
+      <span class="brand-name">TNS <span>Capital</span></span>
+    </a>
+
+    <nav aria-label="Main">
+      @for (item of nav; track item.link) {
+        <a [routerLink]="item.link" routerLinkActive="active" ariaCurrentWhenActive="page">
+          <app-icon [name]="item.icon" />
+          <span>{{ item.label }}</span>
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <app-symbol-search />
+
+      <div class="topbar-actions">
+        <span
+          class="market-status"
+          [class.open]="market().open"
+          title="NYSE regular session, 9:30 to 16:00 New York time. Holidays are not shown."
+        >
+          <span class="dot" aria-hidden="true"></span>
+          <span class="market-label">NYSE {{ market().open ? 'open' : 'closed' }}</span>
+          <span class="market-time num">{{ market().time }} ET</span>
+        </span>
+
+        <span class="divider" aria-hidden="true"></span>
+
+        <button
+          type="button"
+          class="icon-btn"
+          [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+          (click)="theme.toggle()"
+        >
+          <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" />
+        </button>
+
+        <div class="user">
+          @if (initials()) {
+            <span class="avatar" aria-hidden="true">{{ initials() }}</span>
+          }
+          <span class="user-text">
+            <span class="user-name">{{ displayName() }}</span>
+            <span class="user-sub">{{ subtitle() }}</span>
+          </span>
+          <span class="badge">{{ isAdmin ? 'Admin' : 'Trader' }}</span>
+        </div>
+
+        <span class="divider" aria-hidden="true"></span>
+
+        <button type="button" class="logout" (click)="logout()">
+          <app-icon name="logout" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

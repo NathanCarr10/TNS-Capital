@@ -1,0 +1,48 @@
+.side-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0.25rem;
+  border-radius: 10px;
+  background: var(--surface-muted);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0.25rem auto 0.25rem 0.25rem;
+    width: calc(50% - 0.25rem);
+    border-radius: 8px;
+    background: var(--candle-up);
+    transition:
+      transform 0.2s ease,
+      background-color 0.2s ease;
+  }
+
+  &.sell::before {
+    transform: translateX(100%);
+    background: var(--candle-down);
+  }
+
+  button {
+    position: relative;
+    padding: 0.7rem 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: color 0.2s ease;
+
+    &.selected {
+      color: #fff;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+}

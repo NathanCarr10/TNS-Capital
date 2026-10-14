@@ -18,8 +18,8 @@ The services and models in `src/app/api/` are generated from the OpenAPI specs i
 
 | Spec | Generated into | Used by |
 | --- | --- | --- |
-| `contracts/auth-api.yaml` | `src/app/api/auth` | `core/auth/auth.service.ts`, `features/dashboard/trading.service.ts` |
-| `contracts/trading-api.json` | `src/app/api/trading` | `features/dashboard/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices) |
+| `contracts/auth-api.yaml` | `src/app/api/auth` | `core/auth/auth.service.ts`, `core/trading/trading.service.ts` |
+| `contracts/trading-api.json` | `src/app/api/trading` | `core/trading/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices) |
 
 `npm start`, `npm run build`, `npm test` and `npm run typecheck` regenerate them first. Generating needs Java 11+.
 
@@ -36,8 +36,8 @@ Auth spec changes are made by hand in `contracts/auth-api.yaml`. Which response 
 
 Signing in as an admin opens the analytics dashboard (the Streamlit app in `dashboard/`,
 `docker compose up -d dashboard`), where the admin signs in again; its **Trading dashboard**
-button comes back here. Admins have no trading account, so for them `/dashboard` is a read-only
-account viewer: an account picker and an **Analytics** button in the header, no order ticket.
+button comes back here. Admins have no trading account, so for them `/portfolio` is a read-only
+account viewer: an account picker and an **Analytics** button in the header, and the order ticket on `/trade` is read-only.
 If a signed-out user opens a protected page, the login returns them to it (`?returnUrl=`).
 The analytics address is `ANALYTICS_DASHBOARD_URL` in
 `src/app/core/analytics/analytics-dashboard.service.ts`. Why admins sign in twice: see

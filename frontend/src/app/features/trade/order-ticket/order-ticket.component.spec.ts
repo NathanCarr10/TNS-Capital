@@ -1,0 +1,224 @@
+/// <reference types="jasmine" />
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { of, throwError } from 'rxjs';
+
+import { OrderResponse, PlaceOrderResponse } from '../../../api/trading';
+import { AuthService } from '../../../core/auth/auth.service';
+import { AccountStore } from '../../../core/trading/account.store';
+import { ACCOUNT, INSTRUMENTS, tradingServiceStub } from '../../../core/trading/testing/trading-fixtures';
+import { TradingService } from '../../../core/trading/trading.service';
+import { OrderTicketComponent } from './order-ticket.component';
+
+describe('OrderTicketComponent', () => {
+  let fixture: ComponentFixture<OrderTicketComponent>;
+  let component: OrderTicketComponent;
+  let tradingService: jasmine.SpyObj<TradingService>;
+  let isAdmin: boolean;
+
+  const create = (livePrice: number | null = 150, instrument = INSTRUMENTS[0]): void => {
+    TestBed.configureTestingModule({
+      imports: [OrderTicketComponent],
+      providers: [
+        AccountStore,
+        { provide: TradingService, useValue: tradingService },
+        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+      ],
+    });
+    fixture = TestBed.createComponent(OrderTicketComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('symbol', instrument.symbol);
+    fixture.componentRef.setInput('instrument', instrument);
+    fixture.componentRef.setInput('livePrice', livePrice);
+    fixture.detectChanges();
+  };
+
+  const order = (overrides: Partial<OrderResponse>): OrderResponse => ({
+    id: 'ord-1',
+    accountId: ACCOUNT.id,
+    symbol: 'AAPL',
+    side: 'BUY',
+    quantity: 10,
+    price: 150,
+    status: 'FILLED',
+    createdOn: new Date().toISOString(),
+    ...overrides,
+  });
+
+  const submitButton = (): HTMLButtonElement => fixture.nativeElement.querySelector('button[type="submit"]');
+
+  beforeEach(() => {
+    tradingService = tradingServiceStub();
+    isAdmin = false;
+  });
+
+  it('fills the limit price with the live quote', () => {
+    create(187.42);
+
+    expect(component.orderForm.controls.price.value).toBe(187.42);
+    expect(submitButton().textContent).toContain('Buy 1 AAPL');
+  });
+
+  it('keeps a price the trader entered when a new quote arrives', () => {
+    create(150);
+    component.orderForm.controls.price.setValue(140);
+
+    fixture.componentRef.setInput('livePrice', 155);
+    fixture.detectChanges();
+
+    expect(component.orderForm.controls.price.value).toBe(140);
+  });
+
+  it('submits a BUY limit order and shows the fill', fakeAsync(() => {
+    create();
+    tradingService.placeOrder.and.returnValue(of(accepted('ord-buy')));
+    tradingService.getOrder.and.returnValue(of(order({ id: 'ord-buy' })));
+
+    component.orderForm.patchValue({ side: 'BUY', quantity: 10, price: 150 });
+    component.onSubmit();
+    tick();
+
+    expect(tradingService.placeOrder).toHaveBeenCalledWith(
+      jasmine.objectContaining({ accountId: ACCOUNT.id, symbol: 'AAPL', side: 'BUY', quantity: 10, price: 150 })
+    );
+    expect(component.successMessage()).toContain('FILLED');
+    expect(component.errorMessage()).toBeNull();
+    // The fill moves cash and holdings, so both are reloaded for every page
+    expect(tradingService.getAccount).toHaveBeenCalledTimes(2);
+    expect(tradingService.getAccountPositions).toHaveBeenCalledTimes(2);
+  }));
+
+  it('submits a SELL order', fakeAsync(() => {
+    create();
+    tradingService.placeOrder.and.returnValue(of(accepted('ord-sell')));
+    tradingService.getOrder.and.returnValue(of(order({ id: 'ord-sell', side: 'SELL', quantity: 5, price: 155 })));
+
+    component.orderForm.patchValue({ side: 'SELL', quantity: 5, price: 155 });
+    component.onSubmit();
+    tick();
+
+    expect(tradingService.placeOrder).toHaveBeenCalledWith(jasmine.objectContaining({ side: 'SELL', quantity: 5 }));
+    expect(component.successMessage()).toContain('FILLED');
+  }));
+
+  it('sends no price for a market order, so it fills at the latest price', fakeAsync(() => {
+    create();
+    tradingService.placeOrder.and.returnValue(of(accepted('ord-mkt')));
+    tradingService.getOrder.and.returnValue(of(order({ id: 'ord-mkt' })));
+
+    component.orderForm.patchValue({ orderType: 'MARKET', quantity: 2 });
+    component.onSubmit();
+    tick();
+
+    const request = tradingService.placeOrder.calls.mostRecent().args[0];
+    expect(request.price).toBeUndefined();
+    expect(request.quantity).toBe(2);
+  }));
+
+  it('needs a price for a limit order but not for a market order', () => {
+    create(null);
+
+    expect(component.orderForm.controls.price.value).toBeNull();
+    expect(component.orderForm.invalid).toBeTrue();
+
+    component.orderForm.controls.orderType.setValue('MARKET');
+
+    expect(component.orderForm.valid).toBeTrue();
+  });
+
+  it('enforces quantity validation', () => {
+    create();
+    component.orderForm.patchValue({ quantity: 0 });
+
+    component.onSubmit();
+
+    expect(component.orderForm.controls.quantity.invalid).toBeTrue();
+    expect(tradingService.placeOrder).not.toHaveBeenCalled();
+  });
+
+  it('enforces price validation', () => {
+    create();
+    component.orderForm.patchValue({ price: 0 });
+
+    component.onSubmit();
+
+    expect(component.orderForm.controls.price.invalid).toBeTrue();
+    expect(tradingService.placeOrder).not.toHaveBeenCalled();
+  });
+
+  it('shows the rejection reason for insufficient funds', fakeAsync(() => {
+    create();
+    tradingService.placeOrder.and.returnValue(of(accepted('ord-rej')));
+    tradingService.getOrder.and.returnValue(
+      of(order({ id: 'ord-rej', status: 'REJECTED', statusReason: 'Insufficient funds for account 11' }))
+    );
+
+    component.onSubmit();
+    tick();
+
+    expect(component.errorMessage()).toContain('ORD-400');
+    expect(component.successMessage()).toBeNull();
+  }));
+
+  it('maps immediate API validation error codes', () => {
+    create();
+    tradingService.placeOrder.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 422,
+            error: { errorCode: 'VAL-422', message: 'Validation failed', timestamp: new Date().toISOString() },
+          })
+      )
+    );
+
+    component.onSubmit();
+
+    expect(component.errorMessage()).toContain('VAL-422');
+  });
+
+  it('estimates the cost and warns when it is more than the cash', () => {
+    create(100);
+    component.orderForm.patchValue({ quantity: 60 });
+    fixture.detectChanges();
+
+    expect(component.estimatedTotal()).toBe(6000);
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('more than your available cash');
+  });
+
+  it('warns when selling more than is held', () => {
+    tradingService.getAccountPositions.and.returnValue(
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 3, averageCost: 100, marketValue: null }])
+    );
+    create();
+    component.orderForm.patchValue({ side: 'SELL', quantity: 5 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('You hold 3 AAPL');
+  });
+
+  it('cannot trade an instrument that is not tradable', () => {
+    create(10, INSTRUMENTS[2]);
+
+    expect(submitButton().disabled).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('OLD is not tradable');
+  });
+
+  it('is read-only for an admin', () => {
+    isAdmin = true;
+    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+    tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
+    create();
+
+    component.onSubmit();
+
+    expect(tradingService.placeOrder).not.toHaveBeenCalled();
+    expect(submitButton().disabled).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain('Admin view: read-only');
+  });
+});
+
+function accepted(orderId: string): PlaceOrderResponse {
+  return { orderId, status: 'ACCEPTED', price: null, message: 'Order accepted for processing.' };
+}

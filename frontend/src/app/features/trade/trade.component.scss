@@ -1,0 +1,220 @@
+:host {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.breadcrumb {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+
+  a {
+    color: var(--link);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.quote-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 10px;
+  background: var(--primary-soft);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+h1 {
+  font-size: clamp(1.4rem, 2.5vw, 1.75rem);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.quote {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+}
+
+.price {
+  font-size: clamp(1.8rem, 3.5vw, 2.3rem);
+  font-weight: 700;
+}
+
+.change {
+  font-weight: 600;
+}
+
+.as-of {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.skeleton-price {
+  width: 9rem;
+  height: 2.2rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  margin: 0;
+  padding: 0;
+
+  div {
+    padding: 0.9rem 1.1rem;
+    border-right: 1px solid var(--border);
+
+    &:last-child {
+      border-right: none;
+    }
+  }
+
+  dt {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0.3rem 0 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.trade-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22rem;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.main-column {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.ticket {
+  padding: 0;
+}
+
+.indicators {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  &[aria-pressed='false'] .line-key {
+    opacity: 0.35;
+  }
+}
+
+.line-key {
+  width: 0.9rem;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.indicator-0 .line-key {
+  background: var(--accent);
+}
+
+.indicator-1 .line-key {
+  background: var(--sidebar);
+}
+
+:host-context([data-theme='dark']) .indicator-1 .line-key {
+  background: #cad2c5;
+}
+
+// Same height as the chart's readout and plot, so loading does not shift the page
+.chart-skeleton {
+  display: block;
+  width: 100%;
+  height: calc(340px + 2.1rem);
+  border-radius: 8px;
+}
+
+.position-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 1rem;
+  margin: 0.6rem 0 0;
+
+  dt {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0.25rem 0 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.return-percent {
+  margin-left: 0.3rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1100px) {
+  .trade-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .quote {
+    justify-items: start;
+  }
+}

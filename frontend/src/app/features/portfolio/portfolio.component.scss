@@ -1,0 +1,144 @@
+:host {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  p.muted {
+    margin: 0.6rem 0 0;
+    font-size: 0.9rem;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.account-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-left: 4px solid var(--primary);
+}
+
+.account-number {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.4rem 0 0;
+  font-size: 1.35rem;
+}
+
+.holder {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.cash {
+  display: grid;
+  justify-items: end;
+  gap: 0.2rem;
+
+  .muted {
+    font-size: 0.75rem;
+  }
+
+  strong {
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+
+  .available {
+    font-size: 0.72rem;
+    color: var(--positive);
+  }
+}
+
+.deposit-toggle {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+}
+
+.deposit-form {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+
+  label {
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+}
+
+.deposit-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+
+  .input {
+    width: 10rem;
+  }
+}
+
+.form-error,
+.form-success {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.form-error {
+  color: var(--negative);
+}
+
+.form-success {
+  color: var(--positive);
+}
+
+.skeleton-title {
+  width: 12rem;
+  height: 1.5rem;
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.column {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .portfolio-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .cash {
+    justify-items: start;
+  }
+}
