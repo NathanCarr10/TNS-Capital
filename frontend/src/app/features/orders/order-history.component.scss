@@ -1,0 +1,48 @@
+:host {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  p.muted {
+    margin: 0.4rem 0 0;
+  }
+}
+
+.count {
+  font-size: 0.8rem;
+}
+
+.history-table {
+  min-width: 720px;
+}
+
+.symbol {
+  font-weight: 700;
+}
+
+.side-buy,
+.side-sell {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.side-buy {
+  color: var(--positive);
+}
+
+.side-sell {
+  color: var(--negative);
+}

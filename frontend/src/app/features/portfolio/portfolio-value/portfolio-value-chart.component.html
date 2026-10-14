@@ -1,0 +1,87 @@
+<div class="card-header">
+  <div>
+    <p class="eyebrow">Overview</p>
+    <h2 class="card-title">Portfolio value</h2>
+  </div>
+  <div class="segmented" role="group" aria-label="Range">
+    @for (option of ranges; track option.label) {
+      <button
+        type="button"
+        [class.selected]="range() === option"
+        [attr.aria-pressed]="range() === option"
+        (click)="selectRange(option)"
+      >
+        {{ option.label }}
+      </button>
+    }
+  </div>
+</div>
+
+@if (loading() || positions() === null) {
+  <span class="skeleton skeleton-value" aria-hidden="true"></span>
+  <div class="skeleton chart-skeleton" aria-hidden="true"></div>
+} @else if (positions()!.length === 0) {
+  <p class="note">No holdings yet. The value chart appears once an order fills.</p>
+} @else if (failed() || series().length < 2) {
+  <p class="note">Price history for your holdings is unavailable right now.</p>
+} @else {
+  @let shown = active()?.point ?? latest()!;
+  <div class="headline num" aria-live="polite">
+    <strong>{{ shown.value | currency:'USD':'symbol':'1.2-2' }}</strong>
+    @if (active()) {
+      <span class="muted">{{ shown.time | date:(intraday() ? 'MMM d, HH:mm' : 'MMM d, y') }}</span>
+    } @else if (change()) {
+      @let move = change()!;
+      <span [class]="move.amount >= 0 ? 'pnl-up' : 'pnl-down'">
+        {{ move.amount >= 0 ? '+' : '' }}{{ move.amount | currency:'USD':'symbol':'1.2-2' }}
+        @if (move.percent != null) {
+          ({{ move.amount >= 0 ? '+' : '' }}{{ move.percent | number:'1.2-2' }}%)
+        }
+      </span>
+    }
+  </div>
+
+  <div class="chart-frame" [style.height.px]="height">
+    @if (layout(); as chart) {
+      <svg
+        class="chart"
+        [attr.width]="width()"
+        [attr.height]="height"
+        role="img"
+        tabindex="0"
+        [attr.aria-label]="summary()"
+        (pointermove)="point($event)"
+        (pointerleave)="leave()"
+        (keydown)="step($event)"
+        (blur)="leave()"
+      >
+        <defs>
+          <linearGradient id="portfolio-value-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" class="fill-top" />
+            <stop offset="100%" class="fill-bottom" />
+          </linearGradient>
+        </defs>
+        @for (tick of chart.valueTicks; track tick.value) {
+          <line class="grid" [attr.x1]="chart.plotLeft" [attr.x2]="chart.plotRight" [attr.y1]="tick.y" [attr.y2]="tick.y" />
+          <text class="axis-label" [attr.x]="chart.plotLeft - 8" [attr.y]="tick.y" text-anchor="end" dominant-baseline="middle">
+            {{ tick.label }}
+          </text>
+        }
+        @for (tick of chart.timeTicks; track tick.point.time) {
+          <text class="axis-label" [attr.x]="tick.x" [attr.y]="height - 6" text-anchor="middle">
+            {{ tick.point.time | date:(intraday() ? 'MMM d, HH:mm' : 'MMM d') }}
+          </text>
+        }
+        <path class="area" [attr.d]="chart.area" fill="url(#portfolio-value-fill)" />
+        <path class="line" [attr.d]="chart.line" />
+        @if (active(); as current) {
+          <line class="crosshair" [attr.x1]="current.x" [attr.x2]="current.x" [attr.y1]="chart.plotTop" [attr.y2]="chart.plotBottom" />
+          <circle class="marker" [attr.cx]="current.x" [attr.cy]="current.y" r="5" />
+        } @else {
+          <circle class="marker" [attr.cx]="chart.points.at(-1)!.x" [attr.cy]="chart.points.at(-1)!.y" r="4" />
+        }
+      </svg>
+    }
+  </div>
+  <p class="footnote">Today's holdings and cash valued at each past close; past trades are not replayed.</p>
+}

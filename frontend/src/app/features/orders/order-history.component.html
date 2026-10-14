@@ -1,0 +1,82 @@
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Orders</p>
+    <h1>Order history</h1>
+    @if (account(); as current) {
+      <p class="muted">{{ current.accountNumber }} &middot; {{ current.holderName }}</p>
+    }
+  </div>
+  <a class="btn btn-primary" routerLink="/trade">Place order</a>
+</header>
+
+<section class="card">
+  <div class="card-header">
+    <div class="segmented" role="group" aria-label="Filter by status">
+      @for (option of filters; track option.value) {
+        <button
+          type="button"
+          [class.selected]="filter() === option.value"
+          [attr.aria-pressed]="filter() === option.value"
+          (click)="filter.set(option.value)"
+        >
+          {{ option.label }}
+        </button>
+      }
+    </div>
+    @if (!orderHistoryLoading() && !orderHistoryError()) {
+      <span class="muted count">{{ visibleRows().length }} of {{ orderHistory().length }} orders</span>
+    }
+  </div>
+
+  @if (accountError()) {
+    <p class="note error">{{ accountError() }}</p>
+  } @else if (orderHistoryLoading()) {
+    <p class="note">Loading order history...</p>
+  } @else if (orderHistoryError()) {
+    <p class="note error">{{ orderHistoryError() }}</p>
+  } @else if (orderHistory().length === 0) {
+    <p class="note">No previous orders yet. Your completed and cancelled orders will appear here.</p>
+  } @else if (visibleRows().length === 0) {
+    <p class="note">No orders with this status.</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table history-table">
+        <thead>
+          <tr>
+            <th>Date / time</th>
+            <th>Symbol</th>
+            <th>Side</th>
+            <th class="numeric">Quantity</th>
+            <th class="numeric">Price</th>
+            <th class="numeric">Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of visibleRows(); track row.id) {
+            <tr>
+              <td class="num">{{ row.dateTime | date:'MMM d, y, HH:mm:ss' }}</td>
+              <td><a class="symbol-link symbol" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a></td>
+              <td>
+                <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
+              </td>
+              <td class="numeric">{{ row.quantity | number }}</td>
+              <td class="numeric">{{ row.price | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td class="numeric">{{ row.price * row.quantity | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td>
+                <span
+                  class="badge status-badge"
+                  [class.status-filled]="row.status === 'FILLED'"
+                  [class.status-rejected]="row.status === 'REJECTED'"
+                  [class.status-cancelled]="row.status === 'CANCELLED'"
+                >
+                  {{ row.status === 'NEW' ? 'Open' : row.status }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
