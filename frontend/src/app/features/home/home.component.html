@@ -1,0 +1,20 @@
+<section class="home-page">
+  <header class="home-header">
+    <h1>TNS Capital</h1>
+    <p>Choose how you want to sign in.</p>
+  </header>
+
+  <div class="home-options">
+    <a class="home-option" routerLink="/login">
+      <h2>Trader</h2>
+      <p>Place orders, watch the market and track your portfolio.</p>
+      <span class="home-action">Log in as a trader</span>
+    </a>
+
+    <button type="button" class="home-option" (click)="openAdminDashboard()">
+      <h2>Admin</h2>
+      <p>Analytics on what users have traded, rejections and pipeline health.</p>
+      <span class="home-action">Log in as an admin</span>
+    </button>
+  </div>
+</section>

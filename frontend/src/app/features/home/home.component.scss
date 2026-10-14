@@ -1,0 +1,83 @@
+.home-page {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 2rem;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(18, 96, 141, 0.22), transparent 36%),
+    radial-gradient(circle at 90% 20%, rgba(22, 137, 85, 0.22), transparent 40%),
+    linear-gradient(135deg, #f5f8ff 0%, #eef8f3 100%);
+}
+
+.home-header {
+  text-align: center;
+
+  h1 {
+    margin: 0;
+    font-size: 2.25rem;
+    color: #0c2f4d;
+  }
+
+  p {
+    margin: 0.6rem 0 0;
+    color: #476378;
+  }
+}
+
+.home-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  width: min(760px, 100%);
+}
+
+.home-option {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  padding: 2rem;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  background-color: rgba(255, 255, 255, 0.93);
+  border: 1px solid #d9e3ef;
+  border-radius: 1rem;
+  box-shadow: 0 18px 45px rgba(11, 44, 79, 0.15);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 50px rgba(11, 44, 79, 0.22);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(26, 110, 166, 0.5);
+    outline-offset: 2px;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #0c2f4d;
+  }
+
+  p {
+    margin: 0;
+    color: #476378;
+    line-height: 1.5;
+  }
+}
+
+.home-action {
+  margin-top: 0.8rem;
+  justify-self: start;
+  padding: 0.7rem 1.1rem;
+  border-radius: 0.7rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(95deg, #115b8c 0%, #1f7a58 100%);
+}
