@@ -155,5 +155,5 @@ relative path. Linking to `http://localhost:8501` only worked when the browser r
 host with that port open: through a forwarded or remote address it gave "page not found", and a
 browser in the end-to-end tests could not reach it either. The same pattern carries over to the
 sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. The
-Streamlit **Trading dashboard** button is the relative `/dashboard` for the same reason. Port 8501
+Streamlit **Trading dashboard** button is the relative `/portfolio` for the same reason. Port 8501
 stays published for direct access (`http://localhost:8501/analytics/`).

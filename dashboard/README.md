@@ -100,7 +100,7 @@ streamlit run app.py         # reads DB_USER and DB_PASSWORD from the repo's .en
 | `DB_USER`, `DB_PASSWORD` | from `.env` |
 | `DASHBOARD_AUTH_URL` | `http://localhost:4000` (compose: `http://auth-service:4000`) |
 | `JWT_SECRET` | from `.env`; must be the auth service's secret |
-| `DASHBOARD_TRADING_URL` | `/dashboard`: the Angular trading app, on the same origin when opened through it |
+| `DASHBOARD_TRADING_URL` | `/portfolio`: the Angular trading app, on the same origin when opened through it |
 
 The auth service has to be running to sign in: `docker compose up -d auth-service`.
 

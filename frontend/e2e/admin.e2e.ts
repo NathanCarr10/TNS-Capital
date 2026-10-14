@@ -14,9 +14,9 @@ async function signInToAnalytics(page: Page): Promise<void> {
 }
 
 test.describe('Admin', () => {
-  test('the Admin card opens the analytics dashboard, where an admin signs in', async ({ page }) => {
+  test("the home page's admin link opens the analytics dashboard, where an admin signs in", async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: /Admin/ }).click();
+    await page.getByRole('link', { name: 'Open admin analytics' }).click();
 
     // Served on the app's own origin, so this works wherever the app is opened from
     await expect(page).toHaveURL(/\/analytics\/$/);
@@ -24,7 +24,7 @@ test.describe('Admin', () => {
 
     await expect(page.getByText(`Signed in as ${ADMIN.username}`)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Key insights')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Trading dashboard' })).toHaveAttribute('href', '/dashboard');
+    await expect(page.getByRole('link', { name: 'Trading dashboard' })).toHaveAttribute('href', '/portfolio');
   });
 
   test('an admin logging in to the trading app is taken to the analytics dashboard', async ({ page }) => {
