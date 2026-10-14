@@ -71,6 +71,48 @@
   }
 }
 
+.deposit-toggle {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+}
+
+.deposit-form {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+
+  label {
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+}
+
+.deposit-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+
+  .input {
+    width: 10rem;
+  }
+}
+
+.form-error,
+.form-success {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.form-error {
+  color: var(--negative);
+}
+
+.form-success {
+  color: var(--positive);
+}
+
 .skeleton-title {
   width: 12rem;
   height: 1.5rem;

@@ -1,6 +1,6 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable, tap } from 'rxjs';
 
 import { CurrentUser } from '../../api/auth';
 import { AccountResponse, InstrumentResponse, PositionResponse } from '../../api/trading';
@@ -58,6 +58,14 @@ export class AccountStore {
       next: (account) => this.showAccount(account),
       error: (error) => this.failAccount(error, 'Failed to load account details.'),
     });
+  }
+
+  deposit(amount: number): Observable<AccountResponse> {
+    const account = this.account();
+    if (!account) {
+      return EMPTY;
+    }
+    return this.tradingService.deposit(account.id, { amount }).pipe(tap((updated) => this.account.set(updated)));
   }
 
   /** Reloads cash and positions after a fill, without the loading state so the panels do not flicker. */
