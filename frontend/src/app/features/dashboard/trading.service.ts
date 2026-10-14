@@ -5,6 +5,7 @@ import { AuthenticationService, CurrentUser } from '../../api/auth';
 import {
   AccountControllerService,
   AccountResponse,
+  CashTransactionRequest,
   InstrumentControllerService,
   InstrumentResponse,
   OrderControllerService,
@@ -33,6 +34,10 @@ export class TradingService {
 
   getAccount(accountId: number): Observable<AccountResponse> {
     return this.accountApi.getAccount(accountId);
+  }
+
+  deposit(accountId: number, request: CashTransactionRequest): Observable<AccountResponse> {
+    return this.accountApi.deposit(accountId, request);
   }
 
   getInstruments(): Observable<InstrumentResponse[]> {
