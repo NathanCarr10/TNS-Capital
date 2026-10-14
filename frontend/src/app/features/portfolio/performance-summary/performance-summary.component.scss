@@ -1,0 +1,84 @@
+:host {
+  display: block;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+
+  .card {
+    container-type: inline-size;
+    min-height: 7rem;
+  }
+
+  dt {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+
+    app-icon {
+      width: 0.85rem;
+      height: 0.85rem;
+      opacity: 0.7;
+    }
+  }
+
+  dt[title] {
+    cursor: help;
+  }
+
+  dd {
+    margin: 0.6rem 0 0;
+    // Shrinks in narrow tiles so a six-figure amount still fits
+    font-size: clamp(1.15rem, 11cqi, 1.45rem);
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+
+    &.pnl-up {
+      color: var(--text);
+    }
+
+    &.pnl-down {
+      color: var(--negative);
+    }
+  }
+}
+
+.kpi-sub {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.pnl-up .kpi-sub {
+  color: var(--positive);
+}
+
+.pnl-down .kpi-sub {
+  color: var(--negative);
+}
+
+.skeleton-value {
+  width: 7rem;
+  height: 1.4rem;
+}
+
+@media (max-width: 1100px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,72 @@
+@if (error()) {
+  <p class="note error">{{ error() }}</p>
+} @else if (loading()) {
+  <dl class="kpi-grid" aria-hidden="true">
+    @for (tile of [1, 2, 3, 4]; track tile) {
+      <div class="card">
+        <dt><span class="skeleton"></span></dt>
+        <dd><span class="skeleton skeleton-value"></span></dd>
+      </div>
+    }
+  </dl>
+} @else {
+  @if (metrics(); as kpi) {
+    <dl class="kpi-grid">
+      <div class="card">
+        <dt title="Latest value of your priced holdings minus what you paid for them.">
+          Unrealised P&amp;L <app-icon name="info" />
+        </dt>
+        @if (kpi.unrealisedPnl != null) {
+          <dd class="kpi-unrealised" [class]="trend(kpi.unrealisedPnl)">
+            {{ kpi.unrealisedPnl > 0 ? '+' : '' }}{{ kpi.unrealisedPnl | currency:'USD':'symbol':'1.2-2' }}
+            @if (kpi.unrealisedPnlPercent != null) {
+              <span class="kpi-sub">({{ kpi.unrealisedPnlPercent > 0 ? '+' : '' }}{{ kpi.unrealisedPnlPercent | number:'1.2-2' }}%) all time</span>
+            }
+          </dd>
+        } @else {
+          <dd class="kpi-unrealised pnl-flat">&mdash;</dd>
+        }
+      </div>
+      <div class="card">
+        <dt title="Change since the previous close. Positions bought today are measured from the previous close too, not from the purchase price.">
+          Today's P&amp;L <app-icon name="info" />
+        </dt>
+        @if (kpi.todayPnl != null) {
+          <dd class="kpi-today" [class]="trend(kpi.todayPnl)">
+            {{ kpi.todayPnl > 0 ? '+' : '' }}{{ kpi.todayPnl | currency:'USD':'symbol':'1.2-2' }}
+            @if (kpi.todayPnlPercent != null) {
+              <span class="kpi-sub">({{ kpi.todayPnlPercent > 0 ? '+' : '' }}{{ kpi.todayPnlPercent | number:'1.2-2' }}%) today</span>
+            }
+          </dd>
+        } @else {
+          <dd class="kpi-today pnl-flat">&mdash;</dd>
+        }
+      </div>
+      <div class="card">
+        <dt title="Cash plus the latest value of your priced holdings.">Total Equity <app-icon name="info" /></dt>
+        <dd class="kpi-equity">
+          {{ kpi.totalEquity | currency:'USD':'symbol':'1.2-2' }}
+          <span class="kpi-sub">{{ kpi.holdingsValue | currency:'USD':'symbol':'1.0-0' }} in holdings</span>
+        </dd>
+      </div>
+      <div class="card">
+        <dt title="Cash available to trade, and its share of total equity.">Cash <app-icon name="info" /></dt>
+        <dd class="kpi-cash">
+          {{ cashBalance() | currency:'USD':'symbol':'1.2-2' }}
+          <span class="kpi-sub">
+            {{ kpi.investedPercent != null ? (100 - kpi.investedPercent | number:'1.2-2') + '% of equity' : '—' }}
+          </span>
+        </dd>
+      </div>
+    </dl>
+
+    @if (kpi.positionCount === 0) {
+      <p class="note">No open positions yet. P&amp;L appears once an order fills.</p>
+    } @else if (kpi.unpricedCount > 0) {
+      <p class="note">
+        {{ kpi.unpricedCount }} of {{ kpi.positionCount }} {{ kpi.positionCount === 1 ? 'position' : 'positions' }}
+        unpriced and left out of these figures.
+      </p>
+    }
+  }
+}
