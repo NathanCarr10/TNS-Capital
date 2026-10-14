@@ -1,0 +1,43 @@
+:host {
+  display: block;
+}
+
+$header-height: 2.4rem;
+$row-height: 3.4rem;
+$visible-rows: 6;
+
+// Scrolls past $visible-rows holdings so the page stays compact
+.holdings-table-wrap {
+  margin-top: 0.9rem;
+  max-height: calc(#{$header-height} + #{$visible-rows} * #{$row-height});
+  overflow: auto;
+}
+
+.holdings-table {
+  min-width: 480px;
+
+  th {
+    box-sizing: border-box;
+    height: $header-height;
+  }
+
+  td {
+    box-sizing: border-box;
+    height: $row-height;
+  }
+
+  .symbol {
+    font-weight: 700;
+  }
+
+  .value,
+  .return {
+    font-weight: 600;
+  }
+}
+
+.return-percent {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
