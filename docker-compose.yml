@@ -132,6 +132,27 @@ services:
       broker-simulator:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      # The API clients are generated from the specs in contracts/ during the build
+      additional_contexts:
+        contracts: ./contracts
+    mem_limit: 64m
+    ports:
+      - "${FRONTEND_PORT:-4200}:8080"
+    depends_on:
+      app:
+        condition: service_started
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   etl:
     build: ./etl
     mem_limit: 384m
