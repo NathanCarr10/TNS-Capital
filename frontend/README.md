@@ -83,7 +83,7 @@ ng test
 | File | Journeys |
 | --- | --- |
 | `auth.e2e.ts` | The route guard sends a signed-out visitor to login and back; a new trader registers, logs in and sees their account; a wrong password shows an error |
-| `trading.e2e.ts` | A funded trader places a BUY on the trade page that fills (Kafka, broker simulator), then sees it in order history and holdings |
+| `trading.e2e.ts` | A new trader deposits cash on the portfolio page, places a BUY on the trade page that fills (Kafka, broker simulator), then sees it in order history and holdings |
 | `admin.e2e.ts` | The home page's admin link and an admin's login both reach the analytics dashboard, where the admin signs in |
 
 They need the whole stack, so the simplest way to run them is the same script as Jenkins, from the
@@ -102,7 +102,7 @@ npm run e2e                       # E2E_BASE_URL=... for another address; add --
 ```
 
 Each run registers new `e2e…` users. The auth service allows 10 logins a minute per client by
-default (`AUTH_RATE_LIMIT`), and one run uses about 6, so wait a minute between local runs.
+default (`AUTH_RATE_LIMIT`), and one run uses about 5, so wait a minute between local runs.
 The HTML report is in `playwright-report/`, traces of failed tests in `test-results/`
 (`npx playwright show-trace <trace.zip>`).
 

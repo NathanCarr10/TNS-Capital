@@ -1,16 +1,26 @@
 import { expect, test } from '@playwright/test';
 
-import { depositViaApi, newTrader, registerViaApi, submitLogin } from './support';
+import { newTrader, registerViaApi, submitLogin } from './support';
 
 test.describe('Trading', () => {
-  test('a BUY order is filled and shows in order history and holdings', async ({ page, request }) => {
+  test('a new trader deposits cash, and a BUY fills and shows in history and holdings', async ({
+    page,
+    request,
+  }) => {
     const trader = newTrader();
-    const accountId = await registerViaApi(request, trader);
-    await depositViaApi(request, trader, accountId, 10_000);
+    await registerViaApi(request, trader);
 
     await page.goto('/login');
     await submitLogin(page, trader.username, trader.password);
     const account = page.locator('.account-card');
+    await expect(account).toContainText('$0.00');
+
+    // New accounts open with no cash
+    await page.getByRole('button', { name: 'Deposit cash' }).click();
+    const deposit = page.locator('form.deposit-form');
+    await deposit.getByLabel('Amount').fill('10000');
+    await deposit.getByRole('button', { name: 'Confirm deposit' }).click();
+    await expect(deposit.getByRole('status')).toHaveText('Cash deposited successfully.');
     await expect(account).toContainText('$10,000.00');
 
     await page.goto('/trade/AAPL');

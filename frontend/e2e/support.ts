@@ -22,29 +22,6 @@ export async function registerViaApi(request: APIRequestContext, trader: Trader)
   return (await response.json()).accountId;
 }
 
-/**
- * Funds an account through the trading API. New accounts open with a zero balance, so a BUY
- * needs this first; the UI's deposit form was removed in the redesign (#125).
- */
-export async function depositViaApi(
-  request: APIRequestContext,
-  trader: Trader,
-  accountId: number,
-  amount: number
-): Promise<void> {
-  const login = await request.post('/auth/login', {
-    data: { username: trader.username, password: trader.password },
-  });
-  expect(login.ok(), await login.text()).toBeTruthy();
-  const { accessToken } = await login.json();
-
-  const deposit = await request.post(`/api/v1/accounts/${accountId}/deposit`, {
-    data: { amount },
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  expect(deposit.ok(), await deposit.text()).toBeTruthy();
-}
-
 /** Fills and submits the Angular login form (the page must already be on /login). */
 export async function submitLogin(page: Page, username: string, password: string): Promise<void> {
   await page.getByLabel('Username').fill(username);
