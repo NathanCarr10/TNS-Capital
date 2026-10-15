@@ -102,6 +102,30 @@ describe('AuthService', () => {
       expect(error.message).toBe('invalid username or password');
       expect(refreshTokens.create).not.toHaveBeenCalled();
     });
+
+    it('logs a successful login with the username and client IP, never the password (A09-2)', async () => {
+      users.findByUsername.mockResolvedValue(trader);
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+
+      await auth.login('trader', 'password123', '10.0.0.5');
+
+      expect(log).toHaveBeenCalledWith('Login succeeded: username="trader" id=3 ip=10.0.0.5');
+      expect(JSON.stringify(log.mock.calls)).not.toContain('password123');
+      log.mockRestore();
+    });
+
+    it('logs a failed login, quoting the username so it cannot forge log lines', async () => {
+      users.findByUsername.mockResolvedValue(null);
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      await auth.login('evil\nLogin succeeded: username="admin"', 'guess', '10.0.0.6').catch(() => undefined);
+
+      expect(warn).toHaveBeenCalledWith(
+        'Login failed: username="evil\\nLogin succeeded: username=\\"admin\\"" ip=10.0.0.6',
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('guess');
+      warn.mockRestore();
+    });
   });
 
   describe('refresh', () => {
@@ -160,6 +184,22 @@ describe('AuthService', () => {
         errorCode: 'AUTH-401',
         message: 'invalid or expired refresh token',
       });
+    });
+  });
+
+  describe('validate', () => {
+    it('returns the user for the right password', async () => {
+      users.findByUsername.mockResolvedValue(trader);
+
+      expect(await auth.validate('trader', 'password123')).toBe(trader);
+    });
+
+    it('returns null for a wrong password or an unknown user', async () => {
+      users.findByUsername.mockResolvedValue(trader);
+      expect(await auth.validate('trader', 'wrongPassword')).toBeNull();
+
+      users.findByUsername.mockResolvedValue(null);
+      expect(await auth.validate('nobody', 'password123')).toBeNull();
     });
   });
 

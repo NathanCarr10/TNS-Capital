@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.14.0",
+    "generators": {
+      "auth": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../contracts/auth-api.yaml",
+        "output": "src/app/api/auth",
+        "additionalProperties": {
+          "ngVersion": "19.2.0",
+          "providedIn": "root",
+          "supportsES6": true,
+          "stringEnums": false,
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        },
+        "globalProperty": { "apiDocs": false, "modelDocs": false }
+      },
+      "trading": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../contracts/trading-api.json",
+        "output": "src/app/api/trading",
+        "additionalProperties": {
+          "ngVersion": "19.2.0",
+          "providedIn": "root",
+          "supportsES6": true,
+          "stringEnums": false,
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        },
+        "globalProperty": { "apiDocs": false, "modelDocs": false }
+      }
+    }
+  }
+}

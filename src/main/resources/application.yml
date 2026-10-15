@@ -20,6 +20,12 @@ spring:
     show-sql: false
     open-in-view: false
 
+  # Outbound REST calls (the Alpaca market data API) must not hang an order request
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 5s
+
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -31,6 +37,9 @@ spring:
       properties:
         linger.ms: 10
         batch.size: 32768
+        # Fail a send within 5 s when Kafka is unreachable (default 60 s), so
+        # placing an order cannot hang
+        max.block.ms: 5000
     consumer:
       bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       group-id: tns-capital-orders
@@ -44,6 +53,27 @@ trading:
       orders: orders
       trade-events: trade-events
       market-data: market-data
+    # How long placing an order waits for Kafka to acknowledge it
+    send-timeout-ms: 5000
+
+broker:
+  # The Broker Simulator API the Trade Executor sends orders to
+  url: ${BROKER_URL:http://localhost:8085}
+  timeout-ms: 3000
+
+market-data:
+  alpaca:
+    # Without both keys the live price pool is off and orders must include a price
+    key-id: ${ALPACA_API_KEY_ID:}
+    secret-key: ${ALPACA_API_SECRET_KEY:}
+    # iex is the free plan's real-time feed; sip (all US exchanges) needs a paid plan
+    feed: ${ALPACA_FEED:iex}
+    stream-url: wss://stream.data.alpaca.markets/v2/
+    data-url: https://data.alpaca.markets
+    # The free plan streams at most 30 symbols; the rest are priced over REST
+    max-symbols: 30
+    # A pooled price not updated for this long is refreshed over REST before use
+    max-price-age: 60s
 
 dlq:
   auto-resolve:
@@ -55,6 +85,8 @@ dlq:
 jwt:
   # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
   shared-secret: ${JWT_SECRET}
+  # Tokens must carry this iss claim; must match the auth service's JWT_ISSUER
+  issuer: urn:tns-capital:auth-service
 
 mybatis:
   type-handlers-package: com.neueda.leap.config
@@ -82,6 +114,11 @@ springdoc:
     enabled: true
   api-docs:
     path: /v3/api-docs
+    # The Angular client generator's OpenAPI 3.1 support is beta; 3.0 also matches contracts/auth-api.yaml
+    version: openapi_3_0
+  # Without this the spec lists responses as */*, and the generated Angular
+  # clients then read them as Blobs instead of JSON models
+  default-produces-media-type: application/json
 
 # DEBUG for these packages logs every request and Kafka poll; enable it per run
 # when needed, e.g. LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA=DEBUG

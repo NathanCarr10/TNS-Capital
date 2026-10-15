@@ -1,7 +1,9 @@
 package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Order;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,4 +30,14 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
      * @return list of orders for the account; empty list if none found
      */
     List<Order> findByAccountId(Long accountId);
+
+    /**
+     * Finds an order and locks its row until the transaction ends, so the
+     * order consumer and a cancellation cannot both act on the same NEW order.
+     *
+     * @param id the order ID
+     * @return Optional containing the locked order if found, empty otherwise
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Order> findWithLockById(UUID id);
 }

@@ -53,17 +53,35 @@ export class AuthService {
   }
 
   /**
+   * Checks a username and password.
+   *
+   * @returns the user, or null if the username is unknown or the password is
+   *          wrong (callers must not reveal which)
+   */
+  async validate(username: string, password: string): Promise<UserRecord | null> {
+    const user = await this.users.findByUsername(username);
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      return null;
+    }
+    return user;
+  }
+
+  /**
    * Checks the credentials and issues an access token and a refresh token.
    * Each login starts a new session (refresh token family), so a user can be
    * signed in on several devices.
    *
    * Wrong username and wrong password get the same 401, so usernames cannot be probed.
    */
-  async login(username: string, password: string): Promise<LoginResult> {
-    const user = await this.users.findByUsername(username);
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  async login(username: string, password: string, clientIp = 'unknown'): Promise<LoginResult> {
+    const user = await this.validate(username, password);
+    // Every attempt is logged, so password guessing leaves a trace (OWASP A09-2). Never the
+    // password or tokens; the username is quoted so a crafted one cannot forge log lines.
+    if (!user) {
+      this.logger.warn(`Login failed: username=${JSON.stringify(username)} ip=${clientIp}`);
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
+    this.logger.log(`Login succeeded: username=${JSON.stringify(user.username)} id=${user.id} ip=${clientIp}`);
 
     const refreshToken = this.tokens.generateRefreshToken();
     await this.refreshTokens.create(user.id, refreshToken.hash, randomUUID(), REFRESH_TOKEN_TTL_SECONDS);

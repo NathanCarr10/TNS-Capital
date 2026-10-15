@@ -1,0 +1,5 @@
+# Coverage for the Python suites (etl/, dashboard/). Paths in coverage.xml are
+# relative to the repo root, where Jenkins runs pytest, so SonarQube can match them.
+[run]
+relative_files = True
+omit = */tests/*

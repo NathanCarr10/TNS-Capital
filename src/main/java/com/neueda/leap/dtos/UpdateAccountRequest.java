@@ -1,6 +1,7 @@
 package com.neueda.leap.dtos;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * DTO for partial account updates (PATCH requests).
@@ -8,5 +9,6 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record UpdateAccountRequest(
         @NotBlank(message = "Holder name cannot be blank")
+        @Pattern(regexp = HolderName.PATTERN, message = HolderName.MESSAGE)
         String holderName) {
 }

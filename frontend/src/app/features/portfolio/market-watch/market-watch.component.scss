@@ -1,0 +1,83 @@
+:host {
+  display: block;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.last-updated {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+$header-height: 2.4rem;
+$row-height: 3.4rem;
+$visible-rows: 10;
+
+// Fixed row heights so the scroll area shows exactly $visible-rows rows
+.market-table-wrap {
+  margin-top: 0.9rem;
+  max-height: calc(#{$header-height} + #{$visible-rows} * #{$row-height});
+  overflow: auto;
+}
+
+.market-table {
+  min-width: 360px;
+
+  th {
+    box-sizing: border-box;
+    height: $header-height;
+  }
+
+  td {
+    box-sizing: border-box;
+    height: $row-height;
+  }
+
+  td.change-up,
+  td.change-down {
+    font-weight: 600;
+  }
+}
+
+.symbol {
+  display: block;
+  font-weight: 700;
+}
+
+.symbol-link {
+  display: block;
+}
+
+.held-tag {
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+
+.instrument-name {
+  display: block;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.price {
+  font-weight: 600;
+}
+
+.skeleton-wide {
+  width: 7rem;
+}

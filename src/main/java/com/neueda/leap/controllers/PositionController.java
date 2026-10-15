@@ -1,75 +1,44 @@
 package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.PositionResponse;
-import com.neueda.leap.exceptions.AccountNotFoundException;
-import com.neueda.leap.model.Position;
-import com.neueda.leap.repositories.AccountRepository;
-import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.security.AccountAccessGuard;
-import com.neueda.leap.utils.InputNormalizer;
+import com.neueda.leap.services.AccountService;
+import com.neueda.leap.services.PositionValuationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.constraints.NotNull;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
+/**
+ * Holdings, valued at the instruments' latest prices. GET /{accountId} returns
+ * the same list as GET /api/v1/accounts/{accountId}/positions.
+ */
 @RestController
 @RequestMapping("/api/v1/positions")
 public class PositionController {
-        private final PositionRepository positionRepository;
-        private final AccountRepository accountRepository;
+        private final AccountService accountService;
         private final AccountAccessGuard accessGuard;
+        private final PositionValuationService valuationService;
 
-        public PositionController(PositionRepository positionRepository,
-                        AccountRepository accountRepository, AccountAccessGuard accessGuard) {
-                this.positionRepository = positionRepository;
-                this.accountRepository = accountRepository;
+        public PositionController(AccountService accountService, AccountAccessGuard accessGuard,
+                        PositionValuationService valuationService) {
+                this.accountService = accountService;
                 this.accessGuard = accessGuard;
+                this.valuationService = valuationService;
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
-                // Validates account exists before querying positions; prevents exposing
-                // holdings for non-existent accounts
+                // Ownership first, so a non-owner cannot probe which account IDs exist
                 accessGuard.checkAccess(accountId);
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-
-                List<Position> positions = positionRepository.findByAccountId(accountId);
-                List<PositionResponse> responses = positions.stream()
-                                .map(this::mapToResponse)
-                                .collect(Collectors.toList());
-                return ResponseEntity.ok(responses);
+                return ResponseEntity.ok(valuationService.toResponses(accountService.getPositions(accountId)));
         }
 
-        @SuppressWarnings("null")
         @GetMapping("/{accountId}/{symbol}")
         public ResponseEntity<PositionResponse> getPosition(@PathVariable @NotNull Long accountId,
                         @PathVariable String symbol) {
-                // Validates account exists first; normalizes symbol for consistent lookup
                 accessGuard.checkAccess(accountId);
-                accountRepository.findById(accountId)
-                                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountId));
-
-                String normalizedSymbol = InputNormalizer.normalize(symbol);
-                Position position = positionRepository.findByAccountIdAndSymbol(accountId, normalizedSymbol)
-                                .orElseThrow(() -> new com.neueda.leap.exceptions.PositionNotFoundException(
-                                                "Position not found: " + accountId + " " + symbol));
-                return ResponseEntity.ok(mapToResponse(position));
-        }
-
-        private PositionResponse mapToResponse(Position position) {
-                // Maps Position entity to response; uses zero marketValue since real-time
-                // pricing unavailable in this context
-                return new PositionResponse(
-                                position.getAccountId(),
-                                position.getSymbol(),
-                                position.getQuantity(),
-                                position.getAverageCost(),
-                                BigDecimal.ZERO // Market value requires current instrument price; placeholder for now
-                );
+                return ResponseEntity.ok(valuationService.toResponse(accountService.getPosition(accountId, symbol)));
         }
 }

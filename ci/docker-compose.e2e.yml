@@ -1,0 +1,21 @@
+# Overrides for ci/e2e-tests.sh: a throwaway stack that publishes no host ports, so it can
+# run next to a developer's own stack (or another build) on the same machine. The browser
+# reaches the app over the Compose network instead.
+services:
+  zookeeper:
+    ports: !reset []
+  kafka:
+    ports: !reset []
+    environment:
+      # The image's default 1 GB heap is more than a test run needs
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx256m
+  postgres:
+    ports: !reset []
+  auth-service:
+    ports: !reset []
+  app:
+    ports: !reset []
+  frontend:
+    ports: !reset []
+  dashboard:
+    ports: !reset []

@@ -7,7 +7,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -17,6 +22,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 /**
  * Security configuration for the API with JWT validation and security headers.
@@ -39,14 +45,40 @@ public class SecurityConfig {
         @Value("${jwt.shared-secret}")
         private String sharedSecret;
 
+        // Must match the auth service's JWT_ISSUER
+        @Value("${jwt.issuer:urn:tns-capital:auth-service}")
+        private String issuer;
+
         /**
          * Configures JWT decoder using the shared secret.
-         * This validates incoming JWT tokens signed with HMAC-SHA256.
+         * This validates incoming JWT tokens signed with HMAC-SHA256, and checks
+         * that they were issued by the auth service (iss) as access tokens
+         * (typ = "access"), on top of the default expiry checks.
          */
         @Bean
         public JwtDecoder jwtDecoder() {
+                checkSecret(sharedSecret);
                 SecretKeySpec secretKey = new SecretKeySpec(sharedSecret.getBytes(), "HmacSHA256");
-                return NimbusJwtDecoder.withSecretKey(secretKey).build();
+                NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey).build();
+                decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                                JwtValidators.createDefaultWithIssuer(issuer),
+                                new JwtClaimValidator<String>("typ", "access"::equals)));
+                return decoder;
+        }
+
+        /**
+         * Refuses to start with a key anyone could know: too short for HS256, or the
+         * placeholder from .env.example, with which anyone could forge an ADMIN token
+         * (OWASP A02-5). The auth service applies the same rule.
+         */
+        static void checkSecret(String secret) {
+                if (secret == null || secret.length() < 32) {
+                        throw new IllegalStateException("JWT_SECRET must be at least 32 bytes (256 bits) for HS256");
+                }
+                if (secret.toLowerCase(java.util.Locale.ROOT).matches("^change-?me.*")) {
+                        throw new IllegalStateException(
+                                        "JWT_SECRET is the placeholder from .env.example. Generate one with: openssl rand -hex 32");
+                }
         }
 
         /**
@@ -76,13 +108,18 @@ public class SecurityConfig {
                                 HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
 
                 http
-                                // Disable CSRF for stateless APIs (no session state)
+                                // Clients authenticate with a bearer token in the Authorization header,
+                                // never a cookie, and no session is created. A browser cannot attach
+                                // the token to a forged cross-site request, so CSRF protection adds
+                                // nothing here
                                 .csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                                 // Add security headers to all responses
                                 .headers(headers -> headers
                                                 // Prevent clickjacking attacks
-                                                .frameOptions(frameOptions -> frameOptions.deny())
+                                                .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                                                 // Prevent MIME type sniffing - use correct method for Spring 6.x
                                                 .contentTypeOptions(contentTypeOptions -> {
                                                 })
@@ -120,6 +157,6 @@ public class SecurityConfig {
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.getWriter().write(String.format(
                                 "{\"errorCode\":\"%s\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
-                                errorCode, message, LocalDateTime.now()));
+                                errorCode, message, LocalDateTime.now(ZoneOffset.UTC)));
         }
 }

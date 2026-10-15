@@ -8,6 +8,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = "tns-capital-skeleton"
+        // The auth service image, built only so Trivy can scan its OS packages and Node runtime
+        AUTH_IMAGE_NAME = "tns-capital-auth"
 
         // Security scanners run as pinned Docker images so the Jenkins agent only
         // needs the Docker CLI — nothing to install, and every build uses the same
@@ -15,6 +17,9 @@ pipeline {
         GITLEAKS_IMAGE = "zricethezav/gitleaks:v8.21.2"
         SEMGREP_IMAGE  = "semgrep/semgrep:1.99.0"
         TRIVY_IMAGE    = "aquasec/trivy:0.57.1"
+
+        // Node and a matching headless Chromium for the Angular tests, pinned the same way
+        PLAYWRIGHT_IMAGE = "mcr.microsoft.com/playwright:v1.64.0-noble"
 
         // All scan reports land here and are archived with the build.
         REPORTS_DIR = "security-reports"
@@ -103,17 +108,25 @@ pipeline {
             }
         }
 
+        stage('Broker Simulator Tests') {
+            steps {
+                // The Broker Simulator is its own Maven project
+                dir('broker-simulator') {
+                    sh 'mvn -B test'
+                }
+            }
+            post {
+                always {
+                    junit 'broker-simulator/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
         stage('ETL Tests') {
             steps {
-                // The Python ETL pipeline's pytest suite, run in the same Python image
-                // the ETL container uses. The Postgres integration tests skip here
-                // (they need ETL_IT=1 and a database).
-                sh '''
-                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/etl python:3.12-slim \
-                        sh -c "pip install --quiet --user -r requirements-dev.txt && \
-                               python -m pytest -p no:cacheprovider --junitxml=test-results.xml"
-                '''
+                // The ETL pytest suite, including its Postgres integration tests against a
+                // throwaway database, with coverage for SonarQube (see ci/python-tests.sh)
+                sh 'ci/python-tests.sh etl'
             }
             post {
                 always {
@@ -122,16 +135,67 @@ pipeline {
             }
         }
 
+        stage('Dashboard Tests') {
+            steps {
+                // The dashboard's tests: insights, the Streamlit page (headless) and data.py
+                // against a throwaway database, with coverage for SonarQube
+                sh 'ci/python-tests.sh dashboard'
+            }
+            post {
+                always {
+                    junit 'dashboard/test-results.xml'
+                }
+            }
+        }
+
         stage('Auth Service Tests') {
             steps {
                 // The NestJS auth service's Jest suite, in the same Node image its
-                // container uses. The Postgres tests in users.service.spec.ts skip
+                // container uses (Node 22 LTS). The Postgres tests in users.service.spec.ts skip
                 // here (they need DB_HOST and a database).
                 sh '''
                     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:20-alpine \
+                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:22-alpine \
                         sh -c "npm ci --no-audit --no-fund && npm test"
                 '''
+            }
+        }
+
+        stage('Frontend Tests') {
+            steps {
+                // The Angular unit tests in headless Chromium, then a production build so a
+                // compile error fails here. npm's pretest/prebuild hooks first generate the API
+                // clients in src/app/api from contracts/, which needs Java: the JDK21 tool is
+                // mounted read-only, since the Playwright image ships Chromium but no JDK.
+                sh '''
+                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+                        -v "$JAVA_HOME":/opt/jdk:ro -e JAVA_HOME=/opt/jdk \
+                        -v "$WORKSPACE":/repo -w /repo/frontend $PLAYWRIGHT_IMAGE \
+                        bash -c 'export PATH="$JAVA_HOME/bin:$PATH" \
+                            CHROME_BIN="$(ls -d /ms-playwright/chromium-*/chrome-linux64/chrome | head -n 1)" \
+                            && npm ci --no-audit --no-fund \
+                            && npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox \
+                            && npm run build'
+                '''
+            }
+        }
+
+        stage('E2E Tests') {
+            steps {
+                // The Playwright journeys (frontend/e2e) in a real browser against the whole
+                // stack: register, log in, place a BUY that fills, the route guard, and an admin
+                // reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
+                // project with no host ports, runs the suite in PLAYWRIGHT_IMAGE on its network,
+                // then removes it, so it can't clash with a stack already running on this host.
+                sh 'ci/e2e-tests.sh'
+            }
+            post {
+                always {
+                    junit testResults: 'frontend/e2e-results.xml', allowEmptyResults: true
+                    // Report, traces and screenshots of failed tests, and the services' logs on failure
+                    archiveArtifacts artifacts: 'frontend/playwright-report/**, frontend/test-results/**, frontend/e2e-stack.log',
+                        allowEmptyArchive: true
+                }
             }
         }
 
@@ -157,7 +221,9 @@ pipeline {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     // Trivy checks libraries against known CVEs in two places:
                     //   fs    — the manifests in the repo (pom.xml, auth-service package-lock.json)
-                    //   image — the built image: every jar inside the fat jar plus OS packages
+                    //   image — the built images: every jar inside the API's fat jar plus OS
+                    //           packages, and the auth service's Node runtime, node_modules and
+                    //           OS packages (OWASP A06-4)
                     // Reports include HIGH and CRITICAL. The gate fails only on CRITICAL
                     // findings that have a fixed version available (--ignore-unfixed).
                     // Accepted risks go in .trivyignore. The trivy-cache volume keeps the
@@ -165,6 +231,7 @@ pipeline {
                     // The databases come from GitHub's registry: Trivy's default mirror
                     // (mirror.gcr.io) served a broken copy, failing the stage on every branch.
                     sh '''
+                        docker build -q -t "$AUTH_IMAGE_NAME:$BUILD_NUMBER" shared/auth-service > /dev/null
                         TRIVY="docker run --rm -v trivy-cache:/root/.cache/ \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -v $WORKSPACE:/src:ro -w /src $TRIVY_IMAGE"
@@ -176,12 +243,16 @@ pipeline {
                             --format sarif /src > "$REPORTS_DIR/trivy-fs.sarif"
                         $TRIVY image $COMMON --severity HIGH,CRITICAL \
                             --format sarif "$IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-image.sarif"
+                        $TRIVY image $COMMON --severity HIGH,CRITICAL \
+                            --format sarif "$AUTH_IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-auth-image.sarif"
 
                         GATE_FAILED=0
                         $TRIVY fs $COMMON --severity CRITICAL --ignore-unfixed \
                             --exit-code 1 /src || GATE_FAILED=1
                         $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
                             --exit-code 1 "$IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
+                        $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
+                            --exit-code 1 "$AUTH_IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
                         exit $GATE_FAILED
                     '''
                 }
@@ -197,7 +268,7 @@ pipeline {
 
             // Each build tags a ~300MB image that nothing uses afterwards; remove it so
             // the agent's disk doesn't fill up.
-            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} || true"
+            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} || true"
         }
         failure {
             // Notifies the team on build failure. Replace with your notification

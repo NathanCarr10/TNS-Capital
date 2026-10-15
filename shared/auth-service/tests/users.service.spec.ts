@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 import { hashPassword } from '../src/users/password-hasher';
 import { RefreshTokensService } from '../src/users/refresh-tokens.service';
-import { accountNumberFor, UsernameTakenError, UsersService } from '../src/users/users.service';
+import { accountNumberFor, AdminNameTakenError, UsernameTakenError, UsersService } from '../src/users/users.service';
 
 const describeWithDb = process.env.DB_HOST ? describe : describe.skip;
 
@@ -127,10 +127,25 @@ describeWithDb('UsersService.findByUsername', () => {
     expect(await service.findById(-1)).toBeNull();
   });
 
-  it('finds the seeded admin with ADMIN and no account', async () => {
-    const admin = await service.findByUsername('admin');
+});
 
-    expect(admin).toMatchObject({ username: 'admin', roles: ['ADMIN'], accountId: null });
+describeWithDb('UsersService.saveAdmin', () => {
+  it('creates an ADMIN with no trading account, then sets a new password on it', async () => {
+    const username = uniqueName('admintest');
+
+    await service.saveAdmin(username, passwordHash);
+    expect(await service.findByUsername(username)).toMatchObject({ username, roles: ['ADMIN'], accountId: null, passwordHash });
+
+    await service.saveAdmin(username, 'new-hash');
+    expect((await service.findByUsername(username))?.passwordHash).toBe('new-hash');
+  });
+
+  it("never promotes a trader's username", async () => {
+    const username = uniqueName('notadmin');
+    await service.create(username, passwordHash);
+
+    await expect(service.saveAdmin(username, 'new-hash')).rejects.toThrow(AdminNameTakenError);
+    expect(await service.findByUsername(username)).toMatchObject({ roles: ['USER'], passwordHash });
   });
 });
 

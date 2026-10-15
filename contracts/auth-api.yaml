@@ -78,6 +78,8 @@ paths:
                 errorCode: USR-409
                 message: User already exists
                 timestamp: '2026-10-08T15:00:00.000Z'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -100,10 +102,10 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
             examples:
               admin:
-                summary: Login as the seeded admin
+                summary: Login as the admin (password from ADMIN_PASSWORD)
                 value:
                   username: admin
-                  password: adminPassword
+                  password: your-admin-password
       responses:
         '200':
           description: Authentication successful
@@ -123,6 +125,8 @@ paths:
                 errorCode: AUTH-401
                 message: invalid username or password
                 timestamp: '2026-10-08T15:00:00.000Z'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -163,6 +167,8 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '401':
           $ref: '#/components/responses/InvalidRefreshToken'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
 
   /auth/logout:
     post:
@@ -263,6 +269,8 @@ components:
           type: string
           minLength: 3
           maxLength: 100
+          pattern: '^[A-Za-z0-9._-]+$'
+          description: Letters, digits, dot, underscore and hyphen only
           example: trader1
         password:
           type: string
@@ -274,7 +282,10 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-          description: Name on the trading account; defaults to the username
+          pattern: "^[\\p{L}\\p{M}\\p{N} .,'-]+$"
+          description: >-
+            Name on the trading account; defaults to the username. Letters in
+            any language, digits, spaces and . , ' - only
           example: Ada Lovelace
       additionalProperties: false
 
@@ -317,7 +328,7 @@ components:
           minLength: 1
           maxLength: 256
           description: Password of the user
-          example: adminPassword
+          example: your-admin-password
       additionalProperties: false
 
     TokenPair:
@@ -417,7 +428,7 @@ components:
       properties:
         errorCode:
           type: string
-          description: VAL-422, AUTH-401, AUTH-403, USR-409, NOT-404, REQ-405 or SYS-500
+          description: VAL-422, AUTH-401, AUTH-403, AUTH-429, USR-409, NOT-404, REQ-405 or SYS-500
           example: AUTH-401
         message:
           type: string
@@ -484,6 +495,23 @@ components:
             message: invalid or expired refresh token
             timestamp: '2026-10-08T15:00:00.000Z'
 
+    TooManyRequests:
+      description: |
+        More than AUTH_RATE_LIMIT (default 10) register, login or refresh requests
+        from this client IP in a minute. Retry-After gives the seconds to wait.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PlatformErrorResponse'
+          example:
+            errorCode: AUTH-429
+            message: Too many attempts. Try again later
+            timestamp: '2026-10-08T15:00:00.000Z'
+
     InternalServerError:
       description: Unexpected error; details are logged server-side, never returned
       content:
@@ -507,7 +535,7 @@ x-internal-notes: |
      - Postgres `users` table (db/tables/08_users.sql); passwords as Argon2id hashes
      - Refresh tokens as SHA-256 hashes in `refresh_tokens` (db/tables/09_refresh_tokens.sql),
        one row per token, grouped into sessions by family_id
-     - Seeded admin: admin/adminPassword -> Roles: [ADMIN]
+     - Admin: created at startup from ADMIN_PASSWORD (never seeded) -> Roles: [ADMIN]
 
   3. **Token Validation (here and in the Main API):**
      - Algorithm: HS256 (HMAC-SHA256), pinned; never read from the token
@@ -517,7 +545,7 @@ x-internal-notes: |
      - See: src/main/java/com/neueda/leap/security/SecurityConfig.java
 
   4. **Deployment:**
-     - Docker image: node:20-alpine
+     - Docker image: node:22-alpine (npm removed from the runtime stage)
      - Dockerfile: shared/auth-service/Dockerfile
      - Port: 4000 (configurable via PORT env var)
      - User runs as unprivileged 'node' user

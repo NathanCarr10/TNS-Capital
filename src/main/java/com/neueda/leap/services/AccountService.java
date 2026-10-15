@@ -8,6 +8,8 @@ import com.neueda.leap.model.Position;
 import com.neueda.leap.exceptions.AccountAlreadyExistsException;
 import com.neueda.leap.exceptions.AccountDeletionConflictException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
+import com.neueda.leap.utils.InputNormalizer;
+import com.neueda.leap.exceptions.PositionNotFoundException;
 import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.repositories.AccountRepository;
@@ -69,6 +71,26 @@ public class AccountService {
     }
 
     /**
+     * Suspends an active account or reactivates a suspended one. Suspended
+     * accounts cannot trade or move cash until they are active again.
+     *
+     * @throws IllegalArgumentException  if the status is not ACTIVE or SUSPENDED
+     *                                   (closing goes through closeAccount)
+     * @throws AccountNotActiveException if the account is closed
+     */
+    public Account updateStatus(Long accountId, AccountStatus status) {
+        if (status != AccountStatus.ACTIVE && status != AccountStatus.SUSPENDED) {
+            throw new IllegalArgumentException("Status must be ACTIVE or SUSPENDED: " + status);
+        }
+        Account account = getAccountById(accountId);
+        if (account.getStatus() == AccountStatus.CLOSED) {
+            throw new AccountNotActiveException("Account is closed: " + accountId);
+        }
+        account.setStatus(status);
+        return accountRepository.save(account);
+    }
+
+    /**
      * Closes an account. The row is kept with status CLOSED rather than deleted,
      * so its orders, positions and history stay valid for the audit trail;
      * closed accounts cannot trade (business rule 2).
@@ -92,6 +114,19 @@ public class AccountService {
     public List<Position> getPositions(Long accountId) {
         getAccountById(accountId);
         return positionRepository.findByAccountId(accountId);
+    }
+
+    /**
+     * One holding of an account.
+     *
+     * @throws AccountNotFoundException  if the account does not exist
+     * @throws PositionNotFoundException if the account holds none of the symbol
+     */
+    @Transactional(readOnly = true)
+    public Position getPosition(Long accountId, String symbol) {
+        getAccountById(accountId);
+        return positionRepository.findByAccountIdAndSymbol(accountId, InputNormalizer.normalize(symbol))
+                .orElseThrow(() -> new PositionNotFoundException("Position not found: " + accountId + " " + symbol));
     }
 
     @Transactional(readOnly = true)

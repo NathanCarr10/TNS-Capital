@@ -58,3 +58,21 @@ CREATE TABLE IF NOT EXISTS analytics.etl_rejected_orders (
     reject_reason   VARCHAR(100) NOT NULL,
     rejected_at     TIMESTAMP    NOT NULL DEFAULT NOW()
 );
+
+-- Daily price bars per instrument from the Alpaca market data API, for the
+-- dashboard. Prices are as traded (not adjusted), so they match the order
+-- prices in fact_trades; a stock split shows as a jump. symbol matches
+-- dim_instrument.symbol, but there is no foreign key so prices can load even
+-- if the trades part of a run fails.
+CREATE TABLE IF NOT EXISTS analytics.fact_daily_prices (
+    symbol       VARCHAR(20)   NOT NULL,
+    trade_date   DATE          NOT NULL,   -- US trading day (New York time)
+    open         NUMERIC(18,4) NOT NULL,
+    high         NUMERIC(18,4) NOT NULL,
+    low          NUMERIC(18,4) NOT NULL,
+    close        NUMERIC(18,4) NOT NULL,
+    volume       BIGINT        NOT NULL,
+    trade_count  BIGINT,
+    vwap         NUMERIC(18,4),            -- volume-weighted average price
+    PRIMARY KEY (symbol, trade_date)
+);

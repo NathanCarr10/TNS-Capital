@@ -4,14 +4,15 @@ import com.neueda.leap.dtos.AccountResponse;
 import com.neueda.leap.dtos.CashTransactionRequest;
 import com.neueda.leap.dtos.CreateAccountRequest;
 import com.neueda.leap.dtos.UpdateAccountRequest;
+import com.neueda.leap.dtos.UpdateAccountStatusRequest;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.PositionResponse;
 
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
-import com.neueda.leap.model.Position;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.AccountService;
+import com.neueda.leap.services.PositionValuationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,7 +23,6 @@ import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Account endpoints. Admins can use every account; other users only the
@@ -33,10 +33,13 @@ import java.util.stream.Collectors;
 public class AccountController {
         private final AccountService accountService;
         private final AccountAccessGuard accessGuard;
+        private final PositionValuationService valuationService;
 
-        public AccountController(AccountService accountService, AccountAccessGuard accessGuard) {
+        public AccountController(AccountService accountService, AccountAccessGuard accessGuard,
+                        PositionValuationService valuationService) {
                 this.accountService = accountService;
                 this.accessGuard = accessGuard;
+                this.valuationService = valuationService;
         }
 
         /**
@@ -52,7 +55,7 @@ public class AccountController {
                                                 .orElse(List.of());
                 List<AccountResponse> responses = accounts.stream()
                                 .map(this::mapToResponse)
-                                .collect(Collectors.toList());
+                                .toList();
                 return ResponseEntity.ok(responses);
         }
 
@@ -74,6 +77,16 @@ public class AccountController {
                 accessGuard.checkAccess(accountId);
                 Account updatedAccount = accountService.updateHolderName(accountId, request.holderName());
                 return ResponseEntity.ok(mapToResponse(updatedAccount));
+        }
+
+        /**
+         * Suspends or reactivates an account; an admin task.
+         */
+        @PutMapping("/{accountId}/status")
+        @PreAuthorize("hasRole('ADMIN')")
+        public ResponseEntity<AccountResponse> updateAccountStatus(@PathVariable @NotNull Long accountId,
+                        @Valid @RequestBody UpdateAccountStatusRequest request) {
+                return ResponseEntity.ok(mapToResponse(accountService.updateStatus(accountId, request.status())));
         }
 
         /**
@@ -122,10 +135,7 @@ public class AccountController {
         @GetMapping("/{accountId}/positions")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 accessGuard.checkAccess(accountId);
-                List<PositionResponse> responses = accountService.getPositions(accountId).stream()
-                                .map(this::mapPositionToResponse)
-                                .collect(Collectors.toList());
-                return ResponseEntity.ok(responses);
+                return ResponseEntity.ok(valuationService.toResponses(accountService.getPositions(accountId)));
         }
 
         @GetMapping("/{accountId}/orders")
@@ -133,7 +143,7 @@ public class AccountController {
                 accessGuard.checkAccess(accountId);
                 List<OrderResponse> responses = accountService.getOrders(accountId).stream()
                                 .map(this::mapOrderToResponse)
-                                .collect(Collectors.toList());
+                                .toList();
                 return ResponseEntity.ok(responses);
         }
 
@@ -144,19 +154,8 @@ public class AccountController {
                                 account.getHolderName(),
                                 account.getCashBalance(),
                                 account.getStatus(),
+                                account.getOpenedOn(),
                                 account.getLastUpdated()
-                );
-        }
-
-        private PositionResponse mapPositionToResponse(Position position) {
-                // Maps Position entity to response; uses zero marketValue since real-time
-                // pricing unavailable in this context
-                return new PositionResponse(
-                                position.getAccountId(),
-                                position.getSymbol(),
-                                position.getQuantity(),
-                                position.getAverageCost(),
-                                BigDecimal.ZERO // Market value requires current instrument price; placeholder for now
                 );
         }
 

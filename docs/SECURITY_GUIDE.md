@@ -276,7 +276,7 @@ All password handling is tested in `shared/auth-service/tests/`:
 
 **auth-api.spec.ts** — HTTP tests (no database): claims, roles, refresh, logout, guards, error envelope, validation.
 
-**Run tests** (Node 20+; set `DB_*` to reach a Postgres with the `db/` schema):
+**Run tests** (Node 22+; set `DB_*` to reach a Postgres with the `db/` schema):
 ```bash
 cd shared/auth-service
 npm install
@@ -393,6 +393,25 @@ X-Content-Type-Options: nosniff
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 Content-Type: application/json
 ```
+
+### Frontend (nginx) and XSS
+
+The Angular app is served by nginx, which adds a `Content-Security-Policy` and
+`X-Content-Type-Options: nosniff` to every response. They're configured in
+[security-headers.conf](../frontend/security-headers.conf). The CSP only runs scripts from the app's own
+origin, so injected markup cannot run code even if it reaches the page. `ng serve`
+does not send these headers, so check CSP changes against the `frontend` container.
+
+Rules for keeping the frontend XSS-safe:
+
+- Render user and API data with `{{ }}` or property bindings, which Angular escapes.
+- Never use `[innerHTML]`, `ElementRef.nativeElement.innerHTML`, `document.write` or
+  `DomSanitizer.bypassSecurityTrust*` on data a user can influence.
+- Free-text fields use allow-list patterns on both sides. The frontend has
+  [input-patterns.ts](../frontend/src/app/core/validation/input-patterns.ts), and the backends use
+  `RegisterDto` and `HolderName.java`. When adding a field, add it to both.
+- If the built `index.html` gains a new inline script or handler, the CSP will block it.
+  Add its hash to `script-src` rather than `'unsafe-inline'`.
 
 ---
 

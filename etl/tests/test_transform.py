@@ -8,6 +8,7 @@ from transform import (
     build_dim_account,
     build_dim_date,
     build_dim_instrument,
+    build_fact_daily_prices,
     build_fact_trades,
     clean_orders,
     find_rejected_orders,
@@ -167,3 +168,53 @@ def test_transform_gives_the_same_result_every_time(accounts, instruments, order
     second = transform(accounts, instruments, orders.iloc[::-1])  # same data, different order
     for name in first:
         assert first[name].equals(second[name])
+
+
+
+# ---------- build_fact_daily_prices ----------
+
+def bar(t="2026-10-09T04:00:00Z", o=226.0, h=228.5, low=225.1, c=227.3, v=48000000, n=610000, vw=227.0123456):
+    return {"t": t, "o": o, "h": h, "l": low, "c": c, "v": v, "n": n, "vw": vw}
+
+
+def test_bars_become_one_row_per_symbol_and_day():
+    prices = build_fact_daily_prices({"MSFT": [bar(c=431.05)], "AAPL": [bar(), bar(t="2026-10-10T04:00:00Z")]})
+
+    assert list(prices["symbol"]) == ["AAPL", "AAPL", "MSFT"]
+    first = prices.iloc[0]
+    assert first["trade_date"] == date(2026, 10, 9)
+    assert (first["open"], first["high"], first["low"], first["close"]) == (226.0, 228.5, 225.1, 227.3)
+    assert first["volume"] == 48000000
+    assert first["vwap"] == 227.0123  # rounded to 4 places
+
+
+def test_trade_date_is_the_new_york_day():
+    # Midnight in New York is 05:00 UTC in winter; still the same trading day
+    prices = build_fact_daily_prices({"AAPL": [bar(t="2026-12-01T05:00:00Z")]})
+    assert prices.iloc[0]["trade_date"] == date(2026, 12, 1)
+
+
+@pytest.mark.parametrize("broken", [
+    bar(t="not a date"),
+    bar(c=None),
+    bar(o=0),
+    bar(h=1.0, low=2.0),  # high below low
+    bar(v=-1),
+])
+def test_invalid_bars_are_removed(broken):
+    prices = build_fact_daily_prices({"AAPL": [bar(t="2026-10-08T04:00:00Z"), broken]})
+    assert list(prices["trade_date"]) == [date(2026, 10, 8)]
+
+
+def test_a_day_downloaded_twice_is_kept_once():
+    prices = build_fact_daily_prices({"AAPL": [bar(c=227.0), bar(c=227.3)]})
+    assert list(prices["close"]) == [227.3]
+
+
+def test_missing_trade_count_is_allowed():
+    prices = build_fact_daily_prices({"AAPL": [bar(n=None)]})
+    assert prices["trade_count"].isna().all()
+
+
+def test_no_bars_gives_an_empty_table():
+    assert build_fact_daily_prices({}).empty

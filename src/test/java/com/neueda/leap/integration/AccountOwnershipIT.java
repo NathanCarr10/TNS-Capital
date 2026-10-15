@@ -158,6 +158,21 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("can read instruments but not create or change them")
+        void cannotWriteInstruments() throws Exception {
+            String body = "{\"symbol\":\"NEWCO\",\"name\":\"New Co\",\"assetClass\":\"EQUITY\","
+                    + "\"currency\":\"USD\",\"tradable\":true}";
+
+            mockMvc.perform(get("/api/v1/instruments")).andExpect(status().isOk());
+            mockMvc.perform(post("/api/v1/instruments").contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("AUTH-403"));
+            mockMvc.perform(put("/api/v1/instruments/AAPL").contentType(MediaType.APPLICATION_JSON)
+                    .content(body.replace("NEWCO", "AAPL")))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
         @DisplayName("cannot place an order on another user's account")
         void cannotOrderOnOtherAccount() throws Exception {
             mockMvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON)

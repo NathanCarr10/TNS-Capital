@@ -13,10 +13,9 @@ post {
 body:json {
   {
     "accountId": {{accountId}},
-    "symbol": "ACME",
+    "symbol": "AAPL",
     "side": "BUY",
     "quantity": 10,
-    "price": 100.00,
     "idempotencyKey": "{{$randomUUID}}"
   }
 }
@@ -32,7 +31,9 @@ assert {
 }
 
 docs {
-  side: BUY or SELL. symbol: 1-10 uppercase letters (seeded tradable symbols include ACME).
+  side: BUY or SELL. symbol: 1-10 uppercase letters (seeded tradable symbols include AAPL, MSFT, SPY).
+  price is optional: without it the order is priced at the live market price, returned as "price".
+  Add "price": 100.00 to set it yourself (needed when the API runs without Alpaca keys).
   A fresh idempotencyKey is generated on every send.
   Saves orderId for Get Order / Order History / Cancel Order.
 }

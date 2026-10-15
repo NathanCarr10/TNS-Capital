@@ -1,11 +1,7 @@
 package com.neueda.leap.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.neueda.leap.dtos.DeadLetterMessageDTO;
-import com.neueda.leap.dtos.DLQStatistics;
 import com.neueda.leap.enums.DLQStatus;
-import com.neueda.leap.kafka.events.MessageEnvelope;
-import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.DeadLetterMessage;
 import com.neueda.leap.repositories.DeadLetterMessageRepository;
 import com.neueda.leap.time.Clock;
@@ -18,7 +14,6 @@ import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
@@ -30,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests admin DLQ management endpoints with security
  */
 @DisplayName("Dead Letter Queue Controller Integration Tests")
-public class DeadLetterQueueControllerIT extends AbstractIntegrationTest {
+class DeadLetterQueueControllerIT extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

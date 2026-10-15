@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -146,6 +147,7 @@ public class KafkaConfig {
      * - group-id: tns-capital-orders
      * - auto-offset-reset: earliest (process from beginning if no offset exists)
      * - max.poll.records: 50 (batch size)
+     * - auto-commit off: offsets are committed per record after processing
      * 
      * @return ConsumerFactory configured for OrderEvent consumption
      */
@@ -158,8 +160,10 @@ public class KafkaConfig {
         configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 50);
-        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
-        configProps.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
+        // The listener container commits each offset once the record is processed
+        // (or routed to the DLQ); auto-commit could commit a message that was
+        // never processed if the app stopped in between
+        configProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
         return new DefaultKafkaConsumerFactory<>(configProps);
     }
@@ -184,6 +188,7 @@ public class KafkaConfig {
         factory.setConsumerFactory(consumerFactory());
         factory.setCommonErrorHandler(kafkaErrorHandler());
         factory.setConcurrency(3); // 3 concurrent threads for parallel processing
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
 
         log.info("Kafka listener container factory configured with exponential backoff error handler");
         return factory;
@@ -210,7 +215,7 @@ public class KafkaConfig {
         // The BackOff must be explicit: DefaultErrorHandler defaults to
         // FixedBackOff(0, 9), i.e. 10 delivery attempts per failed record.
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-                (consumerRecord, exception) -> handleRecovery(consumerRecord, exception),
+                this::handleRecovery,
                 new FixedBackOff(0L, 0L));
 
         log.info(

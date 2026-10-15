@@ -14,19 +14,22 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 /**
  * Global exception handler that provides secure, consistent error responses.
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
  *   ACC-409, INS-409, ORD-404, POS-404, AUTH-403, NOT-404, REQ-405,
- *   REQ-415 and SYS-500 extend the catalog for cases it does not list
+ *   REQ-415, PRC-503, SYS-500 and SYS-503 extend the catalog for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
  * - Follows security best practices to prevent information leakage
@@ -115,6 +118,14 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "Only NEW orders can be cancelled");
     }
 
+    // Kafka did not take the order; it is stored as REJECTED and will not execute
+    @ExceptionHandler(OrderPublishException.class)
+    public ResponseEntity<ErrorResponse> handleOrderPublish(OrderPublishException e) {
+        logger.error("Order could not be queued: {}", e.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "SYS-503",
+                "The order could not be queued and was not executed. Try again later with a new idempotency key");
+    }
+
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException e) {
         logger.warn("Order not found: {}", e.getMessage());
@@ -127,10 +138,39 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, "POS-404", "The requested position could not be found");
     }
 
+    @ExceptionHandler(PriceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handlePriceUnavailable(PriceUnavailableException e) {
+        logger.warn("Price unavailable: {}", e.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "PRC-503",
+                "No live price is available for this instrument; include a price in the order");
+    }
+
+    @ExceptionHandler(MarketDataUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleMarketDataUnavailable(MarketDataUnavailableException e) {
+        logger.warn("Market data unavailable: {}", e.getMessage());
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "MKT-503",
+                "Market data is unavailable right now; try again later");
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationError(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .reduce((m1, m2) -> m1 + "; " + m2)
+                .orElse("Validation failed");
+
+        logger.warn("Validation error: {}", message);
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, message);
+    }
+
+    // Thrown instead of MethodArgumentNotValidException when the handler also has
+    // constraints on other parameters, e.g. @PathVariable @NotNull plus @Valid @RequestBody
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidationError(HandlerMethodValidationException e) {
+        String message = e.getAllErrors().stream()
+                .map(error -> error instanceof FieldError fieldError
+                        ? fieldError.getField() + ": " + fieldError.getDefaultMessage()
+                        : error.getDefaultMessage())
                 .reduce((m1, m2) -> m1 + "; " + m2)
                 .orElse("Validation failed");
 
@@ -200,6 +240,6 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ErrorResponse> error(HttpStatus status, String errorCode, String message) {
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(errorCode, message, LocalDateTime.now()));
+                .body(new ErrorResponse(errorCode, message, LocalDateTime.now(ZoneOffset.UTC)));
     }
 }

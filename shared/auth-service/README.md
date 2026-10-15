@@ -7,7 +7,7 @@ an access token's *signature*; it never sees a password.
 ## Run it
 
 Normally it runs from the project's `docker-compose.yml` (service `auth-service`, port 4000).
-To run it on its own (Node 20+):
+To run it on its own (Node 22+):
 
 ```bash
 cd shared/auth-service
@@ -31,6 +31,7 @@ yours with `db/recreate_db.sh`.
 | `POST /auth/logout` | no (takes the refresh token) | end the session the refresh token belongs to |
 | `GET /auth/me` | **yes** | the user the access token belongs to |
 | `GET /health` | no | liveness |
+| `GET /docs` | no | live Swagger UI, generated from the controllers (JSON at `/docs-json`) |
 
 ## Register
 
@@ -71,9 +72,12 @@ curl -X POST http://localhost:4000/auth/login \
 | User | Password | roles | Can access |
 |---|---|---|---|
 | any registered user | their own | `["USER"]` | only their own account |
-| `admin` (seeded) | `adminPassword` | `["ADMIN"]` | every account, the DLQ, opening accounts |
+| `admin` | `ADMIN_PASSWORD` | `["ADMIN"]` | every account, the DLQ, opening accounts |
 
-Roles come from `users.role`. The trading API resolves which account a USER owns from the
+Roles come from `users.role`. Nothing is seeded with a known password: when the service
+starts, `src/users/admin-bootstrap.ts` creates the `admin` user (`ADMIN_USERNAME` to rename it)
+from `ADMIN_PASSWORD`, or sets that password on it if it differs, so changing the variable and
+restarting rotates it. It never promotes a trader who registered the same username. The trading API resolves which account a USER owns from the
 token's `sub`.
 
 ## Refresh and log out
@@ -141,17 +145,25 @@ the next refresh.
 | Layer | File | Job |
 |---|---|---|
 | HTTP | `auth/auth.controller.ts` | routes and DTO validation only |
-| Service | `auth/auth.service.ts` | `register`, `login`, `refresh` (rotation, reuse detection), `logout`, `me` |
+| Service | `auth/auth.service.ts` | `register`, `login`, `refresh` (rotation, reuse detection), `logout`, `validate` (credential check), `me` |
 | Service | `auth/token.service.ts` | `issue`, `verify`, `decode`; generating and hashing refresh tokens |
 | Data | `users/users.service.ts` | SQL on the `users` and `accounts` tables; never sees a plaintext password |
 | Data | `users/refresh-tokens.service.ts` | SQL on the `refresh_tokens` table; rotation runs in one transaction |
 | Access control | `auth/guards/`, `auth/decorators/` | `JwtAuthGuard`, `RolesGuard`, `@Public()`, `@Roles()`, `@CurrentUser()` |
+| Logging | `common/request-logging.interceptor.ts` | one line per request (method, path, status, time, user); never bodies, so no passwords or tokens |
 
 ## Errors
 
 Every error is `{ "errorCode", "message", "timestamp" }`: `VAL-422` (400, invalid body or
 unknown property), `AUTH-401` (wrong credentials, with no hint which part was wrong),
-`AUTH-403` (missing role), `USR-409` (username taken), `NOT-404`, `REQ-405` and `SYS-500`.
+`AUTH-403` (missing role), `AUTH-429` (rate limit), `USR-409` (username taken), `NOT-404`,
+`REQ-405` and `SYS-500`.
+
+## Rate limiting
+
+`POST /auth/register`, `/auth/login` and `/auth/refresh` allow `AUTH_RATE_LIMIT` requests
+(default 10) per client IP per minute, to slow down password guessing. Above that the
+service answers `429 AUTH-429` with a `Retry-After` header. The other routes are not limited.
 
 ## Tests
 
@@ -161,6 +173,8 @@ npm test
 
 - `tests/auth-api.spec.ts`: the HTTP endpoints end to end, including the guards, with the
   database replaced by a fake
+- `tests/request-logging.interceptor.spec.ts`: the request log line and its level
+- `tests/rate-limit.spec.ts`: the 429 on the credential endpoints, with a limit of 3
 - `tests/auth.service.spec.ts`, `tests/token.service.spec.ts`, `tests/guards.spec.ts`: unit tests
 - `tests/password-hasher.spec.ts`: Argon2id hashing
 - `tests/users.service.spec.ts`: the SQL of `UsersService` and `RefreshTokensService` against a real Postgres with the `db/` schema. Skipped

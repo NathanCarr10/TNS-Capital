@@ -1,0 +1,22 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+// Overrides the global .input width so Analytics stays on the same row
+select {
+  width: 16rem;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+button {
+  flex-shrink: 0;
+}

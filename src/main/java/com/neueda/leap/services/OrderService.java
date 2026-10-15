@@ -17,6 +17,19 @@ import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.NonRetryableOrderException;
+import com.neueda.leap.exceptions.DuplicateOrderException;
+import com.neueda.leap.exceptions.OrderPublishException;
+import com.neueda.leap.exceptions.AccountNotActiveException;
+import com.neueda.leap.exceptions.BrokerUnavailableException;
+import com.neueda.leap.exceptions.SettlementException;
+import com.neueda.leap.execution.BrokerSimulatorClient;
+import com.neueda.leap.kafka.events.ExecutionEvent;
+import com.neueda.leap.model.Execution;
+import com.neueda.leap.repositories.ExecutionRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import com.neueda.leap.exceptions.PriceUnavailableException;
+import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.OrderRepository;
@@ -45,6 +58,8 @@ import lombok.extern.slf4j.Slf4j;
 @Transactional
 @Slf4j
 public class OrderService {
+    private static final String ACCOUNT_NOT_FOUND = "Account not found: ";
+
     private final AccountRepository accountRepository;
     private final InstrumentRepository instrumentRepository;
     private final OrderRepository orderRepository;
@@ -56,6 +71,9 @@ public class OrderService {
     private final OrderEventPublisher orderEventPublisher;
     private final TradeEventPublisher tradeEventPublisher;
     private final TransactionTemplate transactionTemplate;
+    private final BrokerSimulatorClient brokerClient;
+    private final ExecutionRepository executionRepository;
+    private final PriceProvider priceProvider;
 
     public OrderService(
             AccountRepository accountRepository,
@@ -68,7 +86,10 @@ public class OrderService {
             Clock clock,
             OrderEventPublisher orderEventPublisher,
             TradeEventPublisher tradeEventPublisher,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            BrokerSimulatorClient brokerClient,
+            ExecutionRepository executionRepository,
+            PriceProvider priceProvider) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
         this.instrumentRepository = Objects.requireNonNull(instrumentRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
@@ -81,72 +102,168 @@ public class OrderService {
         this.tradeEventPublisher = Objects.requireNonNull(tradeEventPublisher);
         this.transactionTemplate = new TransactionTemplate(Objects.requireNonNull(transactionManager));
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    }
-
-    @SuppressWarnings("null")
-    public Order placeOrder(PlaceOrderRequest request) {
-        Objects.requireNonNull(request);
-
-        validator.validate(request);
-        String symbol = InputNormalizer.normalize(request.symbol());
-        Order order = new Order(request.accountId(), symbol, request.side(), request.quantity(),
-                request.price(), request.idempotencyKey(), clock);
-
-        // Track previous status for lifecycle events
-        OrderStatus previousStatus = null;
-        String rejectionReason = null;
-
-        try {
-            // Retrieve account with null-safety
-            Account account = accountRepository.findById(request.accountId())
-                    .orElseThrow(() -> new AccountNotFoundException("Account not found: " + request.accountId()));
-
-            // Retrieve strategy with null-safety
-            OrderExecutionStrategy strategy = strategies.get(request.side());
-            if (strategy == null) {
-                throw new IllegalStateException("No strategy registered for order side: " + request.side());
-            }
-
-            strategy.execute(account, request, symbol);
-            previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.FILLED);
-        } catch (InsufficientFundsException | InsufficientHoldingsException ex) {
-            previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.REJECTED);
-            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
-            rejectionReason = ex.getMessage();
-            throw ex;
-        } catch (Exception ex) {
-            previousStatus = order.getStatus();
-            order.setStatus(OrderStatus.REJECTED);
-            order.setStatusReason(DeadLetterService.buildFailureReason(ex));
-            rejectionReason = ex.getMessage();
-            throw new IllegalStateException("Unexpected error during order execution", ex);
-        } finally {
-            orderRepository.save(order);
-
-            // Publish lifecycle event to Kafka for all status changes
-            tradeEventPublisher.publish(order, previousStatus, rejectionReason);
-        }
-
-        // Publish order event to Kafka (when order is placed)
-        orderEventPublisher.publish(order);
-
-        return order;
+        this.brokerClient = Objects.requireNonNull(brokerClient);
+        this.executionRepository = Objects.requireNonNull(executionRepository);
+        this.priceProvider = Objects.requireNonNull(priceProvider);
     }
 
     /**
-     * Processes an order event from Kafka asynchronously.
+     * Stores an order as NEW before it is published for execution, so it can be
+     * looked up and cancelled while it waits.
      * 
-     * Called by OrderMessageListener when an order event is received from the Kafka
-     * topic. Validates and executes the order, creating a new Order entity if it
-     * doesn't already exist (based on order ID).
+     * The order keeps the client's idempotency key. Reusing a key is rejected
+     * with DuplicateOrderException (ORD-409); two requests racing with the same
+     * key are caught by the unique constraint on flush (also ORD-409).
      * 
-     * TRANSACTION BOUNDARIES: Execution runs in its own transaction. If it fails,
-     * that transaction is rolled back (undoing any balance/position changes) and
-     * the order is then persisted as REJECTED in a second, independent
-     * transaction, so the rejection survives the exception that is rethrown to
-     * the Kafka error handler.
+     * Commits before returning, so the order exists before its event is
+     * published and the consumer can always find it.
+     *
+     * @param request the validated order request
+     * @return the stored NEW order
+     * @throws DuplicateOrderException if the idempotency key was already used
+     */
+    public Order acceptOrder(PlaceOrderRequest request) {
+        return storeNewOrder(request);
+    }
+
+    private Order storeNewOrder(PlaceOrderRequest request) {
+        Objects.requireNonNull(request);
+
+        String idempotencyKey = InputNormalizer.normalize(request.idempotencyKey());
+        if (orderRepository.findByIdempotencyKey(idempotencyKey).isPresent()) {
+            throw new DuplicateOrderException("Order already submitted: " + request.idempotencyKey());
+        }
+
+        Order order = new Order(request.accountId(), request.symbol(), request.side(), request.quantity(),
+                request.price(), request.idempotencyKey(), clock);
+        return orderRepository.saveAndFlush(order);
+    }
+
+    /**
+     * Places an order: checks the account and instrument exist, stores the
+     * order as NEW (see {@link #acceptOrder}) and publishes it to the orders
+     * topic for the Trade Executor.
+     * 
+     * Runs without a surrounding transaction so the NEW order is committed
+     * before its event is published; the consumer can then always find it.
+     *
+     * @param request the validated order request
+     * @return the stored NEW order
+     * @throws AccountNotFoundException    if the account does not exist
+     * @throws InstrumentNotFoundException if the instrument does not exist
+     * @throws DuplicateOrderException     if the idempotency key was already used
+     * @throws PriceUnavailableException   if no price was given and no live price is available
+     * @throws OrderPublishException       if Kafka could not take the order; it
+     *                                     is then stored as REJECTED
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Order submitOrder(PlaceOrderRequest request) {
+        Objects.requireNonNull(request);
+
+        // Fail fast: these cannot succeed later, so don't store or queue the order
+        accountRepository.findById(request.accountId())
+                .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + request.accountId()));
+        String symbol = InputNormalizer.normalize(request.symbol());
+        instrumentRepository.findBySymbol(symbol)
+                .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
+
+        // No price given: price the order now at the live market price, so it fills
+        // at the price at the time it was accepted. Only known instruments get here,
+        // so arbitrary symbols are never sent to the market data API.
+        PlaceOrderRequest priced = request.price() != null ? request
+                : new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
+                        livePrice(symbol), request.idempotencyKey());
+
+        Order order = transactionTemplate.execute(status -> storeNewOrder(priced));
+        try {
+            orderEventPublisher.publish(order);
+        } catch (OrderPublishException ex) {
+            // Never left at NEW: an order that could not be queued will not be executed
+            rejectUnqueuedOrder(order, ex);
+            throw ex;
+        }
+        log.info("Order published for async processing: orderId={}, accountId={}, symbol={}",
+                order.getId(), order.getAccountId(), order.getSymbol());
+        return order;
+    }
+
+    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
+    private BigDecimal livePrice(String symbol) {
+        return priceProvider.latestPrice(symbol)
+                .map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP))
+                .orElseThrow(() -> new PriceUnavailableException("No live price for " + symbol));
+    }
+
+    private void rejectUnqueuedOrder(Order order, OrderPublishException cause) {
+        try {
+            Order rejected = transactionTemplate.execute(status -> {
+                Order stored = orderRepository.findWithLockById(order.getId()).orElse(order);
+                if (stored.getStatus() != OrderStatus.NEW) {
+                    return null;
+                }
+                stored.setStatus(OrderStatus.REJECTED);
+                stored.setStatusReason("Could not be queued for execution: " + cause.getMessage());
+                return orderRepository.save(stored);
+            });
+            if (rejected != null) {
+                tradeEventPublisher.publish(rejected, OrderStatus.NEW, rejected.getStatusReason());
+            }
+        } catch (RuntimeException ex) {
+            log.error("Failed to mark unqueued order REJECTED: orderId={}, error={}", order.getId(), ex.getMessage());
+        }
+    }
+
+    /**
+     * @return every order (admin view)
+     */
+    @Transactional(readOnly = true)
+    public List<Order> findAllOrders() {
+        return orderRepository.findAll();
+    }
+
+    /**
+     * @throws OrderNotFoundException if there is no such order
+     */
+    @Transactional(readOnly = true)
+    public Order getOrder(UUID orderId) {
+        Objects.requireNonNull(orderId, "Order ID cannot be null");
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
+    }
+
+    /**
+     * The archived copy of a cancelled order.
+     *
+     * @throws OrderNotFoundException if the order has no history record
+     */
+    @Transactional(readOnly = true)
+    public OrderHistory getOrderHistory(UUID orderId) {
+        return orderHistoryRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new OrderNotFoundException("Order history not found: " + orderId));
+    }
+
+    /**
+     * Archived cancelled orders for an account; works even for closed accounts.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderHistory> getAccountOrderHistory(Long accountId) {
+        return orderHistoryRepository.findByAccountId(accountId);
+    }
+
+    /**
+     * The Trade Executor: works an order event from the orders topic.
+     * 
+     * Called by OrderMessageListener. Validates the order, checks the account
+     * can afford it at its limit price (cash for a BUY, holdings for a SELL)
+     * and sends it to the Broker Simulator. Nothing moves yet: the order stays
+     * NEW until the broker's fill arrives on the executions topic and
+     * {@link #settleExecution} settles it.
+     * 
+     * TRANSACTION BOUNDARIES: The checks run in their own transaction, which is
+     * committed before the order goes to the broker. If a check fails, or the
+     * broker cannot be reached, the order is persisted as REJECTED in a second,
+     * independent transaction, so the rejection survives the exception that is
+     * rethrown to the Kafka error handler.
      * 
      * TRADE EVENTS: Exactly one lifecycle event is published per order, and only
      * after the corresponding status has been committed (FILLED or REJECTED).
@@ -162,7 +279,8 @@ public class OrderService {
      * the DLQ.
      * 
      * @param event the order event to process
-     * @return the processed order
+     * @return the order, NEW and with the broker (or its final status if it
+     *         was already processed or cancelled)
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Order processOrderEvent(OrderEvent event) {
@@ -173,8 +291,8 @@ public class OrderService {
      * Re-processes an order event that was routed to the DLQ.
      * 
      * Unlike {@link #processOrderEvent(OrderEvent)}, an existing REJECTED order is
-     * not treated as already processed: it is executed again and replaced by the
-     * outcome of this attempt. If the replay fails again, the original REJECTED
+     * not treated as already processed: it is checked and sent to the broker
+     * again, replacing the REJECTED record. If the replay fails again, the original REJECTED
      * order is kept and no further trade event is published.
      * 
      * @param event the order event to replay
@@ -188,11 +306,14 @@ public class OrderService {
     private Order processOrderEvent(OrderEvent event, boolean replay) {
         Objects.requireNonNull(event, "Order event cannot be null");
 
-        // Idempotency check: a redelivered message must not execute the order twice
+        // Idempotency check: a redelivered message must not execute the order twice.
+        // A NEW order was stored by acceptOrder and is waiting for this message; any
+        // other status means it was already processed or cancelled.
         Optional<Order> existingOrder = orderRepository.findById(event.orderId());
         boolean replayingRejected = replay && existingOrder.isPresent()
                 && existingOrder.get().getStatus() == OrderStatus.REJECTED;
-        if (existingOrder.isPresent() && !replayingRejected) {
+        boolean waiting = existingOrder.isPresent() && existingOrder.get().getStatus() == OrderStatus.NEW;
+        if (existingOrder.isPresent() && !waiting && !replayingRejected) {
             log.info("Order already exists, skipping re-processing: orderId={}, status={}",
                     event.orderId(), existingOrder.get().getStatus());
             return existingOrder.get();
@@ -206,8 +327,12 @@ public class OrderService {
                     orderRepository.delete(existingOrder.get());
                     orderRepository.flush();
                 }
-                return executeOrderEvent(event);
+                return prepareOrderEvent(event);
             });
+            if (order != null) {
+                // Committed as NEW above, so the fill can always find the order
+                brokerClient.submit(order);
+            }
         } catch (AccountNotFoundException | InstrumentNotFoundException ex) {
             log.warn("Order rejected due to missing resource (non-retryable): orderId={}, error={}, type={}",
                     event.orderId(), ex.getMessage(), ex.getClass().getSimpleName());
@@ -218,6 +343,11 @@ public class OrderService {
                     ex.getMessage());
             recordRejectedOrder(event, ex);
             throw ex;
+        } catch (BrokerUnavailableException ex) {
+            // Retryable: an admin can replay it from the DLQ once the broker is back
+            log.warn("Order rejected, broker unavailable: orderId={}, error={}", event.orderId(), ex.getMessage());
+            recordRejectedOrder(event, ex);
+            throw ex;
         } catch (RuntimeException ex) {
             log.error("Unexpected error processing order event: orderId={}, error={}", event.orderId(),
                     ex.getMessage(), ex);
@@ -225,18 +355,36 @@ public class OrderService {
             throw ex;
         }
 
-        log.info("Order FILLED: orderId={}, accountId={}", event.orderId(), event.accountId());
-        tradeEventPublisher.publish(order, OrderStatus.NEW, null);
+        if (order == null) {
+            log.info("Order is no longer NEW, not sending it to the broker: orderId={}", event.orderId());
+            return orderRepository.findById(event.orderId()).orElse(null);
+        }
+
+        log.info("Order with the broker, awaiting its fill: orderId={}, accountId={}", event.orderId(),
+                event.accountId());
         return order;
     }
 
     /**
-     * Validates and executes the order. Must run inside a transaction so that
-     * account and position changes are rolled back if execution fails.
+     * Validates the order and checks the account can afford it; changes no
+     * cash or positions. Must run inside a transaction.
+     * 
+     * Locks the stored NEW order first, so a cancellation cannot slip in
+     * between the status check and sending the order to the broker.
+     * 
+     * @return the NEW order, saved, or null if the stored order is no longer
+     *         NEW (cancelled while it waited)
      */
-    private Order executeOrderEvent(OrderEvent event) {
+    private Order prepareOrderEvent(OrderEvent event) {
+        Optional<Order> stored = orderRepository.findWithLockById(event.orderId());
+        if (stored.isPresent() && stored.get().getStatus() != OrderStatus.NEW) {
+            return null;
+        }
+
         String symbol = InputNormalizer.normalize(event.symbol());
 
+        // The client's idempotency key was checked by acceptOrder and is already on
+        // the stored order, so the validator's duplicate check runs on the order ID
         PlaceOrderRequest request = new PlaceOrderRequest(
                 event.accountId(),
                 event.symbol(),
@@ -250,39 +398,128 @@ public class OrderService {
         // DEFENSIVE VALIDATION: account or instrument may have been deleted between
         // REST validation and async processing
         Account account = accountRepository.findById(event.accountId())
-                .orElseThrow(() -> new AccountNotFoundException("Account not found: " + event.accountId()));
+                .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + event.accountId()));
         instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
-        OrderExecutionStrategy strategy = strategies.get(event.side());
-        if (strategy == null) {
-            throw new IllegalStateException("No strategy registered for order side: " + event.side());
+        checkAffordable(account, request, symbol);
+
+        // Messages published before orders were stored as NEW (and DLQ replays,
+        // which removed the REJECTED record) have no stored order yet
+        return orderRepository.save(stored.orElseGet(() -> newOrderFromEvent(event)));
+    }
+
+    /**
+     * Rejects an order the account cannot afford at its limit price. Checked
+     * again at settlement, at the fill price, since other orders may have used
+     * the cash or holdings in the meantime.
+     */
+    private void checkAffordable(Account account, PlaceOrderRequest request, String symbol) {
+        if (request.side() == OrderSide.BUY) {
+            BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
+            if (account.getCashBalance().compareTo(cost) < 0) {
+                throw new InsufficientFundsException("Insufficient funds for buy order");
+            }
+        } else {
+            Position position = positionRepository.findByAccountIdAndSymbol(request.accountId(), symbol)
+                    .orElseThrow(() -> new InsufficientHoldingsException("No position for symbol: " + symbol));
+            if (position.getQuantity() < request.quantity()) {
+                throw new InsufficientHoldingsException("Insufficient holdings for symbol: " + symbol);
+            }
+        }
+    }
+
+    /**
+     * Settles a fill from the Broker Simulator (executions topic): moves the
+     * cash and position at the fill price, records the execution and marks the
+     * order FILLED, all in one transaction, then publishes the FILLED event.
+     * 
+     * A fill for an order that is no longer NEW is ignored: it was cancelled
+     * while the broker worked it, or this fill is a redelivery. If the account
+     * can no longer afford the order (another order used the cash or holdings
+     * first) or is no longer active, nothing moves, the order is stored as
+     * REJECTED and a SettlementException is thrown for the DLQ.
+     *
+     * @return the FILLED order, or null if the fill was ignored
+     * @throws SettlementException if the order was rejected at settlement
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public Order settleExecution(ExecutionEvent fill) {
+        Objects.requireNonNull(fill, "Fill cannot be null");
+        Order filled;
+        try {
+            filled = transactionTemplate.execute(status -> settle(fill));
+        } catch (AccountNotFoundException | AccountNotActiveException | InsufficientFundsException
+                | InsufficientHoldingsException ex) {
+            log.warn("Order rejected at settlement: orderId={}, error={}", fill.orderId(), ex.getMessage());
+            OrderEvent event = orderRepository.findById(fill.orderId()).map(this::eventFromOrder).orElse(null);
+            if (event == null) {
+                throw ex;
+            }
+            recordRejectedOrder(event, ex);
+            throw new SettlementException(event, ex);
         }
 
-        Order order = newOrderFromEvent(event);
-        strategy.execute(account, request, symbol);
+        if (filled == null) {
+            log.info("Fill ignored, order is not NEW: orderId={}", fill.orderId());
+            return null;
+        }
+        log.info("Order FILLED: orderId={}, quantity={}, price={}", filled.getId(), fill.quantity(), fill.price());
+        tradeEventPublisher.publish(filled, OrderStatus.NEW, null);
+        return filled;
+    }
+
+    private Order settle(ExecutionEvent fill) {
+        Order order = orderRepository.findWithLockById(fill.orderId()).orElse(null);
+        if (order == null || order.getStatus() != OrderStatus.NEW) {
+            return null;
+        }
+
+        Account account = accountRepository.findById(order.getAccountId())
+                .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + order.getAccountId()));
+        if (!account.isActive()) {
+            throw new AccountNotActiveException("Account not active: " + order.getAccountId());
+        }
+        OrderExecutionStrategy strategy = strategies.get(order.getSide());
+        if (strategy == null) {
+            throw new IllegalStateException("No strategy registered for order side: " + order.getSide());
+        }
+
+        // The strategies re-check funds or holdings, at the fill price this time
+        PlaceOrderRequest atFillPrice = new PlaceOrderRequest(order.getAccountId(), order.getSymbol(),
+                order.getSide(), fill.quantity(), fill.price(), order.getIdempotencyKey());
+        strategy.execute(account, atFillPrice, order.getSymbol());
+
         order.setStatus(OrderStatus.FILLED);
         orderRepository.save(order);
+        executionRepository.save(new Execution(fill.executionId(), order.getId(), fill.quantity(), fill.price(),
+                fill.venue(), fill.executedOn()));
         return order;
+    }
+
+    private OrderEvent eventFromOrder(Order order) {
+        return new OrderEvent(order.getId(), order.getAccountId(), order.getSymbol(), order.getSide(),
+                order.getQuantity(), order.getPrice(), order.getCreatedOn(), order.getIdempotencyKey());
     }
 
     /**
      * Persists the order as REJECTED in its own transaction and publishes the
      * REJECTED trade event once it is committed.
      * 
-     * Does nothing if the order is already stored (e.g. a failed DLQ replay of an
-     * order that was already rejected), so each order produces at most one
-     * REJECTED event. Failures here are logged and swallowed so the original
+     * Updates the stored NEW order. Does nothing if the order already has a
+     * final status (e.g. a failed DLQ replay of an order that was already
+     * rejected), so each order produces at most one REJECTED event. Failures here are logged and swallowed so the original
      * exception still reaches the Kafka error handler.
      */
     private void recordRejectedOrder(OrderEvent event, RuntimeException cause) {
         String reason = cause.getMessage();
         try {
             Order rejectedOrder = transactionTemplate.execute(status -> {
-                if (orderRepository.existsById(event.orderId())) {
+                Optional<Order> stored = orderRepository.findWithLockById(event.orderId());
+                if (stored.isPresent() && stored.get().getStatus() != OrderStatus.NEW) {
                     return null;
                 }
-                Order order = newOrderFromEvent(event);
+                Order order = stored.orElseGet(() -> newOrderFromEvent(event));
                 order.setStatus(OrderStatus.REJECTED);
                 order.setStatusReason(DeadLetterService.buildFailureReason(cause));
                 orderRepository.save(order);
@@ -302,13 +539,15 @@ public class OrderService {
     }
 
     private Order newOrderFromEvent(OrderEvent event) {
+        // Older messages carry no idempotency key; the order ID is unique too
+        String idempotencyKey = event.idempotencyKey() != null ? event.idempotencyKey() : event.orderId().toString();
         Order order = new Order(
                 event.accountId(),
                 event.symbol(),
                 event.side(),
                 event.quantity(),
                 event.price(),
-                event.orderId().toString(),
+                idempotencyKey,
                 clock);
         order.setId(event.orderId());
         return order;
@@ -351,8 +590,8 @@ public class OrderService {
     public Order cancelOrder(UUID orderId) {
         Objects.requireNonNull(orderId, "Order ID cannot be null");
 
-        // Retrieve order
-        Order order = orderRepository.findById(orderId)
+        // Locked so the order consumer cannot fill it while it is being cancelled
+        Order order = orderRepository.findWithLockById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException("Order not found: " + orderId));
 
         // Validate cancellation is allowed (only NEW orders can be cancelled)

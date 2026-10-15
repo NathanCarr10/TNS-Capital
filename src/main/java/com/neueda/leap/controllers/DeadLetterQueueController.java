@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * REST API controller for Dead-Letter Queue (DLQ) management.
@@ -78,7 +77,7 @@ public class DeadLetterQueueController {
 
             List<DeadLetterMessageDTO> dtos = messages.stream()
                     .map(this::mapToDTO)
-                    .collect(Collectors.toList());
+                    .toList();
 
             return ResponseEntity.ok(dtos);
 

@@ -27,3 +27,16 @@ SCHEDULE_TIME = os.getenv("ETL_SCHEDULE_TIME", "02:00")
 # before the first retry (the wait doubles each time: 2s, 4s, 8s...)
 RETRY_ATTEMPTS = int(os.getenv("ETL_RETRY_ATTEMPTS", "3"))
 RETRY_DELAY_SECONDS = float(os.getenv("ETL_RETRY_DELAY_SECONDS", "2"))
+
+# Alpaca market data API, for the daily price history. Leave the keys blank
+# to skip loading prices.
+ALPACA_API_KEY_ID = os.getenv("ALPACA_API_KEY_ID", "")
+ALPACA_API_SECRET_KEY = os.getenv("ALPACA_API_SECRET_KEY", "")
+ALPACA_DATA_URL = os.getenv("ALPACA_DATA_URL", "https://data.alpaca.markets")
+
+# "sip" covers all US exchanges. The free plan allows it for data older than
+# 15 minutes, which daily history always is. "iex" is the free live feed only.
+PRICE_HISTORY_FEED = os.getenv("PRICE_HISTORY_FEED", "sip")
+
+# How many years of daily prices the first run loads for each instrument
+PRICE_BACKFILL_YEARS = int(os.getenv("PRICE_BACKFILL_YEARS", "5"))

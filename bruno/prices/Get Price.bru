@@ -1,0 +1,20 @@
+meta {
+  name: Get Price
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{apiUrl}}/api/v1/prices/AAPL
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Latest live price from the Alpaca feed: symbol, price and tradedAt.
+  Returns 503 (PRC-503) when the API runs without Alpaca keys.
+}

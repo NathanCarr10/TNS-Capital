@@ -1,0 +1,124 @@
+<header class="page-header">
+  <div>
+    <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
+    @if (isAdmin) {
+      <h1>Account viewer</h1>
+      <p class="muted">Admin view: orders can only be placed by the account's owner.</p>
+    } @else {
+      <h1>Welcome{{ firstName() ? ', ' + firstName() : '' }}</h1>
+      <p class="muted">Here's how your portfolio is performing today.</p>
+    }
+  </div>
+
+  <div class="actions">
+    @if (isAdmin) {
+      <app-admin-account-bar
+        [accounts]="adminAccounts()"
+        [selectedId]="account()?.id ?? null"
+        (accountChange)="viewAccount($event)"
+        (openAnalytics)="openAnalytics()"
+      />
+    } @else {
+      <a class="btn" routerLink="/orders">View Order History</a>
+      <a class="btn btn-primary place-order" routerLink="/trade">
+        <app-icon name="trade" />
+        Place Order
+      </a>
+    }
+  </div>
+</header>
+
+@if (accountError()) {
+  <p class="note error" role="alert">{{ accountError() }}</p>
+}
+
+<section class="card account-card" [class.admin]="isAdmin" aria-label="Account details">
+  @if (accountLoading()) {
+    <p class="eyebrow">Account details</p>
+    <span class="skeleton skeleton-title" aria-hidden="true"></span>
+  } @else if (account()) {
+    @let details = account()!;
+    <div>
+      <p class="eyebrow">Account details</p>
+      <p class="account-number">
+        {{ details.accountNumber }}
+        <span class="badge" [class.badge-positive]="details.status === 'ACTIVE'">{{ details.status }}</span>
+      </p>
+      <p class="muted holder">{{ details.holderName }} &middot; Updated {{ details.lastUpdated | date:'MMM d, HH:mm' }}</p>
+    </div>
+    @if (isAdmin) {
+      <div class="status-control">
+        <span class="muted">Account status</span>
+        <button
+          type="button"
+          role="switch"
+          class="status-switch"
+          aria-label="Account active"
+          [attr.aria-checked]="details.status === 'ACTIVE'"
+          [disabled]="statusLoading() || details.status === 'CLOSED'"
+          (click)="toggleStatus()"
+        >
+          <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+          <span class="status-label">{{ details.status === 'ACTIVE' ? 'Active' : details.status === 'SUSPENDED' ? 'Suspended' : 'Closed' }}</span>
+        </button>
+        @if (statusError()) {
+          <p class="form-error" role="alert">{{ statusError() }}</p>
+        }
+      </div>
+    }
+    <div class="cash">
+      <span class="muted">Cash balance</span>
+      <strong class="num">{{ details.cashBalance | currency:'USD':'symbol':'1.2-2' }}</strong>
+      <span class="available">Available to trade</span>
+      @if (!isAdmin) {
+        <button class="btn btn-primary deposit-toggle" type="button" (click)="toggleDeposit()">
+          {{ depositOpen() ? 'Cancel' : 'Deposit cash' }}
+        </button>
+      }
+    </div>
+    @if (!isAdmin && depositOpen()) {
+      <form class="deposit-form" [formGroup]="depositForm" (ngSubmit)="submitDeposit()" novalidate>
+        <label for="deposit-amount">Amount</label>
+        <div class="deposit-fields">
+          <input id="deposit-amount" class="input num" type="number" formControlName="amount" min="0.01" step="0.01" />
+          <button class="btn btn-primary" type="submit" [disabled]="depositLoading()">
+            {{ depositLoading() ? 'Depositing...' : 'Confirm deposit' }}
+          </button>
+        </div>
+        @if (depositForm.controls.amount.invalid && depositForm.controls.amount.touched) {
+          <p class="form-error" role="alert">Enter an amount greater than $0.00.</p>
+        }
+        @if (depositMessage()) {
+          <p class="form-success" role="status">{{ depositMessage() }}</p>
+        }
+        @if (depositError()) {
+          <p class="form-error" role="alert">{{ depositError() }}</p>
+        }
+      </form>
+    }
+  } @else {
+    <p class="eyebrow">Account details</p>
+    <p class="note error">Account details unavailable.</p>
+  }
+</section>
+
+<app-performance-summary [positions]="positions()" [cashBalance]="cashBalance()" [error]="positionsError()" />
+
+<div class="portfolio-grid">
+  <div class="column">
+    <section class="card">
+      <app-portfolio-value-chart [positions]="positions()" [cashBalance]="cashBalance()" />
+    </section>
+    <section class="card">
+      <app-holdings [positions]="positions()" [error]="positionsError()" />
+    </section>
+  </div>
+  <div class="column">
+    <section class="card">
+      <app-portfolio-split [positions]="positions()" [cashBalance]="cashBalance()" [error]="positionsError()" />
+    </section>
+    <section class="card">
+      <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" [heldSymbols]="heldSymbols()" />
+    </section>
+  </div>
+</div>

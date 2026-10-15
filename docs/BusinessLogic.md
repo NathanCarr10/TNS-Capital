@@ -2,6 +2,13 @@
 
 This folder contains architectural and design diagrams for the TNS Capital trading system.
 
+> **Sprint 5 design.** The diagrams below are the domain design from Sprint 5, before the
+> Spring Boot API and Kafka existed: they show an order validated, paid for and filled in one
+> step. The implemented system places orders asynchronously (Kafka, the Trade Executor and the
+> Broker Simulator). For the code as it is now, see
+> [diagrams/CLASS-DIAGRAM.md](diagrams/CLASS-DIAGRAM.md) and
+> [diagrams/ORDER-FLOW.md](diagrams/ORDER-FLOW.md).
+
 ## Diagrams
 
 ### Class Diagram

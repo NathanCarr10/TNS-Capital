@@ -1,0 +1,63 @@
+<p class="eyebrow">Overview</p>
+<h2 class="card-title">Portfolio split</h2>
+
+@if (error()) {
+  <p class="note error">{{ error() }}</p>
+} @else if (loading()) {
+  <div class="split-bar skeleton" aria-hidden="true"></div>
+} @else {
+  @if (split(); as portfolio) {
+    @if (portfolio.total === 0) {
+      <p class="note">Nothing to split yet: no cash and no priced holdings.</p>
+    } @else {
+      <div class="split-chart">
+        <div class="split-bar" role="group" aria-label="Portfolio split" [class.has-active]="active()">
+          @for (segment of portfolio.segments; track segment.key) {
+            <div
+              class="segment"
+              tabindex="0"
+              [class.active]="active()?.segment?.key === segment.key"
+              [style.flex-grow]="segment.value"
+              [style.background]="'var(--' + segment.color + ')'"
+              [attr.aria-label]="
+                segment.label + ': ' + (segment.value | currency:'USD':'symbol':'1.2-2') + ', ' +
+                (segment.percent | number:'1.1-1') + '% of portfolio'
+              "
+              (pointerenter)="show(segment, $event)"
+              (pointerleave)="hide()"
+              (focus)="show(segment, $event)"
+              (blur)="hide()"
+            ></div>
+          }
+        </div>
+
+        @if (active(); as current) {
+          <div class="split-tooltip" role="tooltip" [style.left]="'clamp(5rem, ' + current.x + 'px, calc(100% - 5rem))'">
+            <strong class="tooltip-value">{{ current.segment.value | currency:'USD':'symbol':'1.2-2' }}</strong>
+            <span class="tooltip-label">
+              <span class="line-key" [style.background]="'var(--' + current.segment.color + ')'"></span>
+              {{ current.segment.label }} &middot; {{ current.segment.percent | number:'1.1-1' }}%
+            </span>
+          </div>
+        }
+      </div>
+
+      <ul class="split-legend">
+        @for (segment of portfolio.segments; track segment.key) {
+          <li>
+            <span class="swatch" [style.background]="'var(--' + segment.color + ')'"></span>
+            <span class="legend-label">{{ segment.label }}</span>
+            <span class="legend-percent">{{ segment.percent | number:'1.1-1' }}%</span>
+          </li>
+        }
+      </ul>
+
+      @if (portfolio.unpricedCount > 0) {
+        <p class="note">
+          {{ portfolio.unpricedCount }} unpriced {{ portfolio.unpricedCount === 1 ? 'holding' : 'holdings' }}
+          left out of the split.
+        </p>
+      }
+    }
+  }
+}

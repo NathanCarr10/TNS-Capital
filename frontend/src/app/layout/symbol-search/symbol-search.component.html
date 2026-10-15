@@ -1,0 +1,44 @@
+<div class="search" [class.open]="open() && query()">
+  <app-icon name="search" class="search-icon" />
+  <input
+    #input
+    type="search"
+    role="combobox"
+    aria-label="Search symbols and companies"
+    aria-autocomplete="list"
+    aria-controls="symbol-search-results"
+    [attr.aria-expanded]="open() && results().length > 0"
+    [attr.aria-activedescendant]="open() && results().length ? 'symbol-option-' + activeIndex() : null"
+    placeholder="Search symbols, companies..."
+    autocomplete="off"
+    [value]="query()"
+    (input)="onInput($any($event.target).value)"
+    (keydown)="onKeydown($event)"
+    (focus)="open.set(true)"
+    (blur)="close()"
+  />
+  <kbd>{{ shortcut }}</kbd>
+
+  @if (open() && query()) {
+    <ul id="symbol-search-results" class="results" role="listbox" aria-label="Instruments">
+      @for (instrument of results(); track instrument.symbol; let index = $index) {
+        <li
+          [id]="'symbol-option-' + index"
+          role="option"
+          [class.active]="index === activeIndex()"
+          [attr.aria-selected]="index === activeIndex()"
+          (mousedown)="$event.preventDefault(); choose(instrument)"
+          (mouseenter)="activeIndex.set(index)"
+        >
+          <span class="symbol">{{ instrument.symbol }}</span>
+          <span class="name">{{ instrument.name }}</span>
+          @if (!instrument.tradable) {
+            <span class="badge">Not tradable</span>
+          }
+        </li>
+      } @empty {
+        <li class="empty">No instrument matches "{{ query() }}"</li>
+      }
+    </ul>
+  }
+</div>

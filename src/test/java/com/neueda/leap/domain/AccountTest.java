@@ -15,17 +15,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
-import com.neueda.leap.time.ClockTest;
+import com.neueda.leap.time.FixedClock;
 
 @DisplayName("Account Test Suite")
 
 class AccountTest {
     private Account account;
-    private ClockTest testClock;
+    private FixedClock testClock;
 
     @BeforeEach
     void setUp() {
-        testClock = new ClockTest(Instant.parse("2026-09-16T10:00:00Z"));
+        testClock = new FixedClock(Instant.parse("2026-09-16T10:00:00Z"));
         account = new Account("ACC001", "John Doe", new BigDecimal("10000.00"), testClock);
     }
 
@@ -38,7 +38,8 @@ class AccountTest {
                 "Initial cash balance should match constructor argument");
         assertEquals(AccountStatus.ACTIVE, account.getStatus(), "New account should have ACTIVE status");
         assertEquals(0, account.getVersion(), "Initial version should be 0");
-        assertNotNull(account.getLastUpdated(), "Last updated timestamp should be set");
+        assertNotNull(account.getOpenedOn(), "Opened timestamp should be set");
+        assertEquals(account.getOpenedOn(), account.getLastUpdated(), "A new account was last updated when opened");
     }
 
     @DisplayName("Debit Operation Tests")
@@ -58,17 +59,17 @@ class AccountTest {
         @DisplayName("Debit amount exceeding balance throws InsufficientFundsException")
         @Test
         void testDebitInsufficientFunds() {
-            assertThrows(InsufficientFundsException.class, () -> {
-                account.debit(new BigDecimal("15000.00"));
-            }, "Should throw exception when debiting amount exceeds balance");
+            BigDecimal amount = new BigDecimal("15000.00");
+            assertThrows(InsufficientFundsException.class, () -> account.debit(amount),
+                    "Should throw exception when debiting amount exceeds balance");
         }
 
         @DisplayName("Debit with amount slightly exceeding balance throws exception")
         @Test
         void testDebitBoundaryExceedsBalance() {
-            assertThrows(InsufficientFundsException.class, () -> {
-                account.debit(new BigDecimal("10000.01"));
-            }, "Should throw exception even when exceeding by minimal amount");
+            BigDecimal amount = new BigDecimal("10000.01");
+            assertThrows(InsufficientFundsException.class, () -> account.debit(amount),
+                    "Should throw exception even when exceeding by minimal amount");
         }
 
         @DisplayName("Debit exact balance leaves account with zero")

@@ -1,0 +1,39 @@
+<section class="login-page">
+  <div class="login-card">
+    <h1>Welcome Back</h1>
+    <p>Sign in to access your account and trading tools.</p>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate>
+      <label for="username">Username</label>
+      <input
+        id="username"
+        type="text"
+        formControlName="username"
+        autocomplete="username"
+        placeholder="Enter username"
+      />
+
+      <label for="password">Password</label>
+      <input
+        id="password"
+        type="password"
+        formControlName="password"
+        autocomplete="current-password"
+        placeholder="Enter password"
+      />
+
+      <p class="field-error" *ngIf="loginForm.invalid && loginForm.touched">
+        Username and password are required.
+      </p>
+
+      <p class="server-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+
+      <button type="submit" [disabled]="isSubmitting()">
+        {{ isSubmitting() ? 'Signing In...' : 'Login' }}
+      </button>
+    </form>
+
+    <p class="auth-link">New to TNS Capital? <a routerLink="/register">Create an account</a></p>
+    <a class="back-link" href="/">&larr; Back to home</a>
+  </div>
+</section>

@@ -121,3 +121,42 @@ def test_transform_failure_is_reported(fake_database, monkeypatch):
 
     assert pipeline.run_pipeline() is False
     assert calls["load"] == 0
+
+
+# ---------- run_prices ----------
+
+@pytest.fixture
+def fake_prices(monkeypatch):
+    """Turn the price job on, with fake database and Alpaca steps."""
+    monkeypatch.setattr(pipeline.config, "ALPACA_API_KEY_ID", "key")
+    monkeypatch.setattr(pipeline.config, "ALPACA_API_SECRET_KEY", "secret")
+    loaded = []
+    monkeypatch.setattr(pipeline, "run_price_extract", lambda: {"AAPL": None})
+    monkeypatch.setattr(pipeline.market_data, "fetch_daily_bars", lambda symbols, start: {
+        "AAPL": [{"t": "2026-10-09T04:00:00Z", "o": 1.0, "h": 2.0, "l": 0.5, "c": 1.5, "v": 100}]})
+    monkeypatch.setattr(pipeline, "run_price_load", loaded.append)
+    return loaded
+
+
+def test_prices_are_skipped_without_alpaca_keys(fake_database, monkeypatch):
+    monkeypatch.setattr(pipeline, "run_price_extract", lambda: pytest.fail("should not run"))
+    assert pipeline.run_pipeline() is True
+
+
+def test_prices_are_loaded(fake_database, fake_prices):
+    assert pipeline.run_pipeline() is True
+    assert len(fake_prices) == 1
+    assert list(fake_prices[0]["symbol"]) == ["AAPL"]
+
+
+def test_price_failure_is_reported_but_trades_still_load(fake_database, fake_prices, monkeypatch):
+    calls, _ = fake_database
+
+    def alpaca_down(symbols, start):
+        raise pipeline.market_data.MarketDataError("Alpaca returned 403")
+
+    monkeypatch.setattr(pipeline.market_data, "fetch_daily_bars", alpaca_down)
+
+    assert pipeline.run_pipeline() is False
+    assert calls["load"] == 1  # trades were loaded
+    assert fake_prices == []   # prices were not

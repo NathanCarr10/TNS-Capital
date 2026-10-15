@@ -1,0 +1,109 @@
+<div class="ticket-header">
+  <div>
+    <p class="eyebrow">Overview</p>
+    <h2 class="card-title">Order ticket</h2>
+  </div>
+  <span class="badge">{{ isAdmin ? 'Read-only' : 'Live' }}</span>
+</div>
+
+<form class="ticket-body" [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
+  <app-side-toggle formControlName="side" labelledBy="side-label" />
+  <span id="side-label" class="visually-hidden">Side</span>
+
+  <div class="field">
+    <span class="field-label">Account</span>
+    <div class="readonly">
+      @if (account(); as current) {
+        <span>{{ current.accountNumber }}</span>
+        <span class="badge" [class.badge-positive]="current.status === 'ACTIVE'">{{ current.status }}</span>
+      } @else if (accountLoading()) {
+        <span class="skeleton"></span>
+      } @else {
+        <span class="muted">Unavailable</span>
+      }
+    </div>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Instrument</span>
+    <div class="readonly">
+      <strong>{{ symbol() }}</strong>
+      <span class="num">{{ livePrice() != null ? (livePrice() | currency:instrument()?.currency ?? 'USD':'symbol':'1.2-2') : '—' }}</span>
+    </div>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label for="quantity">Quantity</label>
+      <input id="quantity" class="input num" type="number" formControlName="quantity" min="1" step="1" />
+    </div>
+    <div class="field">
+      <label for="order-type">Order type</label>
+      <select id="order-type" class="input" formControlName="orderType">
+        <option value="LIMIT">Limit</option>
+        <option value="MARKET">Market</option>
+      </select>
+    </div>
+  </div>
+  @if (orderForm.controls.quantity.touched && orderForm.controls.quantity.invalid) {
+    <p class="field-error">Quantity must be a whole number from 1 to 1,000,000.</p>
+  }
+
+  @if (isLimit()) {
+    <div class="field">
+      <label for="price">Limit price</label>
+      <input id="price" class="input num" type="number" formControlName="price" min="0.01" step="0.01" />
+    </div>
+    @if (orderForm.controls.price.touched && orderForm.controls.price.invalid) {
+      <p class="field-error">Price must be greater than 0.</p>
+    }
+  } @else {
+    <p class="hint">Fills at the latest market price.</p>
+  }
+
+  <dl class="summary">
+    <div>
+      <dt>Estimated {{ side() === 'BUY' ? 'cost' : 'proceeds' }}</dt>
+      <dd class="num">{{ estimatedTotal() != null ? (estimatedTotal() | currency:'USD':'symbol':'1.2-2') : '—' }}</dd>
+    </div>
+    <div>
+      @if (side() === 'BUY') {
+        <dt>Available cash</dt>
+        <dd class="num">{{ account() ? (account()!.cashBalance | currency:'USD':'symbol':'1.2-2') : '—' }}</dd>
+      } @else {
+        <dt>Shares held</dt>
+        <dd class="num">{{ heldQuantity() | number }}</dd>
+      }
+    </div>
+  </dl>
+  @if (shortfall() && !isAdmin) {
+    <p class="hint warning">{{ shortfall() }}</p>
+  }
+
+  <button
+    type="submit"
+    class="btn btn-primary submit"
+    [class.sell]="side() === 'SELL'"
+    [disabled]="isSubmitDisabled()"
+  >
+    @if (isSubmitting()) {
+      Submitting...
+    } @else if (isTracking()) {
+      Tracking order...
+    } @else {
+      {{ side() === 'BUY' ? 'Buy' : 'Sell' }} {{ orderForm.controls.quantity.value || '' }} {{ symbol() }}
+    }
+  </button>
+
+  @if (isAdmin) {
+    <p class="note">Admin view: read-only. Orders can only be placed by the account's owner.</p>
+  } @else if (instrument() && !tradable()) {
+    <p class="note">{{ symbol() }} is not tradable.</p>
+  }
+  @if (successMessage()) {
+    <p class="note success" role="status">{{ successMessage() }}</p>
+  }
+  @if (errorMessage()) {
+    <p class="note error" role="alert">{{ errorMessage() }}</p>
+  }
+</form>

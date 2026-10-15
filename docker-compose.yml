@@ -5,8 +5,9 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    # Infrastructure ports are for tools on this machine only (OWASP A05-2)
     ports:
-      - "2181:2181"
+      - "127.0.0.1:2181:2181"
     healthcheck:
       test: ["CMD", "echo", "stat", "|", "nc", "localhost", "2181"]
       interval: 5s
@@ -16,8 +17,9 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     mem_limit: 1g
+    # Only this machine: anyone who can produce to the orders topic can trade on any account
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -43,7 +45,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_USER: ${DB_USER:-tns-capital-db-user}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     command:
       - "-c"
       - "max_connections=30"
@@ -66,12 +68,15 @@ services:
     mem_limit: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # The admin account is created from this at startup; nothing is seeded (OWASP A07-4)
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env (at least 12 characters)}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: tns_capital
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
     ports:
       - "4000:4000"
     depends_on:
@@ -83,6 +88,26 @@ services:
       timeout: 5s
       retries: 5
 
+  broker-simulator:
+    build: ./broker-simulator
+    mem_limit: 384m
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BROKER_MIN_DELAY: ${BROKER_MIN_DELAY:-500ms}
+      BROKER_MAX_DELAY: ${BROKER_MAX_DELAY:-2000ms}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    # No host port: the broker has no authentication, so only the API can reach it
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8085/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   app:
     build: .
     mem_limit: 512m
@@ -92,6 +117,12 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BROKER_URL: http://broker-simulator:8085
+      # One JSON object per log line (Elastic Common Schema), for log tools to parse
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
+      ALPACA_FEED: ${ALPACA_FEED:-iex}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
     ports:
       - "3000:3000"
@@ -102,6 +133,32 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      broker-simulator:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      # The API clients are generated from the specs in contracts/ during the build
+      additional_contexts:
+        contracts: ./contracts
+    mem_limit: 64m
+    ports:
+      - "${FRONTEND_PORT:-8086}:8080"
+    depends_on:
+      app:
+        condition: service_started
+      auth-service:
+        condition: service_healthy
+      # nginx forwards /analytics/ to it, and won't start if it can't resolve the name
+      dashboard:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   etl:
     build: ./etl
@@ -111,9 +168,36 @@ services:
       DB_USER: ${DB_USER:-tns-capital-db-user}
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
+      PRICE_HISTORY_FEED: ${PRICE_HISTORY_FEED:-sip}
+      PRICE_BACKFILL_YEARS: ${PRICE_BACKFILL_YEARS:-5}
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    mem_limit: 384m
+    environment:
+      DASHBOARD_DB_HOST: postgres
+      DB_USER: ${DB_USER:-tns-capital-db-user}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DASHBOARD_AUTH_URL: http://auth-service:4000
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+    ports:
+      - "${DASHBOARD_PORT:-8501}:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The image has no curl or wget; Streamlit serves its health check under the base path
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/analytics/_stcore/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   kafka-ui:
@@ -125,9 +209,12 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: trading-platform
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      # Browse only: it has no login, and producing to orders would bypass account ownership
+      # (OWASP A05-1, A01-5)
+      KAFKA_CLUSTERS_0_READONLY: "true"
       JAVA_OPTS: -XX:MaxRAMPercentage=70
     ports:
-      - "${KAFKA_UI_PORT:-8090}:8080"
+      - "127.0.0.1:${KAFKA_UI_PORT:-8090}:8080"
     restart: unless-stopped
 
 volumes:

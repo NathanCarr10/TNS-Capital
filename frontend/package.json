@@ -1,0 +1,50 @@
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "generate:api": "node -e \"require('fs').rmSync('src/app/api', { recursive: true, force: true })\" && openapi-generator-cli generate",
+    "fetch:trading-spec": "node scripts/fetch-trading-spec.mjs",
+    "prestart": "npm run generate:api",
+    "start": "ng serve",
+    "prebuild": "npm run generate:api",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "pretest": "npm run generate:api",
+    "test": "ng test",
+    "pretest:headless": "npm run generate:api",
+    "test:headless": "PW_CHROME=$(find \"$HOME/.cache/ms-playwright\" -type f \\( -path '*chromium-*/chrome-linux/chrome' -o -path '*chromium-*/chrome-linux64/chrome' \\) | head -n 1) && CHROME_BIN=\"$PW_CHROME\" ng test --watch=false --browsers=ChromeHeadless",
+    "pretypecheck": "npm run generate:api",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit",
+    "e2e": "playwright test"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/common": "^19.2.0",
+    "@angular/compiler": "^19.2.0",
+    "@angular/core": "^19.2.0",
+    "@angular/forms": "^19.2.0",
+    "@angular/platform-browser": "^19.2.0",
+    "@angular/platform-browser-dynamic": "^19.2.0",
+    "@angular/router": "^19.2.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^19.2.27",
+    "@angular/cli": "^19.2.27",
+    "@angular/compiler-cli": "^19.2.0",
+    "@openapitools/openapi-generator-cli": "^2.41.0",
+    "@playwright/test": "1.64.0",
+    "@types/jasmine": "~5.1.0",
+    "jasmine-core": "~5.6.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "playwright": "^1.64.0",
+    "typescript": "~5.7.2"
+  }
+}

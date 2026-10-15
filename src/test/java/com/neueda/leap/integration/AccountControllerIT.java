@@ -1,7 +1,12 @@
 package com.neueda.leap.integration;
 
+import com.neueda.leap.dtos.HolderName;
 import com.neueda.leap.model.Account;
+import com.neueda.leap.model.Instrument;
+import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
+import com.neueda.leap.repositories.InstrumentRepository;
+import com.neueda.leap.repositories.PositionRepository;
 import com.neueda.leap.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -23,13 +29,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @DisplayName("Account Controller Integration Tests")
 @WithMockUser(username = "testuser", roles = "ADMIN")
-public class AccountControllerIT extends AbstractIntegrationTest {
+class AccountControllerIT extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private AccountRepository accountRepository;
+
+    @Autowired
+    private InstrumentRepository instrumentRepository;
+
+    @Autowired
+    private PositionRepository positionRepository;
 
     @Autowired
     private Clock clock;
@@ -104,6 +116,34 @@ public class AccountControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("Should list positions with no market value when there is no live price")
+    void testPositionsWithoutLivePrice() throws Exception {
+        // Tests run without Alpaca keys, so there are no live prices
+        instrumentRepository.save(new Instrument("ACME", "Acme Corp", "Equity", "USD", true));
+        positionRepository.save(new Position(testAccount.getId(), "ACME", 10, new BigDecimal("25.00")));
+
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/positions", testAccount.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].symbol", is("ACME")))
+                .andExpect(jsonPath("$[0].averageCost", is(25.0)))
+                .andExpect(jsonPath("$[0].marketValue", nullValue()));
+    }
+
+    @Test
+    @DisplayName("Should move lastUpdated when the balance changes")
+    void testDepositUpdatesLastUpdated() throws Exception {
+        java.time.Instant created = accountRepository.findById(testAccount.getId()).orElseThrow().getLastUpdated();
+
+        mockMvc.perform(post("/api/v1/accounts/{accountId}/deposit", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"amount\": 5.00}"))
+                .andExpect(status().isOk());
+
+        java.time.Instant updated = accountRepository.findById(testAccount.getId()).orElseThrow().getLastUpdated();
+        org.junit.jupiter.api.Assertions.assertTrue(updated.isAfter(created),
+                "lastUpdated should move from " + created + " but was " + updated);
+    }
+
+    @Test
     @DisplayName("Should return empty orders list for new account")
     @SuppressWarnings("null")
     void testGetAccountOrders() throws Exception {
@@ -162,13 +202,39 @@ public class AccountControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should update the holder name")
+    @DisplayName("Should update the holder name and keep the opening date")
     void testUpdateHolderName() throws Exception {
+        java.time.Instant openedOn = accountRepository.findById(testAccount.getId()).orElseThrow().getOpenedOn();
+
         mockMvc.perform(patch("/api/v1/accounts/{id}", testAccount.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"holderName\":\"Johnny Doe\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.holderName", is("Johnny Doe")));
+                .andExpect(jsonPath("$.holderName", is("Johnny Doe")))
+                .andExpect(jsonPath("$.openedOn", notNullValue()));
+
+        assertEquals(openedOn, accountRepository.findById(testAccount.getId()).orElseThrow().getOpenedOn());
+    }
+
+    @Test
+    @DisplayName("Should reject a script payload as the holder name when opening an account")
+    void testCreateAccountRejectsScriptInHolderName() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"ACC003\",\"holderName\":\"<script>alert(1)</script>\",\"cashBalance\":1.00}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errorCode", is("VAL-422")));
+    }
+
+    @Test
+    @DisplayName("Should reject a script payload as the new holder name")
+    void testUpdateHolderNameRejectsScript() throws Exception {
+        mockMvc.perform(patch("/api/v1/accounts/{id}", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"holderName\":\"<img src=x onerror=alert(1)>\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errorCode", is("VAL-422")))
+                .andExpect(jsonPath("$.message", is("holderName: " + HolderName.MESSAGE)));
     }
 
     @Test
