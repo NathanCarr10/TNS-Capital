@@ -14,6 +14,7 @@ import {
   PlaceOrderRequest,
   PlaceOrderResponse,
   PositionResponse,
+  UpdateAccountStatusRequest,
 } from '../../api/trading';
 
 @Injectable({ providedIn: 'root' })
@@ -38,6 +39,11 @@ export class TradingService {
 
   deposit(accountId: number, request: CashTransactionRequest): Observable<AccountResponse> {
     return this.accountApi.deposit(accountId, request);
+  }
+
+  /** Admin only: suspend an account or reactivate it. */
+  updateAccountStatus(accountId: number, request: UpdateAccountStatusRequest): Observable<AccountResponse> {
+    return this.accountApi.updateAccountStatus(accountId, request);
   }
 
   getInstruments(): Observable<InstrumentResponse[]> {

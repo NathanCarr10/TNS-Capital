@@ -1,6 +1,5 @@
 :host {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
 }
@@ -11,7 +10,13 @@ label {
   color: var(--text-muted);
 }
 
+// Overrides the global .input width so Analytics stays on the same row
 select {
-  min-width: 14rem;
-  max-width: 100%;
+  width: 16rem;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+button {
+  flex-shrink: 0;
 }

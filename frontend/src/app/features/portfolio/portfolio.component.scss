@@ -38,6 +38,87 @@
   border-left: 4px solid var(--primary);
 }
 
+.account-card.admin > div:first-child {
+  margin-right: auto;
+}
+
+.status-control {
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+  padding-right: 1.25rem;
+  border-right: 1px solid var(--border);
+
+  > .muted {
+    font-size: 0.75rem;
+  }
+
+  .form-error {
+    max-width: 16rem;
+    text-align: right;
+  }
+}
+
+.status-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.2rem 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  .track {
+    position: relative;
+    width: 2.5rem;
+    height: 1.4rem;
+    border-radius: 999px;
+    background: var(--border-strong);
+    transition: background 0.15s ease;
+  }
+
+  .thumb {
+    position: absolute;
+    top: 0.2rem;
+    left: 0.2rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: transform 0.15s ease;
+  }
+
+  &[aria-checked='true'] .track {
+    background: var(--primary);
+  }
+
+  &[aria-checked='true'] .thumb {
+    transform: translateX(1.1rem);
+  }
+
+  &[aria-checked='false'] .status-label {
+    color: var(--negative);
+  }
+
+  &:focus-visible {
+    outline: none;
+
+    .track {
+      box-shadow: 0 0 0 3px var(--focus);
+    }
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
 .account-number {
   display: flex;
   align-items: center;
@@ -138,7 +219,17 @@
 }
 
 @media (max-width: 560px) {
-  .cash {
+  .cash,
+  .status-control {
     justify-items: start;
+  }
+
+  .status-control {
+    padding-right: 0;
+    border-right: none;
+
+    .form-error {
+      text-align: left;
+    }
   }
 }
