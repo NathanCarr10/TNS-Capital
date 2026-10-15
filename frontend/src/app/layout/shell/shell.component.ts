@@ -6,6 +6,7 @@ import { interval } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { ThemeService } from '../../core/theme/theme.service';
 import { AccountStore } from '../../core/trading/account.store';
+import { OrderTrackerService } from '../../core/trading/order-tracker.service';
 import { IconComponent, IconName } from '../icon/icon.component';
 import { nyseStatus } from '../market-status/market-hours';
 import { SymbolSearchComponent } from '../symbol-search/symbol-search.component';
@@ -20,7 +21,7 @@ interface NavItem {
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, IconComponent, SymbolSearchComponent],
-  providers: [AccountStore],
+  providers: [AccountStore, OrderTrackerService],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
 })

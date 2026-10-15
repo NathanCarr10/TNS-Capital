@@ -7,6 +7,7 @@ import { of, throwError } from 'rxjs';
 import { MarketQuote, PositionResponse } from '../../api/trading';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountStore } from '../../core/trading/account.store';
+import { OrderTrackerService } from '../../core/trading/order-tracker.service';
 import { MarketDataService } from '../../core/trading/market-data.service';
 import { tradingServiceStub } from '../../core/trading/testing/trading-fixtures';
 import { PriceBar } from '../../core/trading/trading.models';
@@ -58,6 +59,7 @@ describe('TradeComponent', () => {
       providers: [
         provideRouter([]),
         AccountStore,
+        OrderTrackerService,
         { provide: MarketDataService, useValue: marketDataServiceSpy },
         { provide: TradingService, useValue: tradingService },
         { provide: AuthService, useValue: { isAdmin: () => false } },
