@@ -1,12 +1,14 @@
 /// <reference types="jasmine" />
 
 import { HttpErrorResponse } from '@angular/common/http';
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 
 import { OrderResponse, PlaceOrderResponse } from '../../../api/trading';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ToastService } from '../../../core/notifications/toast.service';
 import { AccountStore } from '../../../core/trading/account.store';
+import { OrderTrackerService } from '../../../core/trading/order-tracker.service';
 import { ACCOUNT, INSTRUMENTS, tradingServiceStub } from '../../../core/trading/testing/trading-fixtures';
 import { TradingService } from '../../../core/trading/trading.service';
 import { OrderTicketComponent } from './order-ticket.component';
@@ -22,6 +24,7 @@ describe('OrderTicketComponent', () => {
       imports: [OrderTicketComponent],
       providers: [
         AccountStore,
+        OrderTrackerService,
         { provide: TradingService, useValue: tradingService },
         { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
       ],
@@ -45,6 +48,8 @@ describe('OrderTicketComponent', () => {
     createdOn: new Date().toISOString(),
     ...overrides,
   });
+
+  const toastMessages = (): string[] => TestBed.inject(ToastService).toasts().map((toast) => toast.message);
 
   const submitButton = (): HTMLButtonElement => fixture.nativeElement.querySelector('button[type="submit"]');
 
@@ -70,7 +75,7 @@ describe('OrderTicketComponent', () => {
     expect(component.orderForm.controls.price.value).toBe(140);
   });
 
-  it('submits a BUY limit order and shows the fill', fakeAsync(() => {
+  it('submits a BUY limit order and toasts the fill', fakeAsync(() => {
     create();
     tradingService.placeOrder.and.returnValue(of(accepted('ord-buy')));
     tradingService.getOrder.and.returnValue(of(order({ id: 'ord-buy' })));
@@ -82,11 +87,14 @@ describe('OrderTicketComponent', () => {
     expect(tradingService.placeOrder).toHaveBeenCalledWith(
       jasmine.objectContaining({ accountId: ACCOUNT.id, symbol: 'AAPL', side: 'BUY', quantity: 10, price: 150 })
     );
-    expect(component.successMessage()).toContain('FILLED');
+    expect(toastMessages()).toEqual(['Order filled: BUY 10 AAPL at 150.00.']);
+    expect(component.successMessage()).toBeNull();
     expect(component.errorMessage()).toBeNull();
+    expect(component.isTracking()).toBeFalse();
     // The fill moves cash and holdings, so both are reloaded for every page
     expect(tradingService.getAccount).toHaveBeenCalledTimes(2);
     expect(tradingService.getAccountPositions).toHaveBeenCalledTimes(2);
+    flush();
   }));
 
   it('submits a SELL order', fakeAsync(() => {
@@ -99,7 +107,8 @@ describe('OrderTicketComponent', () => {
     tick();
 
     expect(tradingService.placeOrder).toHaveBeenCalledWith(jasmine.objectContaining({ side: 'SELL', quantity: 5 }));
-    expect(component.successMessage()).toContain('FILLED');
+    expect(toastMessages()).toEqual(['Order filled: SELL 5 AAPL at 155.00.']);
+    flush();
   }));
 
   it('sends no price for a market order, so it fills at the latest price', fakeAsync(() => {
@@ -114,6 +123,7 @@ describe('OrderTicketComponent', () => {
     const request = tradingService.placeOrder.calls.mostRecent().args[0];
     expect(request.price).toBeUndefined();
     expect(request.quantity).toBe(2);
+    flush();
   }));
 
   it('needs a price for a limit order but not for a market order', () => {
@@ -147,7 +157,7 @@ describe('OrderTicketComponent', () => {
     expect(tradingService.placeOrder).not.toHaveBeenCalled();
   });
 
-  it('shows the rejection reason for insufficient funds', fakeAsync(() => {
+  it('toasts the rejection reason for insufficient funds', fakeAsync(() => {
     create();
     tradingService.placeOrder.and.returnValue(of(accepted('ord-rej')));
     tradingService.getOrder.and.returnValue(
@@ -157,8 +167,31 @@ describe('OrderTicketComponent', () => {
     component.onSubmit();
     tick();
 
-    expect(component.errorMessage()).toContain('ORD-400');
+    expect(toastMessages()).toEqual(['BUY AAPL rejected: Insufficient funds (ORD-400).']);
     expect(component.successMessage()).toBeNull();
+    expect(component.isTracking()).toBeFalse();
+    flush();
+  }));
+
+  it('shows the order as tracking until it settles', fakeAsync(() => {
+    create();
+    tradingService.placeOrder.and.returnValue(of(accepted('ord-open')));
+    tradingService.getOrder.and.returnValue(of(order({ id: 'ord-open', status: 'NEW' })));
+
+    component.onSubmit();
+    tick();
+    fixture.detectChanges();
+
+    expect(component.isTracking()).toBeTrue();
+    expect(submitButton().textContent).toContain('Tracking order...');
+    expect(fixture.nativeElement.querySelector('.note.success')?.textContent).toContain('Tracking order ord-open');
+
+    tradingService.getOrder.and.returnValue(of(order({ id: 'ord-open' })));
+    tick(OrderTrackerService.POLL_INTERVAL_MS);
+
+    expect(component.isTracking()).toBeFalse();
+    expect(toastMessages().length).toBe(1);
+    flush();
   }));
 
   it('maps immediate API validation error codes', () => {
