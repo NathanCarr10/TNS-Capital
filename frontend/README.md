@@ -84,7 +84,7 @@ ng test
 | --- | --- |
 | `auth.e2e.ts` | The route guard sends a signed-out visitor to login and back; a new trader registers, logs in and sees their account; a wrong password shows an error |
 | `trading.e2e.ts` | A new trader deposits cash, places a BUY that fills (Kafka, broker simulator) and sees it in order history and holdings; sells part of a holding; a BUY they cannot afford is rejected (ORD-400); an open order is cancelled before it fills |
-| `admin.e2e.ts` | The home page's admin link and an admin's login both reach the analytics dashboard, where the admin signs in |
+| `admin.e2e.ts` | The home page's admin link reaches the analytics dashboard, where the admin signs in; an admin's login lands on the read-only account viewer, whose Analytics button opens the dashboard |
 
 They need the whole stack, so the simplest way to run them is the same script as Jenkins, from the
 repo root. It needs only Docker: it starts a throwaway copy of the stack with no host ports, so it
