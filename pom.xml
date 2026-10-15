@@ -35,14 +35,20 @@
         <!-- Web:S6819 ("prefer a native element to this ARIA role") is switched off for three
              controls that have no native equivalent and follow the WAI-ARIA Authoring Practices
              patterns instead: the BUY/SELL toggle (radio group of buttons), the symbol search
-             (combobox with a listbox of results) and the account status switch. -->
-        <sonar.issue.ignore.multicriteria>aria1,aria2,aria3</sonar.issue.ignore.multicriteria>
+             (combobox with a listbox of results), the account status switch, and the price and
+             portfolio-value charts (SVG charts whose bars the arrow keys step through, as a
+             slider; an <input type="range"> cannot draw them). -->
+        <sonar.issue.ignore.multicriteria>aria1,aria2,aria3,aria4,aria5</sonar.issue.ignore.multicriteria>
         <sonar.issue.ignore.multicriteria.aria1.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria1.ruleKey>
         <sonar.issue.ignore.multicriteria.aria1.resourceKey>frontend/src/app/features/trade/order-ticket/side-toggle/side-toggle.component.html</sonar.issue.ignore.multicriteria.aria1.resourceKey>
         <sonar.issue.ignore.multicriteria.aria2.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria2.ruleKey>
         <sonar.issue.ignore.multicriteria.aria2.resourceKey>frontend/src/app/layout/symbol-search/symbol-search.component.html</sonar.issue.ignore.multicriteria.aria2.resourceKey>
         <sonar.issue.ignore.multicriteria.aria3.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria3.ruleKey>
         <sonar.issue.ignore.multicriteria.aria3.resourceKey>frontend/src/app/features/portfolio/portfolio.component.html</sonar.issue.ignore.multicriteria.aria3.resourceKey>
+        <sonar.issue.ignore.multicriteria.aria4.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria4.ruleKey>
+        <sonar.issue.ignore.multicriteria.aria4.resourceKey>frontend/src/app/features/trade/candlestick-chart/candlestick-chart.component.html</sonar.issue.ignore.multicriteria.aria4.resourceKey>
+        <sonar.issue.ignore.multicriteria.aria5.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria5.ruleKey>
+        <sonar.issue.ignore.multicriteria.aria5.resourceKey>frontend/src/app/features/portfolio/portfolio-value/portfolio-value-chart.component.html</sonar.issue.ignore.multicriteria.aria5.resourceKey>
         <sonar.javascript.lcov.reportPaths>frontend/coverage/frontend/lcov.info,shared/auth-service/coverage/lcov.info</sonar.javascript.lcov.reportPaths>
     </properties>
 

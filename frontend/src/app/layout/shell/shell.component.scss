@@ -68,8 +68,7 @@ nav {
     text-decoration: none;
 
     &:hover {
-      // The sidebar with 6% white, as one colour, so contrast checkers see the real background
-      background: color-mix(in srgb, var(--sidebar), #ffffff 6%);
+      background: var(--sidebar-hover);
       color: #ffffff;
     }
 
