@@ -83,8 +83,8 @@ ng test
 | File | Journeys |
 | --- | --- |
 | `auth.e2e.ts` | The route guard sends a signed-out visitor to login and back; a new trader registers, logs in and sees their account; a wrong password shows an error |
-| `trading.e2e.ts` | A new trader deposits cash on the portfolio page, places a BUY on the trade page that fills (Kafka, broker simulator), then sees it in order history and holdings |
-| `admin.e2e.ts` | The home page's admin link and an admin's login both reach the analytics dashboard, where the admin signs in |
+| `trading.e2e.ts` | A new trader deposits cash, places a BUY that fills (Kafka, broker simulator) and sees it in order history and holdings; sells part of a holding; a BUY they cannot afford is rejected (ORD-400); an open order is cancelled before it fills |
+| `admin.e2e.ts` | The home page's admin link reaches the analytics dashboard, where the admin signs in; an admin's login lands on the read-only account viewer, whose Analytics button opens the dashboard |
 
 They need the whole stack, so the simplest way to run them is the same script as Jenkins, from the
 repo root. It needs only Docker: it starts a throwaway copy of the stack with no host ports, so it
@@ -94,7 +94,7 @@ can run next to your own, and removes it afterwards.
 ci/e2e-tests.sh
 ```
 
-To run them against a stack that is already up (`docker compose up -d`, app on :4200):
+To run them against a stack that is already up (`docker compose up -d`, app on :8086):
 
 ```bash
 npx playwright install chromium   # once
@@ -102,7 +102,7 @@ npm run e2e                       # E2E_BASE_URL=... for another address; add --
 ```
 
 Each run registers new `e2e…` users. The auth service allows 10 logins a minute per client by
-default (`AUTH_RATE_LIMIT`), and one run uses about 5, so wait a minute between local runs.
+default (`AUTH_RATE_LIMIT`), and one run uses about 8, so wait a minute between local runs.
 The HTML report is in `playwright-report/`, traces of failed tests in `test-results/`
 (`npx playwright show-trace <trace.zip>`).
 

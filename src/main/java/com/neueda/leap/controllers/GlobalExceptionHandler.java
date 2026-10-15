@@ -14,9 +14,11 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -154,6 +156,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleValidationError(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .reduce((m1, m2) -> m1 + "; " + m2)
+                .orElse("Validation failed");
+
+        logger.warn("Validation error: {}", message);
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, INVALID_INPUT, message);
+    }
+
+    // Thrown instead of MethodArgumentNotValidException when the handler also has
+    // constraints on other parameters, e.g. @PathVariable @NotNull plus @Valid @RequestBody
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> handleMethodValidationError(HandlerMethodValidationException e) {
+        String message = e.getAllErrors().stream()
+                .map(error -> error instanceof FieldError fieldError
+                        ? fieldError.getField() + ": " + fieldError.getDefaultMessage()
+                        : error.getDefaultMessage())
                 .reduce((m1, m2) -> m1 + "; " + m2)
                 .orElse("Validation failed");
 

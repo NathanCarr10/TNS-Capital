@@ -28,6 +28,10 @@
     }
   </div>
 
+  @if (cancelError()) {
+    <p class="note error" role="alert">{{ cancelError() }}</p>
+  }
+
   @if (accountError()) {
     <p class="note error">{{ accountError() }}</p>
   } @else if (orderHistoryLoading()) {
@@ -50,6 +54,9 @@
             <th class="numeric">Price</th>
             <th class="numeric">Total</th>
             <th>Status</th>
+            @if (!isAdmin) {
+              <th><span class="visually-hidden">Actions</span></th>
+            }
           </tr>
         </thead>
         <tbody>
@@ -73,6 +80,21 @@
                   {{ row.status === 'NEW' ? 'Open' : row.status }}
                 </span>
               </td>
+              @if (!isAdmin) {
+                <td>
+                  @if (row.status === 'NEW') {
+                    <button
+                      type="button"
+                      class="btn btn-small"
+                      [disabled]="cancellingId() !== null"
+                      [attr.aria-label]="'Cancel ' + row.side + ' ' + row.quantity + ' ' + row.symbol"
+                      (click)="cancel(row)"
+                    >
+                      {{ cancellingId() === row.id ? 'Cancelling...' : 'Cancel' }}
+                    </button>
+                  }
+                </td>
+              }
             </tr>
           }
         </tbody>

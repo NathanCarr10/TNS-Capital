@@ -269,6 +269,8 @@ components:
           type: string
           minLength: 3
           maxLength: 100
+          pattern: '^[A-Za-z0-9._-]+$'
+          description: Letters, digits, dot, underscore and hyphen only
           example: trader1
         password:
           type: string
@@ -280,7 +282,10 @@ components:
           type: string
           minLength: 1
           maxLength: 255
-          description: Name on the trading account; defaults to the username
+          pattern: "^[\\p{L}\\p{M}\\p{N} .,'-]+$"
+          description: >-
+            Name on the trading account; defaults to the username. Letters in
+            any language, digits, spaces and . , ' - only
           example: Ada Lovelace
       additionalProperties: false
 

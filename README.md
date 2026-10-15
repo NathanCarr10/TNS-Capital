@@ -31,7 +31,7 @@ flowchart LR
     client([Client / Bruno / Swagger UI])
 
     subgraph stack[docker-compose stack]
-        web[Frontend<br/>Angular + nginx · :4200]
+        web[Frontend<br/>Angular + nginx · :8086]
         auth[auth-service<br/>NestJS · :4000]
         app[Trading API<br/>Spring Boot · :3000]
         broker[Broker Simulator<br/>Spring Boot · internal]
@@ -193,7 +193,7 @@ Edit `.env` and set:
 | `ADMIN_PASSWORD` | Password of the `admin` account, which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
-`DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `4200`) and
+`DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `8086`) and
 `AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute).
 
 ### 3. Start the stack
@@ -219,14 +219,14 @@ API's startup with `docker compose logs -f app`.
 
 | Service | URL | Notes |
 |---|---|---|
-| Web app | http://localhost:4200 | Angular frontend; nginx forwards `/api`, `/auth` and `/analytics/` to the services |
+| Web app | http://localhost:8086 | Angular frontend; nginx forwards `/api`, `/auth` and `/analytics/` to the services |
 | Trading API | http://localhost:3000 | All endpoints need a bearer token |
 | Swagger UI | http://localhost:3000/swagger-ui.html | Public. Click **Authorize** and paste an access token |
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
 | Auth service | http://localhost:4000 | `GET /health` is public |
 | Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
 | Kafka UI | http://localhost:8090 | Browse topics and messages |
-| Dashboard | http://localhost:4200/analytics/ | Admin analytics (Streamlit); also directly on http://localhost:8501/analytics/. Run the ETL once to fill the batch view |
+| Dashboard | http://localhost:8086/analytics/ | Admin analytics (Streamlit); also directly on http://localhost:8501/analytics/. Run the ETL once to fill the batch view |
 | PostgreSQL | `localhost:5432`, database `tns_capital` | Credentials from `.env` |
 | Kafka | `kafka:9092` | Reachable from inside the Compose network (see [Troubleshooting](#troubleshooting)) |
 
@@ -478,7 +478,7 @@ for the quality gate.
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
-| Port already in use (3000, 4000, 4200, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
+| Port already in use (3000, 4000, 8086, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |
 | Order stays `NEW` | Check the consumer with `docker compose logs app`, and the `orders` topic in Kafka UI. |

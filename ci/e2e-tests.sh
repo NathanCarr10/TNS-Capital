@@ -20,7 +20,8 @@ if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose"; else C
 COMPOSE="$COMPOSE --project-name $PROJECT --project-directory $ROOT --env-file $ENV_FILE \
     -f $ROOT/docker-compose.yml -f $ROOT/ci/docker-compose.e2e.yml"
 
-# Fresh secrets, no market data keys (each order carries its own price), a fast broker, and
+# Fresh secrets, no market data keys (each order carries its own price), a broker that takes
+# 4-5 s to fill (long enough for the cancel journey to catch an open order), and
 # an auth rate limit the journeys can't trip. Replaces the repo's .env for this run.
 cat > "$ENV_FILE" <<VARS
 DB_USER=tns-capital-db-user
@@ -28,8 +29,8 @@ ADMIN_PASSWORD=$ADMIN_PASSWORD
 DB_PASSWORD=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
 JWT_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 AUTH_RATE_LIMIT=1000
-BROKER_MIN_DELAY=100ms
-BROKER_MAX_DELAY=500ms
+BROKER_MIN_DELAY=4s
+BROKER_MAX_DELAY=5s
 VARS
 
 cleanup() {

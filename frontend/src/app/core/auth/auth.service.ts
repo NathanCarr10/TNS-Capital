@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, map, tap } from 'rxjs/operators';
+import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
+import { catchError, finalize, map, shareReplay, tap } from 'rxjs/operators';
 
 import {
   AccessTokenClaims,
@@ -23,6 +23,9 @@ export class AuthService {
   private readonly tokenStorage = inject(TokenStorageService);
 
   private readonly authState$ = new BehaviorSubject<boolean>(this.hasValidAccessToken());
+
+  /** The refresh in progress, shared by every caller until it settles. */
+  private refreshInFlight: Observable<void> | null = null;
 
   readonly isAuthenticated$ = this.authState$.asObservable();
 
@@ -52,6 +55,39 @@ export class AuthService {
       map(() => undefined),
       catchError(() => of(undefined))
     );
+  }
+
+  /**
+   * Swaps the refresh token for a new access and refresh token pair.
+   *
+   * Refresh tokens are single use and the auth service revokes the whole session when one is
+   * presented twice, so concurrent callers (several requests getting a 401 at once) share one
+   * request instead of each sending the same token.
+   */
+  refresh(): Observable<void> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
+    }
+    const refreshToken = this.tokenStorage.refreshToken;
+    if (!refreshToken) {
+      return throwError(() => new Error('No refresh token'));
+    }
+
+    this.refreshInFlight = this.authApi.refresh({ refreshToken }).pipe(
+      tap((tokens) => {
+        this.tokenStorage.setTokens(tokens);
+        this.authState$.next(true);
+      }),
+      map(() => undefined),
+      finalize(() => (this.refreshInFlight = null)),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    return this.refreshInFlight;
+  }
+
+  /** Whether a refresh is worth trying: there is a refresh token to send. */
+  canRefresh(): boolean {
+    return !!this.tokenStorage.refreshToken;
   }
 
   forceLogoutToLogin(): void {

@@ -144,7 +144,7 @@ services:
         contracts: ./contracts
     mem_limit: 64m
     ports:
-      - "${FRONTEND_PORT:-4200}:8080"
+      - "${FRONTEND_PORT:-8086}:8080"
     depends_on:
       app:
         condition: service_started

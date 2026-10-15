@@ -7,7 +7,7 @@ import { catchError, distinctUntilChanged, map, switchMap } from 'rxjs/operators
 
 import { OrderHistoryResponse, OrderResponse } from '../../api/trading';
 import { AccountStore } from '../../core/trading/account.store';
-import { readErrorMessage } from '../../core/trading/api-error';
+import { readApiError, readErrorMessage } from '../../core/trading/api-error';
 import { OrderHistoryRow } from '../../core/trading/trading.models';
 import { TradingService } from '../../core/trading/trading.service';
 
@@ -26,6 +26,8 @@ export class OrderHistoryComponent {
 
   readonly account = this.store.account;
   readonly accountError = this.store.accountError;
+  /** Admins view other traders' accounts read-only, so they get no Cancel button. */
+  readonly isAdmin = this.store.isAdmin;
 
   readonly orderHistory = signal<OrderHistoryRow[]>([]);
   readonly orderHistoryLoading = signal(true);
@@ -39,6 +41,9 @@ export class OrderHistoryComponent {
     { value: 'CANCELLED', label: 'Cancelled' },
   ];
   readonly filter = signal<StatusFilter>('ALL');
+  /** The order being cancelled, so its button can show progress. */
+  readonly cancellingId = signal<string | null>(null);
+  readonly cancelError = signal<string | null>(null);
 
   readonly visibleRows = computed(() => {
     const filter = this.filter();
@@ -76,6 +81,38 @@ export class OrderHistoryComponent {
         this.orderHistory.set(rows);
         this.orderHistoryLoading.set(false);
       });
+  }
+
+  /** Cancels an open order. It may fill first; the API then answers ORD-409. */
+  cancel(row: OrderHistoryRow): void {
+    if (this.isAdmin || row.status !== 'NEW' || this.cancellingId()) {
+      return;
+    }
+    this.cancellingId.set(row.id);
+    this.cancelError.set(null);
+    this.tradingService.cancelOrder(row.id).subscribe({
+      next: (order) => {
+        this.cancellingId.set(null);
+        this.setStatus(row.id, order.status);
+      },
+      error: (error: unknown) => {
+        this.cancellingId.set(null);
+        this.cancelError.set(
+          readApiError(error)?.errorCode === 'ORD-409'
+            ? `The ${row.symbol} order could not be cancelled: it has already been filled or cancelled.`
+            : readErrorMessage(error, `The ${row.symbol} order could not be cancelled.`)
+        );
+        // Show what happened to it instead
+        this.tradingService.getOrder(row.id).subscribe({
+          next: (order) => this.setStatus(row.id, order.status),
+          error: () => undefined,
+        });
+      },
+    });
+  }
+
+  private setStatus(orderId: string, status: OrderHistoryRow['status']): void {
+    this.orderHistory.update((rows) => rows.map((row) => (row.id === orderId ? { ...row, status } : row)));
   }
 }
 

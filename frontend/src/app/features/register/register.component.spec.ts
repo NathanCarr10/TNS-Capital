@@ -72,4 +72,45 @@ describe('RegisterComponent', () => {
     expect(authServiceSpy.register).not.toHaveBeenCalled();
     expect(component.errorMessage()).toBe('Passwords do not match.');
   });
+
+  describe('rejects script input', () => {
+    const payloads = ['<script>alert(1)</script>', '<img src=x onerror=alert(1)>', '"><svg onload=alert(1)>', 'javascript:alert(1)'];
+    const fill = (overrides: Partial<{ username: string; holderName: string }>) =>
+      component.registerForm.setValue({
+        username: 'newtrader',
+        password: 'password123',
+        confirmPassword: 'password123',
+        holderName: 'Ada Lovelace',
+        ...overrides,
+      });
+    const text = (): string => (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    payloads.forEach((payload) => {
+      it(`in the username: ${payload}`, () => {
+        fill({ username: payload });
+        component.onSubmit();
+        fixture.detectChanges();
+
+        expect(component.registerForm.controls.username.hasError('pattern')).toBeTrue();
+        expect(authServiceSpy.register).not.toHaveBeenCalled();
+        expect(text()).toContain('Username can only contain letters, numbers, dots, underscores and hyphens.');
+      });
+
+      it(`in the account holder name: ${payload}`, () => {
+        fill({ holderName: payload });
+        component.onSubmit();
+        fixture.detectChanges();
+
+        expect(component.registerForm.controls.holderName.hasError('pattern')).toBeTrue();
+        expect(authServiceSpy.register).not.toHaveBeenCalled();
+        expect(text()).toContain("Account holder name can only contain letters, numbers, spaces and . , ' -");
+      });
+    });
+
+    it('still accepts real names with accents, apostrophes and hyphens', () => {
+      fill({ username: 'zoe.oneill_1', holderName: "Zoë O'Neill-Smith" });
+
+      expect(component.registerForm.valid).toBeTrue();
+    });
+  });
 });

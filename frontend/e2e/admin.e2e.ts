@@ -31,10 +31,16 @@ test.describe('Admin', () => {
     await expect(page.getByRole('link', { name: 'Trading dashboard' })).toHaveAttribute('href', '/portfolio');
   });
 
-  test('an admin logging in to the trading app is taken to the analytics dashboard', async ({ page }) => {
+  test("an admin logging in to the trading app sees the read-only account viewer, whose Analytics button opens the analytics dashboard", async ({ page }) => {
     await page.goto('/login');
     await submitLogin(page, ADMIN.username, ADMIN.password);
 
+    await expect(page).toHaveURL(/\/portfolio$/);
+    await expect(page.getByRole('heading', { name: 'Account viewer' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Account' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Place Order' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Analytics' }).click();
     await expect(page).toHaveURL(/\/analytics\/$/);
     await expect(page.getByText('Admins only. Sign in with your TNS Capital account.')).toBeVisible({
       timeout: 30_000,

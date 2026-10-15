@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
+import { catchError, map, of } from 'rxjs';
 
 import { AuthService } from './auth.service';
 
@@ -12,5 +13,14 @@ export const authGuard: CanActivateFn = (_route, state) => {
   }
 
   // Remember where the user was going, so login can take them back there
-  return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+  const toLogin = router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+
+  // The access token has expired, but the session may still be alive: refresh it
+  if (authService.canRefresh()) {
+    return authService.refresh().pipe(
+      map(() => true),
+      catchError(() => of(toLogin))
+    );
+  }
+  return toLogin;
 };

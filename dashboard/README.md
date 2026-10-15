@@ -82,7 +82,7 @@ schema has no rejection reasons or execution times:
 ## Running it
 
 With Docker, it runs as the `dashboard` service: `docker compose up -d dashboard`, then
-open it through the trading app at http://localhost:4200/analytics/, or directly at
+open it through the trading app at http://localhost:8086/analytics/, or directly at
 http://localhost:8501/analytics/ (change the port with `DASHBOARD_PORT`). The `/analytics` base path
 is set in [.streamlit/config.toml](.streamlit/config.toml) so the app's nginx can forward that path here. Run the ETL once
 (`python etl/pipeline.py`) to fill the batch source.

@@ -3,7 +3,6 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
-import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
 
 @Component({
@@ -17,7 +16,6 @@ export class LoginComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly analyticsDashboard = inject(AnalyticsDashboardService);
 
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -42,8 +40,6 @@ export class LoginComponent {
         const returnUrl = this.safeReturnUrl();
         if (returnUrl) {
           void this.router.navigateByUrl(returnUrl);
-        } else if (this.authService.isAdmin()) {
-          this.analyticsDashboard.open();
         } else {
           void this.router.navigate(['/portfolio']);
         }
