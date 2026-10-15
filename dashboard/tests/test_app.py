@@ -129,7 +129,7 @@ def test_links_back_to_the_trading_dashboard(monkeypatch):
 
     [link] = app.sidebar.get("link_button")
     assert link.proto.label == "Trading dashboard"
-    assert link.proto.url == "http://localhost:4200/dashboard"
+    assert link.proto.url == "/portfolio"  # same origin as the Angular app, see docs/DECISIONS.md 13
 
 
 def test_sign_out_returns_to_the_form(monkeypatch):
