@@ -14,6 +14,7 @@ import {
   PlaceOrderRequest,
   PlaceOrderResponse,
   PositionResponse,
+  UpdateAccountRequest,
   UpdateAccountStatusRequest,
 } from '../../api/trading';
 
@@ -39,6 +40,11 @@ export class TradingService {
 
   deposit(accountId: number, request: CashTransactionRequest): Observable<AccountResponse> {
     return this.accountApi.deposit(accountId, request);
+  }
+
+  /** Renames the account holder; the name must match HOLDER_NAME_PATTERN (VAL-422 otherwise). */
+  updateAccount(accountId: number, request: UpdateAccountRequest): Observable<AccountResponse> {
+    return this.accountApi.updateAccount(accountId, request);
   }
 
   /** Admin only: suspend an account or reactivate it. */

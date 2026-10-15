@@ -31,16 +31,18 @@ export class ShellComponent {
   private readonly store = inject(AccountStore);
   readonly theme = inject(ThemeService);
 
+  readonly isAdmin = this.store.isAdmin;
+
+  // Admins have no account of their own, so there are no settings to show them
   readonly nav: NavItem[] = [
     { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
     { label: 'Trade', link: '/trade', icon: 'trade' },
     { label: 'Order History', link: '/orders', icon: 'history' },
+    ...(this.isAdmin ? [] : [{ label: 'Settings', link: '/settings', icon: 'settings' as const }]),
   ];
 
   private readonly now = signal(new Date());
   readonly market = computed(() => nyseStatus(this.now()));
-
-  readonly isAdmin = this.store.isAdmin;
 
   /** The account holder's name, or the admin's username as admins have no account. */
   readonly displayName = computed(() =>
