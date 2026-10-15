@@ -71,6 +71,26 @@ public class AccountService {
     }
 
     /**
+     * Suspends an active account or reactivates a suspended one. Suspended
+     * accounts cannot trade or move cash until they are active again.
+     *
+     * @throws IllegalArgumentException  if the status is not ACTIVE or SUSPENDED
+     *                                   (closing goes through closeAccount)
+     * @throws AccountNotActiveException if the account is closed
+     */
+    public Account updateStatus(Long accountId, AccountStatus status) {
+        if (status != AccountStatus.ACTIVE && status != AccountStatus.SUSPENDED) {
+            throw new IllegalArgumentException("Status must be ACTIVE or SUSPENDED: " + status);
+        }
+        Account account = getAccountById(accountId);
+        if (account.getStatus() == AccountStatus.CLOSED) {
+            throw new AccountNotActiveException("Account is closed: " + accountId);
+        }
+        account.setStatus(status);
+        return accountRepository.save(account);
+    }
+
+    /**
      * Closes an account. The row is kept with status CLOSED rather than deleted,
      * so its orders, positions and history stay valid for the audit trail;
      * closed accounts cannot trade (business rule 2).

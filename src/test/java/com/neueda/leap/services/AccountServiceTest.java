@@ -391,6 +391,37 @@ class AccountServiceTest {
         }
     }
 
+    @DisplayName("updateStatus Tests")
+    @Nested
+    class UpdateStatusTests {
+        @DisplayName("Should suspend an active account and reactivate it")
+        @Test
+        void testSuspendAndReactivate() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            assertEquals(AccountStatus.SUSPENDED, accountService.updateStatus(1L, AccountStatus.SUSPENDED).getStatus());
+            assertEquals(AccountStatus.ACTIVE, accountService.updateStatus(1L, AccountStatus.ACTIVE).getStatus());
+        }
+
+        @DisplayName("Should refuse to close an account through a status change")
+        @Test
+        void testUpdateStatusRejectsClosed() {
+            assertThrows(IllegalArgumentException.class, () -> accountService.updateStatus(1L, AccountStatus.CLOSED));
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should refuse to reactivate a closed account")
+        @Test
+        void testUpdateStatusOnClosedAccount() {
+            testAccount.setStatus(AccountStatus.CLOSED);
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+
+            assertThrows(AccountNotActiveException.class, () -> accountService.updateStatus(1L, AccountStatus.ACTIVE));
+            assertEquals(AccountStatus.CLOSED, testAccount.getStatus());
+        }
+    }
+
     @DisplayName("deposit and withdraw Tests")
     @Nested
     class CashTransactionTests {
