@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * End-to-end tests: a real browser against the whole stack (Angular behind nginx, auth
  * service, trading API, Kafka, broker simulator, analytics dashboard).
  *
- * E2E_BASE_URL is where the app is served: http://localhost:4200 for a local stack
+ * E2E_BASE_URL is where the app is served: http://localhost:8086 for a local stack
  * (`docker compose up -d` or `npm start`), http://frontend:8080 inside ci/e2e-tests.sh.
  */
 export default defineConfig({
@@ -24,7 +24,7 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {
-    baseURL: process.env['E2E_BASE_URL'] ?? 'http://localhost:4200',
+    baseURL: process.env['E2E_BASE_URL'] ?? 'http://localhost:8086',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
