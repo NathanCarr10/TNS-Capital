@@ -47,6 +47,9 @@ def verify(token):
     secret = os.getenv("JWT_SECRET")
     if not secret:
         raise AuthError("The dashboard is missing JWT_SECRET, so it cannot check sign-ins.")
+    # Anyone could forge an admin token with the published placeholder (OWASP A02-5)
+    if secret.lower().startswith(("change-me", "changeme")):
+        raise AuthError("The dashboard's JWT_SECRET is the .env.example placeholder, so sign-ins are refused.")
     try:
         # The algorithm is pinned here, never taken from the token's header
         claims = jwt.decode(token, secret, algorithms=["HS256"], issuer=ISSUER,

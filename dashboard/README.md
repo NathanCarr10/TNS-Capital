@@ -26,7 +26,7 @@ read-only. The two apps run on different origins, so the admin signs in here sep
 see decision 12 in [docs/DECISIONS.md](../docs/DECISIONS.md).
 
 The token is checked again on every interaction, so when it expires (15 minutes) the page
-goes back to the sign-in form. The seeded admin is `admin` / `adminPassword`.
+goes back to the sign-in form. The admin is `admin`, with the `ADMIN_PASSWORD` from `.env`.
 
 ## Insights
 

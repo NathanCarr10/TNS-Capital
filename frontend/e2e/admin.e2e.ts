@@ -14,6 +14,10 @@ async function signInToAnalytics(page: Page): Promise<void> {
 }
 
 test.describe('Admin', () => {
+  test.beforeEach(() => {
+    expect(ADMIN.password, 'Set E2E_ADMIN_PASSWORD to the ADMIN_PASSWORD in your .env').not.toBe('');
+  });
+
   test("the home page's admin link opens the analytics dashboard, where an admin signs in", async ({ page }) => {
     await page.goto('/');
     await page.getByRole('link', { name: 'Open admin analytics' }).click();

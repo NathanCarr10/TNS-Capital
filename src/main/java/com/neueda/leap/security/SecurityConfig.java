@@ -57,12 +57,28 @@ public class SecurityConfig {
          */
         @Bean
         public JwtDecoder jwtDecoder() {
+                checkSecret(sharedSecret);
                 SecretKeySpec secretKey = new SecretKeySpec(sharedSecret.getBytes(), "HmacSHA256");
                 NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey).build();
                 decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                                 JwtValidators.createDefaultWithIssuer(issuer),
                                 new JwtClaimValidator<String>("typ", "access"::equals)));
                 return decoder;
+        }
+
+        /**
+         * Refuses to start with a key anyone could know: too short for HS256, or the
+         * placeholder from .env.example, with which anyone could forge an ADMIN token
+         * (OWASP A02-5). The auth service applies the same rule.
+         */
+        static void checkSecret(String secret) {
+                if (secret == null || secret.length() < 32) {
+                        throw new IllegalStateException("JWT_SECRET must be at least 32 bytes (256 bits) for HS256");
+                }
+                if (secret.toLowerCase(java.util.Locale.ROOT).matches("^change-?me.*")) {
+                        throw new IllegalStateException(
+                                        "JWT_SECRET is the placeholder from .env.example. Generate one with: openssl rand -hex 32");
+                }
         }
 
         /**

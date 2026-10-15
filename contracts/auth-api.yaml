@@ -102,10 +102,10 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
             examples:
               admin:
-                summary: Login as the seeded admin
+                summary: Login as the admin (password from ADMIN_PASSWORD)
                 value:
                   username: admin
-                  password: adminPassword
+                  password: your-admin-password
       responses:
         '200':
           description: Authentication successful
@@ -323,7 +323,7 @@ components:
           minLength: 1
           maxLength: 256
           description: Password of the user
-          example: adminPassword
+          example: your-admin-password
       additionalProperties: false
 
     TokenPair:
@@ -530,7 +530,7 @@ x-internal-notes: |
      - Postgres `users` table (db/tables/08_users.sql); passwords as Argon2id hashes
      - Refresh tokens as SHA-256 hashes in `refresh_tokens` (db/tables/09_refresh_tokens.sql),
        one row per token, grouped into sessions by family_id
-     - Seeded admin: admin/adminPassword -> Roles: [ADMIN]
+     - Admin: created at startup from ADMIN_PASSWORD (never seeded) -> Roles: [ADMIN]
 
   3. **Token Validation (here and in the Main API):**
      - Algorithm: HS256 (HMAC-SHA256), pinned; never read from the token
@@ -540,7 +540,7 @@ x-internal-notes: |
      - See: src/main/java/com/neueda/leap/security/SecurityConfig.java
 
   4. **Deployment:**
-     - Docker image: node:20-alpine
+     - Docker image: node:22-alpine (npm removed from the runtime stage)
      - Dockerfile: shared/auth-service/Dockerfile
      - Port: 4000 (configurable via PORT env var)
      - User runs as unprivileged 'node' user
