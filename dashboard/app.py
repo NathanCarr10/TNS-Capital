@@ -19,8 +19,9 @@ import insights
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
-# The Angular trading app; admins can view any account there, read-only
-TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "http://localhost:4200/dashboard")
+# The Angular trading app; admins can view any account there, read-only. Relative, since
+# admins reach this page through the Angular app's origin (/analytics/)
+TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "/portfolio")
 ASSET_CLASS_LABEL = "Asset class"
 
 
@@ -249,10 +250,15 @@ else:
             "last_order": st.column_config.DatetimeColumn("Last order", format="D MMM YYYY, HH:mm"),
         })
 
-    chosen = st.selectbox("See one user's orders", by_user["username"].tolist(), index=None,
-                          placeholder="Choose a user")
-    if chosen is not None:
-        theirs = trades[trades["username"] == chosen]
+    # Picked by holder name, keyed by account: names can repeat, and every account without a
+    # login shares the username "(no login)"
+    holders = by_user.sort_values(["holder_name", "account_number"])
+    labels = dict(zip(holders["account_number"], holders["holder_name"] + " (" + holders["account_number"] + ")"))
+    account = st.selectbox("See one account holder's orders", list(labels), index=None,
+                           format_func=labels.get, placeholder="Choose an account holder")
+    if account is not None:
+        chosen = labels[account]
+        theirs = trades[trades["account_number"] == account]
         col1, col2, col3 = st.columns(3)
         col1.metric("Their orders", f"{len(theirs):,}")
         col2.metric("Their fill rate", percent(insights.fill_rate(theirs)))

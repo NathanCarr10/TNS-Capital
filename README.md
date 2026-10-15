@@ -219,14 +219,14 @@ API's startup with `docker compose logs -f app`.
 
 | Service | URL | Notes |
 |---|---|---|
-| Web app | http://localhost:4200 | Angular frontend; nginx forwards `/api` and `/auth` to the services |
+| Web app | http://localhost:4200 | Angular frontend; nginx forwards `/api`, `/auth` and `/analytics/` to the services |
 | Trading API | http://localhost:3000 | All endpoints need a bearer token |
 | Swagger UI | http://localhost:3000/swagger-ui.html | Public. Click **Authorize** and paste an access token |
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
 | Auth service | http://localhost:4000 | `GET /health` is public |
 | Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
 | Kafka UI | http://localhost:8090 | Browse topics and messages |
-| Dashboard | http://localhost:8501 | Business insights; run the ETL once to fill the batch view |
+| Dashboard | http://localhost:4200/analytics/ | Admin analytics (Streamlit); also directly on http://localhost:8501/analytics/. Run the ETL once to fill the batch view |
 | PostgreSQL | `localhost:5432`, database `tns_capital` | Credentials from `.env` |
 | Kafka | `kafka:9092` | Reachable from inside the Compose network (see [Troubleshooting](#troubleshooting)) |
 
@@ -439,6 +439,8 @@ See [etl/README.md](etl/README.md) for settings and the reporting schema.
 | ETL | `cd etl && pip install -r requirements-dev.txt && python -m pytest` | Database integration tests run only with `ETL_IT=1`; see [etl/README.md](etl/README.md) |
 | Dashboard | `cd dashboard && pip install -r requirements.txt -r requirements-dev.txt && python -m pytest` | The `data.py` database tests run only with `DASHBOARD_IT=1` |
 | ETL and dashboard, with their database tests | `ci/python-tests.sh etl` / `ci/python-tests.sh dashboard` | Needs only Docker: starts a throwaway Postgres and removes it afterwards. Writes `coverage.xml` |
+| Frontend unit tests | `cd frontend && npm ci && npm test` | Karma and Jasmine in Chrome; generates the API clients first (needs Java 11+) |
+| End-to-end (Playwright) | `ci/e2e-tests.sh` | Needs only Docker: builds and starts a throwaway copy of the whole stack with no host ports, runs [frontend/e2e](frontend/e2e) in the Playwright image, then removes it. Against your own running stack instead: `cd frontend && npx playwright install chromium && npm run e2e` (see [frontend/README.md](frontend/README.md#end-to-end-tests)) |
 
 ---
 
@@ -456,6 +458,8 @@ Jenkins runs the [`Jenkinsfile`](Jenkinsfile) on every branch and pull request:
 | ETL Tests | The ETL pytest suite, including its Postgres integration tests against a throwaway database, with coverage (`ci/python-tests.sh etl`) |
 | Dashboard Tests | The dashboard's tests (insights, the headless Streamlit page, `data.py` against a throwaway database), with coverage |
 | Auth Service Tests | The auth service's Jest suite in a `node:20-alpine` container |
+| Frontend Tests | The Angular unit tests in headless Chromium, then a production build |
+| E2E Tests | The Playwright journeys against a throwaway copy of the whole stack (`ci/e2e-tests.sh`); the report and traces of failed tests are archived |
 | SonarQube Analysis | Analyses the Java API and the Python ETL and dashboard, uploads their coverage and waits for the quality gate |
 | Dependency Scan | Trivy scans the manifests and the built image. Fails on fixable CRITICAL CVEs. Accepted risks go in `.trivyignore` |
 

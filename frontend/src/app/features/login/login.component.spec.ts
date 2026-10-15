@@ -78,14 +78,14 @@ describe('LoginComponent', () => {
     expect(component.errorMessage()).toBe('invalid username or password');
   });
 
-  it('sends traders to the trader dashboard', () => {
+  it('sends traders to the portfolio page', () => {
     authServiceSpy.login.and.returnValue(of(undefined));
     authServiceSpy.isAdmin.and.returnValue(false);
 
     component.loginForm.setValue({ username: 'trader', password: 'traderPassword' });
     component.onSubmit();
 
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/dashboard']);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/portfolio']);
     expect(analyticsSpy.open).not.toHaveBeenCalled();
   });
 
@@ -101,14 +101,14 @@ describe('LoginComponent', () => {
   });
 
   it('takes anyone back to the page they were going to, even an admin', () => {
-    queryParams = { returnUrl: '/dashboard' };
+    queryParams = { returnUrl: '/portfolio' };
     authServiceSpy.login.and.returnValue(of(undefined));
     authServiceSpy.isAdmin.and.returnValue(true);
 
     component.loginForm.setValue({ username: 'admin', password: 'adminPassword' });
     component.onSubmit();
 
-    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/dashboard');
+    expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/portfolio');
     expect(analyticsSpy.open).not.toHaveBeenCalled();
   });
 
@@ -122,7 +122,7 @@ describe('LoginComponent', () => {
       component.onSubmit();
 
       expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();
-      expect(routerSpy.navigate).toHaveBeenCalledWith(['/dashboard']);
+      expect(routerSpy.navigate).toHaveBeenCalledWith(['/portfolio']);
     });
   }
 });

@@ -10,7 +10,7 @@ To start a local development server, run:
 ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Once the server is running, open your browser and navigate to `http://<server-ip>:8086/` (the dev server listens on `0.0.0.0:8086`, set in `angular.json`). The application will automatically reload whenever you modify any of the source files.
 
 ## API clients
 
@@ -18,8 +18,8 @@ The services and models in `src/app/api/` are generated from the OpenAPI specs i
 
 | Spec | Generated into | Used by |
 | --- | --- | --- |
-| `contracts/auth-api.yaml` | `src/app/api/auth` | `core/auth/auth.service.ts`, `features/dashboard/trading.service.ts` |
-| `contracts/trading-api.json` | `src/app/api/trading` | `features/dashboard/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices) |
+| `contracts/auth-api.yaml` | `src/app/api/auth` | `core/auth/auth.service.ts`, `core/trading/trading.service.ts` |
+| `contracts/trading-api.json` | `src/app/api/trading` | `core/trading/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices) |
 
 `npm start`, `npm run build`, `npm test` and `npm run typecheck` regenerate them first. Generating needs Java 11+.
 
@@ -36,11 +36,12 @@ Auth spec changes are made by hand in `contracts/auth-api.yaml`. Which response 
 
 Signing in as an admin opens the analytics dashboard (the Streamlit app in `dashboard/`,
 `docker compose up -d dashboard`), where the admin signs in again; its **Trading dashboard**
-button comes back here. Admins have no trading account, so for them `/dashboard` is a read-only
-account viewer: an account picker and an **Analytics** button in the header, no order ticket.
+button comes back here. Admins have no trading account, so for them `/portfolio` is a read-only
+account viewer: an account picker and an **Analytics** button in the header, and the order ticket on `/trade` is read-only.
 If a signed-out user opens a protected page, the login returns them to it (`?returnUrl=`).
-The analytics address is `ANALYTICS_DASHBOARD_URL` in
-`src/app/core/analytics/analytics-dashboard.service.ts`. Why admins sign in twice: see
+The dashboard is served on this app's own origin at `/analytics/`: nginx (and `ng serve`'s
+`proxy.conf.json`) forward it to the Streamlit container, so the link works wherever the app is
+opened from (`ANALYTICS_DASHBOARD_URL` in `src/app/core/analytics/analytics-dashboard.service.ts`). Why admins sign in twice: see
 decision 12 in [docs/DECISIONS.md](../docs/DECISIONS.md).
 
 ## Code scaffolding
@@ -75,15 +76,35 @@ To execute unit tests with the [Karma](https://karma-runner.github.io) test runn
 ng test
 ```
 
-## Running end-to-end tests
+## End-to-end tests
 
-For end-to-end (e2e) testing, run:
+[Playwright](https://playwright.dev) drives a real browser through the core journeys in [`e2e/`](e2e):
+
+| File | Journeys |
+| --- | --- |
+| `auth.e2e.ts` | The route guard sends a signed-out visitor to login and back; a new trader registers, logs in and sees their account; a wrong password shows an error |
+| `trading.e2e.ts` | A new trader deposits cash, places a BUY that fills (Kafka, broker simulator) and sees it in order history and holdings; sells part of a holding; a BUY they cannot afford is rejected (ORD-400); an open order is cancelled before it fills |
+| `admin.e2e.ts` | The home page's admin link and an admin's login both reach the analytics dashboard, where the admin signs in |
+
+They need the whole stack, so the simplest way to run them is the same script as Jenkins, from the
+repo root. It needs only Docker: it starts a throwaway copy of the stack with no host ports, so it
+can run next to your own, and removes it afterwards.
 
 ```bash
-ng e2e
+ci/e2e-tests.sh
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+To run them against a stack that is already up (`docker compose up -d`, app on :4200):
+
+```bash
+npx playwright install chromium   # once
+npm run e2e                       # E2E_BASE_URL=... for another address; add --ui to watch them
+```
+
+Each run registers new `e2e…` users. The auth service allows 10 logins a minute per client by
+default (`AUTH_RATE_LIMIT`), and one run uses about 8, so wait a minute between local runs.
+The HTML report is in `playwright-report/`, traces of failed tests in `test-results/`
+(`npx playwright show-trace <trace.zip>`).
 
 ## Additional Resources
 
