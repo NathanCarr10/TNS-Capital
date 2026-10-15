@@ -60,6 +60,11 @@ export class TradingService {
     return this.orderApi.placeOrder(request);
   }
 
+  /** Cancels an order that has not filled yet (status NEW); ORD-409 once it has. */
+  cancelOrder(orderId: string): Observable<OrderResponse> {
+    return this.orderApi.cancelOrder(orderId);
+  }
+
   getOrder(orderId: string): Observable<OrderResponse> {
     return this.orderApi.getOrder(orderId);
   }
