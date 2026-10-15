@@ -19,6 +19,7 @@ be explained at the showcase and revisited later.
 | 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
+| 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -157,3 +158,11 @@ browser in the end-to-end tests could not reach it either. The same pattern carr
 sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. The
 Streamlit **Trading dashboard** button is the relative `/portfolio` for the same reason. Port 8501
 stays published for direct access (`http://localhost:8501/analytics/`).
+
+## 15. Node.js 22 for the auth service
+
+§4.2 lists Node.js 20 LTS. Node 20 reached end of life on 2026-04-30 and no longer gets security
+fixes (docs/OWASP_REVIEW.md A06-3), so the auth service builds, tests (Jenkins) and runs on
+`node:22-alpine`, the current LTS. NestJS 11, Argon2 and the test suite run unchanged on it. The
+runtime image also drops the npm CLI, which only the build needs; it carried every HIGH finding
+in Trivy's scan of the image (A06-4).
