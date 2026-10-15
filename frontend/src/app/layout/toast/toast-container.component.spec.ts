@@ -39,7 +39,7 @@ describe('ToastContainerComponent', () => {
     (fixture.nativeElement.querySelector('button.close') as HTMLButtonElement).click();
     fixture.detectChanges();
 
-    expect(toastElements().length).toBe(0);
+    expect(toastElements()).toHaveSize(0);
   }));
 
   it('pauses a toast while the pointer is on it', fakeAsync(() => {

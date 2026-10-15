@@ -30,7 +30,7 @@ export class MarketQuotesStore {
 
   constructor() {
     const symbols$ = this.symbols$.pipe(
-      map((symbols) => [...symbols].sort()),
+      map((symbols) => [...symbols].sort((a, b) => a.localeCompare(b))),
       // Reordering the same symbols, e.g. when holdings load, must not trigger an extra fetch
       distinctUntilChanged((previous, current) => previous.join() === current.join())
     );

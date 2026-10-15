@@ -61,7 +61,7 @@ describe('PortfolioSplitComponent', () => {
 
     setQuotes(quote('AAPL', 120), quote('MSFT', 200));
     expect(fixture.nativeElement.querySelector('.skeleton')).toBeNull();
-    expect(segments().length).toBe(3);
+    expect(segments()).toHaveSize(3);
   });
 
   it('sizes each segment by value and lists every part in the legend', () => {
@@ -116,7 +116,7 @@ describe('PortfolioSplitComponent', () => {
     render({ positions, cashBalance: 800 });
     setQuotes(quote('AAPL', 120), quote('MSFT', null));
 
-    expect(segments().length).toBe(2);
+    expect(segments()).toHaveSize(2);
     expect(fixture.nativeElement.querySelector('.note')?.textContent).toContain('1 unpriced holding');
   });
 

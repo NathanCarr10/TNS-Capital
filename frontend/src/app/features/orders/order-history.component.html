@@ -11,7 +11,7 @@
 
 <section class="card">
   <div class="card-header">
-    <div class="segmented" role="group" aria-label="Filter by status">
+    <fieldset class="segmented" aria-label="Filter by status">
       @for (option of filters; track option.value) {
         <button
           type="button"
@@ -22,7 +22,7 @@
           {{ option.label }}
         </button>
       }
-    </div>
+    </fieldset>
     @if (!orderHistoryLoading() && !orderHistoryError()) {
       <span class="muted count">{{ visibleRows().length }} of {{ orderHistory().length }} orders</span>
     }

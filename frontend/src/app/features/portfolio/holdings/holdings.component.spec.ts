@@ -108,7 +108,7 @@ describe('HoldingsComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('tr.skeleton-row')).toBeNull();
-    expect(fixture.nativeElement.querySelectorAll('.price-unavailable').length).toBe(3);
+    expect(fixture.nativeElement.querySelectorAll('.price-unavailable')).toHaveSize(3);
   });
 
   it('shows an empty state when there are no open positions', () => {

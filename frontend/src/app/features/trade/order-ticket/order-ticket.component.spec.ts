@@ -190,7 +190,7 @@ describe('OrderTicketComponent', () => {
     tick(OrderTrackerService.POLL_INTERVAL_MS);
 
     expect(component.isTracking()).toBeFalse();
-    expect(toastMessages().length).toBe(1);
+    expect(toastMessages()).toHaveSize(1);
     flush();
   }));
 

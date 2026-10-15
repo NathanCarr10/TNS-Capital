@@ -24,6 +24,6 @@ describe('Generated API types', () => {
     // @ts-expect-error idempotencyKey is required by PlaceOrderRequest
     const missingKey: PlaceOrderRequest = { accountId: 7, symbol: 'AAPL', side: PlaceOrderRequest.SideEnum.BUY, quantity: 1 };
 
-    expect([missingPassword, stringAmount, badSide, missingKey].length).toBe(4);
+    expect([missingPassword, stringAmount, badSide, missingKey]).toHaveSize(4);
   });
 });

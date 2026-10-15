@@ -36,11 +36,11 @@
       <tbody>
         @if (!lastUpdated()) {
           @for (row of skeletonRows; track row) {
-            <tr class="skeleton-row" aria-hidden="true">
-              <td><span class="skeleton skeleton-wide"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
+            <tr class="skeleton-row">
+              <td><span class="skeleton skeleton-wide" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
             </tr>
           }
         } @else {

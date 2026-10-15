@@ -314,6 +314,19 @@ a.symbol-link {
 }
 
 // Info and error messages
+// Groups of controls are <fieldset>s (native grouping) and status messages <output>s (a live
+// status region); this keeps them looking like the <div>s and <p>s they replaced
+fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+output {
+  display: block;
+}
+
 .note {
   margin: 0.9rem 0 0;
   padding: 0.6rem 0.8rem;

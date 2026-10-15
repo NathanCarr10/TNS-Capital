@@ -89,7 +89,7 @@
           <p class="form-error" role="alert">Enter an amount greater than $0.00.</p>
         }
         @if (depositMessage()) {
-          <p class="form-success" role="status">{{ depositMessage() }}</p>
+          <output class="form-success">{{ depositMessage() }}</output>
         }
         @if (depositError()) {
           <p class="form-error" role="alert">{{ depositError() }}</p>

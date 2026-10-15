@@ -32,6 +32,17 @@
         <sonar.test.inclusions>src/test/java/**,etl/tests/**,dashboard/tests/**,frontend/src/app/**/*.spec.ts,frontend/src/app/core/trading/testing/**,frontend/e2e/**,shared/auth-service/tests/**</sonar.test.inclusions>
         <sonar.python.version>3.12</sonar.python.version>
         <sonar.python.coverage.reportPaths>etl/coverage.xml,dashboard/coverage.xml</sonar.python.coverage.reportPaths>
+        <!-- Web:S6819 ("prefer a native element to this ARIA role") is switched off for three
+             controls that have no native equivalent and follow the WAI-ARIA Authoring Practices
+             patterns instead: the BUY/SELL toggle (radio group of buttons), the symbol search
+             (combobox with a listbox of results) and the account status switch. -->
+        <sonar.issue.ignore.multicriteria>aria1,aria2,aria3</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.aria1.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria1.ruleKey>
+        <sonar.issue.ignore.multicriteria.aria1.resourceKey>frontend/src/app/features/trade/order-ticket/side-toggle/side-toggle.component.html</sonar.issue.ignore.multicriteria.aria1.resourceKey>
+        <sonar.issue.ignore.multicriteria.aria2.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria2.ruleKey>
+        <sonar.issue.ignore.multicriteria.aria2.resourceKey>frontend/src/app/layout/symbol-search/symbol-search.component.html</sonar.issue.ignore.multicriteria.aria2.resourceKey>
+        <sonar.issue.ignore.multicriteria.aria3.ruleKey>Web:S6819</sonar.issue.ignore.multicriteria.aria3.ruleKey>
+        <sonar.issue.ignore.multicriteria.aria3.resourceKey>frontend/src/app/features/portfolio/portfolio.component.html</sonar.issue.ignore.multicriteria.aria3.resourceKey>
         <sonar.javascript.lcov.reportPaths>frontend/coverage/frontend/lcov.info,shared/auth-service/coverage/lcov.info</sonar.javascript.lcov.reportPaths>
     </properties>
 

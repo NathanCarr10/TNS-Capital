@@ -70,7 +70,7 @@ export class PortfolioValueChartComponent {
       return null;
     }
     const first = series[0].value;
-    const amount = series[series.length - 1].value - first;
+    const amount = series.at(-1)!.value - first;
     return { amount, percent: first > 0 ? (amount * 100) / first : null };
   });
 
@@ -126,7 +126,7 @@ export class PortfolioValueChartComponent {
     const values = series.map((point) => point.value);
     return (
       `Portfolio value over ${this.range().label}: from ${compactCurrency.format(values[0])} ` +
-      `to ${compactCurrency.format(values[values.length - 1])}, ranging from ${compactCurrency.format(Math.min(...values))} ` +
+      `to ${compactCurrency.format(values.at(-1)!)}, ranging from ${compactCurrency.format(Math.min(...values))} ` +
       `to ${compactCurrency.format(Math.max(...values))}. Use the arrow keys to read each point.`
     );
   });
@@ -175,7 +175,7 @@ export class PortfolioValueChartComponent {
   // Refetches when the held symbols or the range change; a bar series that fails is left out
   private loadBars(): void {
     const symbols$ = toObservable(this.positions).pipe(
-      map((positions) => (positions === null ? null : positions.map((position) => position.symbol).sort().join())),
+      map((positions) => (positions === null ? null : positions.map((position) => position.symbol).sort((a, b) => a.localeCompare(b)).join())),
       distinctUntilChanged()
     );
     combineLatest([symbols$, toObservable(this.range)])

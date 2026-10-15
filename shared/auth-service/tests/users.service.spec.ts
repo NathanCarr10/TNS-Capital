@@ -4,7 +4,7 @@
  * is set. Rows created here are removed afterwards.
  */
 import { Pool } from 'pg';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../src/users/password-hasher';
 import { RefreshTokensService } from '../src/users/refresh-tokens.service';
 import { accountNumberFor, AdminNameTakenError, UsernameTakenError, UsersService } from '../src/users/users.service';

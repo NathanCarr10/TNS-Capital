@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { ApiException } from '../common/api.exception';
 import type { Role } from '../users/users.service';
 

@@ -32,10 +32,11 @@ export class SymbolSearchComponent {
     }
     const instruments = this.store.instruments() ?? [];
     const bySymbol = instruments.filter((instrument) => instrument.symbol.startsWith(query));
+    bySymbol.sort((a, b) => a.symbol.localeCompare(b.symbol));
     const byName = instruments.filter(
       (instrument) => !instrument.symbol.startsWith(query) && instrument.name.toUpperCase().includes(query)
     );
-    return [...bySymbol.sort((a, b) => a.symbol.localeCompare(b.symbol)), ...byName].slice(
+    return [...bySymbol, ...byName].slice(
       0,
       SymbolSearchComponent.MAX_RESULTS
     );
