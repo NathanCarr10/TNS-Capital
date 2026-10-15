@@ -1,5 +1,6 @@
 package com.neueda.leap.integration;
 
+import com.neueda.leap.dtos.HolderName;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.Position;
@@ -207,6 +208,27 @@ class AccountControllerIT extends AbstractIntegrationTest {
                 .content("{\"holderName\":\"Johnny Doe\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.holderName", is("Johnny Doe")));
+    }
+
+    @Test
+    @DisplayName("Should reject a script payload as the holder name when opening an account")
+    void testCreateAccountRejectsScriptInHolderName() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"accountNumber\":\"ACC003\",\"holderName\":\"<script>alert(1)</script>\",\"cashBalance\":1.00}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errorCode", is("VAL-422")));
+    }
+
+    @Test
+    @DisplayName("Should reject a script payload as the new holder name")
+    void testUpdateHolderNameRejectsScript() throws Exception {
+        mockMvc.perform(patch("/api/v1/accounts/{id}", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"holderName\":\"<img src=x onerror=alert(1)>\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errorCode", is("VAL-422")))
+                .andExpect(jsonPath("$.message", is("holderName: " + HolderName.MESSAGE)));
     }
 
     @Test

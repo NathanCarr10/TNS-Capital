@@ -300,6 +300,18 @@ describe('Auth API contract', () => {
       expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.any(String), 'Ada Lovelace');
     });
 
+    it('says which characters are allowed when the holder name has script characters', async () => {
+      const response = await register({ username: 'newtrader', password: 'password123', holderName: '<b>Ada</b>' }).expect(400);
+
+      expect(response.body.message).toBe("holderName can only contain letters, numbers, spaces and . , ' -");
+    });
+
+    it('accepts real names with accents, apostrophes and hyphens', async () => {
+      await register({ username: 'zoe.oneill_1', password: 'password123', holderName: "Zoë O'Neill-Smith" }).expect(201);
+
+      expect(fakeUsers.create).toHaveBeenCalledWith('zoe.oneill_1', expect.any(String), "Zoë O'Neill-Smith");
+    });
+
     it('never returns the password or its hash', async () => {
       const response = await register({ username: 'newtrader', password: 'password123' }).expect(201);
 
@@ -328,6 +340,11 @@ describe('Auth API contract', () => {
       ['password is shorter than 8 characters', { username: 'newtrader', password: 'short' }],
       ['holderName is blank', { username: 'newtrader', password: 'password123', holderName: '   ' }],
       ['there is an unexpected property', { username: 'newtrader', password: 'password123', role: 'ADMIN' }],
+      ['username contains a script tag', { username: '<script>alert(1)</script>', password: 'password123' }],
+      ['username contains an HTML event handler', { username: '<img src=x onerror=alert(1)>', password: 'password123' }],
+      ['holderName contains a script tag', { username: 'newtrader', password: 'password123', holderName: '<script>alert(1)</script>' }],
+      ['holderName contains an HTML event handler', { username: 'newtrader', password: 'password123', holderName: '<img src=x onerror=alert(1)>' }],
+      ['holderName breaks out of an attribute', { username: 'newtrader', password: 'password123', holderName: '"><svg onload=alert(1)>' }],
     ])('rejects the body when %s', async (_case, body) => {
       const response = await register(body).expect(400);
 

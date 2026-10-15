@@ -59,6 +59,18 @@ describe('PortfolioComponent', () => {
     expect(links).toEqual(['/orders', '/trade']);
   });
 
+  it('shows a stored script payload in the holder name as text instead of running it', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    tradingService.getAccount.and.returnValue(of({ ...ACCOUNT, holderName: payload }));
+
+    const element = create();
+    const holder = element.querySelector('.holder')!;
+
+    expect(holder.textContent).toContain(payload);
+    expect(holder.innerHTML).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(element.querySelector('img[src="x"]')).toBeNull();
+  });
+
   it('does not show admin controls to a trader', () => {
     const element = create();
 
