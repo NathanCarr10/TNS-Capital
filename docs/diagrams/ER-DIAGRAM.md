@@ -20,6 +20,7 @@ erDiagram
         NUMERIC(18-2) cash_balance "CHECK >= 0"
         VARCHAR(20) status "ACTIVE | SUSPENDED | CLOSED"
         INT version "optimistic lock"
+        TIMESTAMP opened_on "set once, when the account is opened"
         TIMESTAMP last_updated
     }
 

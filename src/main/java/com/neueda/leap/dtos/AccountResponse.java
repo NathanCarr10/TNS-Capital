@@ -15,5 +15,6 @@ public record AccountResponse(
         @Schema(requiredMode = REQUIRED) String holderName,
         @Schema(requiredMode = REQUIRED) BigDecimal cashBalance,
         @Schema(requiredMode = REQUIRED) AccountStatus status,
+        @Schema(requiredMode = REQUIRED) Instant openedOn,
         @Schema(requiredMode = REQUIRED) Instant lastUpdated) {
 }
