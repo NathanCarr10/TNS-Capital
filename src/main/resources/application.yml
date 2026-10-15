@@ -77,8 +77,10 @@ market-data:
 
 dlq:
   auto-resolve:
-    # PENDING DLQ messages are marked RESOLVED once older than after-ms
-    enabled: true
+    # PENDING DLQ messages are marked RESOLVED once older than after-ms. Off: a failed order
+    # stays PENDING until an admin reviews or replays it (OWASP A09-4). DLQ_AUTO_RESOLVE=true
+    # turns it back on, e.g. for a demo.
+    enabled: ${DLQ_AUTO_RESOLVE:false}
     after-ms: 10000
     interval-ms: 1000
 
