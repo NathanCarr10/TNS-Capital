@@ -46,18 +46,26 @@ describe('ShellComponent', () => {
     }
   });
 
-  it('links to Portfolio, Trade and Order History only', () => {
+  const navLinks = (element: HTMLElement): (string | null | undefined)[][] =>
+    Array.from(element.querySelectorAll('nav a')).map((link) => [link.textContent?.trim(), link.getAttribute('href')]);
+
+  it('links to Portfolio, Trade, Order History and Settings', () => {
     const element = create();
 
-    const links = Array.from(element.querySelectorAll('nav a')).map((link) => [
-      link.textContent?.trim(),
-      link.getAttribute('href'),
-    ]);
-    expect(links).toEqual([
+    expect(navLinks(element)).toEqual([
       ['Portfolio', '/portfolio'],
       ['Trade', '/trade'],
       ['Order History', '/orders'],
+      ['Settings', '/settings'],
     ]);
+  });
+
+  it('gives admins no Settings link, as they have no account of their own', () => {
+    isAdmin = true;
+
+    const element = create();
+
+    expect(navLinks(element).map(([label]) => label)).not.toContain('Settings');
   });
 
   it("shows the account holder's name, initials and account number", () => {

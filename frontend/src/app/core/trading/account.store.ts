@@ -68,6 +68,15 @@ export class AccountStore {
     return this.tradingService.deposit(account.id, { amount }).pipe(tap((updated) => this.account.set(updated)));
   }
 
+  /** Changes the name the account is held under. */
+  updateHolderName(holderName: string): Observable<AccountResponse> {
+    const account = this.account();
+    if (!account) {
+      return EMPTY;
+    }
+    return this.tradingService.updateAccount(account.id, { holderName }).pipe(tap((updated) => this.account.set(updated)));
+  }
+
   /** Admin view: suspend the shown account or reactivate it. */
   setStatus(status: AccountResponse.StatusEnum): Observable<AccountResponse> {
     const account = this.account();
