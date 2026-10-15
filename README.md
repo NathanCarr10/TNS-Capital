@@ -127,18 +127,23 @@ TNS-Capital/
 │   ├── services/                    Business logic: orders, accounts, order validation, DLQ
 │   ├── strategies/                  Buy and sell execution strategies
 │   ├── kafka/                       Order/trade event publishers, order listener, event types
+│   ├── execution/                   Broker Simulator client (the Trade Executor's outbound call)
+│   ├── marketdata/                  Live prices from Alpaca behind PriceProvider
 │   ├── security/                    JWT configuration and account ownership checks
 │   ├── model/  dtos/  enums/        JPA entities, request/response records, enums
 │   ├── repositories/  mappers/      Spring Data JPA repositories and MyBatis mappers
 │   ├── exceptions/                  Domain exceptions mapped to API error codes
 │   └── config/                      Kafka, OpenAPI and MyBatis configuration
 ├── src/test/                        Unit tests and *IT integration tests (Testcontainers)
+├── frontend/                        Angular app, served by nginx; e2e/ holds the Playwright tests
 ├── shared/auth-service/             NestJS auth service (has its own README)
+├── broker-simulator/                Spring Boot Broker Simulator: fills orders after a delay
 ├── db/                              PostgreSQL image: tables/, views/, seed data/
 ├── etl/                             Python ETL pipeline (has its own README)
 ├── dashboard/                       Streamlit analytics dashboard (has its own README)
 ├── bruno/                           Bruno API collection for manual testing
-├── contracts/                       OpenAPI contract for the auth API
+├── contracts/                       OpenAPI contracts for the auth and trading APIs
+├── ci/                              Test scripts Jenkins runs (Python suites, e2e stack)
 ├── docs/                            Business logic, security guide, SonarQube, diagrams
 ├── docker-compose.yml               Full local stack
 ├── Dockerfile                       Multi-stage build for the trading API
@@ -160,7 +165,7 @@ These steps take a fresh clone to a running stack.
 | [Docker](https://docs.docker.com/get-docker/) with Docker Compose | Docker 24+ | running the stack and the integration tests |
 | JDK | 21 | building and testing the API outside Docker (optional) |
 | Maven | 3.8+ | as above (optional) |
-| Node.js | 20+ | developing the auth service (optional) |
+| Node.js | 22+ | developing the auth service or the frontend (optional) |
 | Python | 3.12 | developing the ETL pipeline (optional) |
 
 The full stack uses about 3.5 GB of memory. Give Docker Desktop at least 4 GB.
@@ -225,7 +230,7 @@ API's startup with `docker compose logs -f app`.
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
 | Auth service | http://localhost:4000 | `GET /health` is public |
 | Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
-| Kafka UI | http://localhost:8090 | Browse topics and messages |
+| Kafka UI | http://localhost:8090 | Browse topics and messages (read-only, this machine only) |
 | Dashboard | http://localhost:8086/analytics/ | Admin analytics (Streamlit); also directly on http://localhost:8501/analytics/. Run the ETL once to fill the batch view |
 | PostgreSQL | `localhost:5432`, database `tns_capital` | Credentials from `.env` |
 | Kafka | `kafka:9092` | Reachable from inside the Compose network (see [Troubleshooting](#troubleshooting)) |
@@ -254,6 +259,18 @@ curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Beare
 ```
 
 ### Stopping and resetting
+
+```bash
+docker compose down        # stop the stack, keep the database
+docker compose down -v     # stop the stack and delete the database volume
+```
+
+The database scripts in `db/` only run when the data volume is empty. **After pulling
+changes to `db/tables` or `db/data`, run `docker compose down -v` and start again** so
+PostgreSQL rebuilds the schema. The same applies to `DB_PASSWORD`: PostgreSQL only reads it
+when the volume is created, so changing it later locks the services out until you reset.
+
+### ETL pipeline (optional)
 
 A scheduled Python pipeline in [`etl/`](etl/README.md) extracts trade data from PostgreSQL, transforms it into a reporting star schema and loads it into the `analytics` schema. It also loads daily price history for every instrument from Alpaca into `analytics.fact_daily_prices`. See [etl/README.md](etl/README.md).
 
@@ -473,8 +490,9 @@ for the quality gate.
 
 | Problem | Fix |
 |---|---|
-| `required variable DB_PASSWORD is missing` or `set JWT_SECRET in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
-| Auth service exits on startup | `JWT_SECRET` must be at least 32 bytes. Use `openssl rand -hex 32`. |
+| `required variable DB_PASSWORD is missing`, `set JWT_SECRET in .env` or `set ADMIN_PASSWORD in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
+| Auth service or API exits on startup | `JWT_SECRET` must be at least 32 bytes and not the `change-me` placeholder; `ADMIN_PASSWORD` at least 12 characters. Check `docker compose logs auth-service`. |
+| `admin` / `adminPassword` no longer logs in | Nothing is seeded any more: log in as `admin` with the `ADMIN_PASSWORD` from `.env` (the auth service sets it at startup). |
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
@@ -493,6 +511,8 @@ for the quality gate.
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Design decisions and where the build deliberately differs from the spec |
 | [docs/BusinessLogic.md](docs/BusinessLogic.md) | Domain model, class diagram and buy/sell sequence diagrams |
 | [docs/diagrams/ER-DIAGRAM.md](docs/diagrams/ER-DIAGRAM.md) | Database ER diagram |
+| [docs/diagrams/CLASS-DIAGRAM.md](docs/diagrams/CLASS-DIAGRAM.md) | Domain model, services and strategies, exceptions (UML class diagrams) |
+| [docs/diagrams/ORDER-FLOW.md](docs/diagrams/ORDER-FLOW.md) | Order flow sequence diagrams: a BUY that fills, a rejection and the DLQ, cancelling |
 | [docs/SECURITY_GUIDE.md](docs/SECURITY_GUIDE.md) | API security measures |
 | [docs/SONARQUBE.md](docs/SONARQUBE.md) | SonarQube quality gate |
 | [shared/auth-service/README.md](shared/auth-service/README.md) | Auth endpoints, tokens, guards and error codes |
