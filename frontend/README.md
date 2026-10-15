@@ -10,7 +10,7 @@ To start a local development server, run:
 ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Once the server is running, open your browser and navigate to `http://<server-ip>:8086/` (the dev server listens on `0.0.0.0:8086`, set in `angular.json`). The application will automatically reload whenever you modify any of the source files.
 
 ## API clients
 
