@@ -2,7 +2,7 @@
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -114,6 +114,67 @@ describe('PortfolioComponent', () => {
       const element = create();
 
       expect(element.querySelector('.note.error')?.textContent).toContain('There are no trading accounts yet.');
+    });
+  });
+
+  describe('deposit', () => {
+    const button = (name: string): HTMLButtonElement =>
+      Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
+        (candidate) => candidate.textContent!.trim() === name
+      )!;
+    const depositAmount = (amount: number): void => {
+      button('Deposit cash').click();
+      fixture.detectChanges();
+      const input: HTMLInputElement = fixture.nativeElement.querySelector('#deposit-amount');
+      input.value = String(amount);
+      input.dispatchEvent(new Event('input'));
+      button('Confirm deposit').click();
+      fixture.detectChanges();
+    };
+
+    it('deposits into the account and shows the new balance', () => {
+      tradingService.deposit.and.returnValue(of({ ...ACCOUNT, cashBalance: ACCOUNT.cashBalance + 250 }));
+      const element = create();
+
+      depositAmount(250);
+
+      expect(tradingService.deposit).toHaveBeenCalledWith(ACCOUNT.id, { amount: 250 });
+      expect(element.querySelector('[role="status"]')!.textContent).toContain('Cash deposited successfully.');
+      expect(element.querySelector('.account-card')!.textContent).toContain(
+        (ACCOUNT.cashBalance + 250).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+      );
+    });
+
+    it('does not send an amount of zero', () => {
+      const element = create();
+
+      depositAmount(0);
+
+      expect(tradingService.deposit).not.toHaveBeenCalled();
+      expect(element.querySelector('.deposit-form [role="alert"]')!.textContent).toContain(
+        'Enter an amount greater than $0.00.'
+      );
+    });
+
+    it("shows the API's reason when the deposit is refused", () => {
+      tradingService.deposit.and.returnValue(
+        throwError(() => ({ status: 403, error: { errorCode: 'ACC-403', message: 'The account is not in an active state for this operation' } }))
+      );
+      const element = create();
+
+      depositAmount(100);
+
+      expect(element.querySelector('.deposit-form [role="alert"]')!.textContent).toContain(
+        'The account is not in an active state for this operation'
+      );
+    });
+
+    it('is not offered to admins, who view accounts read-only', () => {
+      isAdmin = true;
+      tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
+      create();
+
+      expect(button('Deposit cash')).toBeUndefined();
     });
   });
 });
