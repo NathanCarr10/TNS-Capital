@@ -14,14 +14,14 @@ describe('OrderHistoryComponent', () => {
   let fixture: ComponentFixture<OrderHistoryComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
 
-  const create = (): HTMLElement => {
+  const create = (isAdmin = false): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [OrderHistoryComponent],
       providers: [
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => false } },
+        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
       ],
     });
     fixture = TestBed.createComponent(OrderHistoryComponent);
@@ -140,5 +140,61 @@ describe('OrderHistoryComponent', () => {
     const element = create();
 
     expect(element.querySelector('.note.error')?.textContent).toContain('History is down');
+  });
+
+  describe('cancelling', () => {
+    const cancelButtons = (): HTMLButtonElement[] =>
+      Array.from(fixture.nativeElement.querySelectorAll('tbody button') as NodeListOf<HTMLButtonElement>);
+    const statusOf = (symbol: string): string =>
+      (Array.from(fixture.nativeElement.querySelectorAll('tbody tr') as NodeListOf<HTMLElement>)
+        .find((row) => row.textContent!.includes(symbol))!
+        .querySelector('.status-badge') as HTMLElement).textContent!.trim();
+
+    it('offers Cancel only on open orders', () => {
+      create();
+
+      expect(cancelButtons().map((button) => button.getAttribute('aria-label'))).toEqual(['Cancel BUY 10 AAPL']);
+    });
+
+    it('marks the order cancelled when the API cancels it', () => {
+      tradingService.cancelOrder.and.returnValue(
+        of({ id: 'open-1', accountId: ACCOUNT.id, symbol: 'AAPL', side: 'BUY', quantity: 10, price: 150,
+             status: 'CANCELLED', createdOn: '2026-01-01T12:00:00Z' })
+      );
+      create();
+
+      cancelButtons()[0].click();
+      fixture.detectChanges();
+
+      expect(tradingService.cancelOrder).toHaveBeenCalledWith('open-1');
+      expect(statusOf('AAPL')).toBe('CANCELLED');
+      expect(cancelButtons().length).toBe(0);
+    });
+
+    it('explains when the order filled before it could be cancelled, and shows its status', () => {
+      tradingService.cancelOrder.and.returnValue(
+        throwError(() => ({ status: 409, error: { errorCode: 'ORD-409', message: 'Only NEW orders can be cancelled' } }))
+      );
+      tradingService.getOrder.and.returnValue(
+        of({ id: 'open-1', accountId: ACCOUNT.id, symbol: 'AAPL', side: 'BUY', quantity: 10, price: 150,
+             status: 'FILLED', createdOn: '2026-01-01T12:00:00Z' })
+      );
+      const element = create();
+
+      cancelButtons()[0].click();
+      fixture.detectChanges();
+
+      expect(element.querySelector('[role="alert"]')!.textContent).toContain(
+        'could not be cancelled: it has already been filled or cancelled'
+      );
+      expect(statusOf('AAPL')).toBe('FILLED');
+    });
+
+    it('gives admins, who view accounts read-only, no Cancel button', () => {
+      tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
+      create(true);
+
+      expect(cancelButtons().length).toBe(0);
+    });
   });
 });

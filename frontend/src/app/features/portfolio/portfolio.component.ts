@@ -6,6 +6,7 @@ import { RouterLink } from '@angular/router';
 
 import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AccountStore } from '../../core/trading/account.store';
+import { readErrorMessage } from '../../core/trading/api-error';
 import { MarketQuotesStore } from '../../core/trading/market-quotes.store';
 import { IconComponent } from '../../layout/icon/icon.component';
 import { AdminAccountBarComponent } from './admin-account-bar/admin-account-bar.component';
@@ -94,9 +95,10 @@ export class PortfolioComponent {
           this.depositMessage.set('Cash deposited successfully.');
           this.depositForm.reset({ amount: 0 });
         },
-        error: () => {
+        error: (error: unknown) => {
           this.depositLoading.set(false);
-          this.depositError.set('Could not deposit cash. Please try again.');
+          // e.g. the account is not active (ACC-403) or the amount is invalid (VAL-422)
+          this.depositError.set(readErrorMessage(error, 'Could not deposit cash. Please try again.'));
         },
       });
   }

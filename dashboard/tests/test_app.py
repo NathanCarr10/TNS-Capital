@@ -129,7 +129,7 @@ def test_links_back_to_the_trading_dashboard(monkeypatch):
 
     [link] = app.sidebar.get("link_button")
     assert link.proto.label == "Trading dashboard"
-    assert link.proto.url == "http://localhost:8086/dashboard"
+    assert link.proto.url == "/portfolio"  # same origin as the Angular app, see docs/DECISIONS.md 13
 
 
 def test_sign_out_returns_to_the_form(monkeypatch):
@@ -147,7 +147,10 @@ def test_shows_what_each_user_traded_and_one_users_orders(monkeypatch):
     [by_user] = [frame.value for frame in app.dataframe if "fill_rate" in frame.value]
     assert by_user["username"].tolist() == ["ann", "bob"]
 
-    app.selectbox[0].select("bob").run()
+    picker = app.selectbox[0]
+    assert picker.label == "See one account holder's orders"
+    assert picker.options == ["Ann (ACC-1)", "Bob (ACC-2)"]
+    picker.select("ACC-2").run()
 
     assert not app.exception
     metrics = {metric.label: metric.value for metric in app.metric}
@@ -157,6 +160,17 @@ def test_shows_what_each_user_traded_and_one_users_orders(monkeypatch):
     [theirs] = [frame.value for frame in app.dataframe if "notional" in frame.value and "order_id" not in frame.value]
     assert theirs["status"].tolist() == ["REJECTED"]
 
+
+
+def test_accounts_without_a_login_are_picked_one_at_a_time(monkeypatch):
+    # Seeded accounts have no login, so they all share the username "(no login)"
+    no_login = TRADES.assign(username="(no login)")
+    app = run_app(monkeypatch, {**FRAMES, "live": no_login})
+
+    app.selectbox[0].select("ACC-1").run()
+
+    assert not app.exception
+    assert {metric.label: metric.value for metric in app.metric}["Their orders"] == "1"
 
 def test_shows_metrics_insights_and_charts(monkeypatch):
     app = run_app(monkeypatch, FRAMES)

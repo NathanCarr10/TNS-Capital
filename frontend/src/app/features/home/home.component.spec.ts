@@ -3,7 +3,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
+import { ANALYTICS_DASHBOARD_URL } from '../../core/analytics/analytics-dashboard.service';
 import { HomeComponent } from './home.component';
 
 describe('HomeComponent', () => {
@@ -12,7 +12,7 @@ describe('HomeComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [HomeComponent],
-      providers: [provideRouter([]), { provide: AnalyticsDashboardService, useValue: { url: 'http://10.9.73.140:8501' } }],
+      providers: [provideRouter([])],
     }).compileComponents();
 
     fixture = TestBed.createComponent(HomeComponent);
@@ -28,6 +28,7 @@ describe('HomeComponent', () => {
   it('links admins to the analytics dashboard', () => {
     const adminLink: HTMLAnchorElement = fixture.nativeElement.querySelector('.admin-access a');
 
-    expect(adminLink.getAttribute('href')).toBe('http://10.9.73.140:8501');
+    expect(adminLink.getAttribute('href')).toBe(ANALYTICS_DASHBOARD_URL);
+    expect(adminLink.textContent?.trim()).toBe('Open admin analytics');
   });
 });

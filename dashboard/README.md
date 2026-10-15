@@ -44,10 +44,11 @@ goes back to the sign-in form. The seeded admin is `admin` / `adminPassword`.
 | Stuck orders: still NEW after 5 minutes | `stuck_orders` |
 | Dead-letter queue by failure type: total, awaiting review, retryable | `dlq_summary` |
 
-Below the per-user table, choose a user to see their fill rate, average trade size, buy/sell
-mix and every order they placed. Each trade is labelled with the username that owns the
-account (`users.account_id`); accounts no user owns, such as the seeded ones, show as
-`(no login)`.
+Below the per-user table, choose an account holder (listed by holder name and account number)
+to see their fill rate, average trade size, buy/sell mix and every order they placed. The list
+is keyed by account, since holder names can repeat. Each trade is also labelled with the
+username that owns the account (`users.account_id`); accounts no user owns, such as the seeded
+ones, show as `(no login)`.
 
 The top of the page also states the main findings in plain sentences.
 
@@ -81,7 +82,9 @@ schema has no rejection reasons or execution times:
 ## Running it
 
 With Docker, it runs as the `dashboard` service: `docker compose up -d dashboard`, then
-open http://localhost:8501 (change the port with `DASHBOARD_PORT`). Run the ETL once
+open it through the trading app at http://localhost:8086/analytics/, or directly at
+http://localhost:8501/analytics/ (change the port with `DASHBOARD_PORT`). The `/analytics` base path
+is set in [.streamlit/config.toml](.streamlit/config.toml) so the app's nginx can forward that path here. Run the ETL once
 (`python etl/pipeline.py`) to fill the batch source.
 
 Locally:
@@ -98,7 +101,7 @@ streamlit run app.py         # reads DB_USER and DB_PASSWORD from the repo's .en
 | `DB_USER`, `DB_PASSWORD` | from `.env` |
 | `DASHBOARD_AUTH_URL` | `http://localhost:4000` (compose: `http://auth-service:4000`) |
 | `JWT_SECRET` | from `.env`; must be the auth service's secret |
-| `DASHBOARD_TRADING_URL` | the Angular trading app at `/dashboard` on port 8086 of the host the browser used for this page |
+| `DASHBOARD_TRADING_URL` | `/portfolio`: the Angular trading app, on the same origin when opened through it |
 
 The auth service has to be running to sign in: `docker compose up -d auth-service`.
 

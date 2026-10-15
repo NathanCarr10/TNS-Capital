@@ -146,6 +146,9 @@ services:
         condition: service_started
       auth-service:
         condition: service_healthy
+      # nginx forwards /analytics/ to it, and won't start if it can't resolve the name
+      dashboard:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1"]
       interval: 5s
@@ -184,6 +187,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # The image has no curl or wget; Streamlit serves its health check under the base path
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/analytics/_stcore/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   kafka-ui:
