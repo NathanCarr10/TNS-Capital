@@ -21,13 +21,18 @@
         <tomcat.version>10.1.59</tomcat.version>
         <sonar.projectKey>tns-capital</sonar.projectKey>
         <sonar.projectName>TNS Capital</sonar.projectName>
-        <!-- Analyse the Python ETL pipeline and dashboard as well as the Java API.
-             Jenkins runs their tests first (ci/python-tests.sh) to write coverage.xml. -->
-        <sonar.sources>src/main/java,etl,dashboard</sonar.sources>
-        <sonar.tests>src/test/java,etl/tests,dashboard/tests</sonar.tests>
-        <sonar.exclusions>etl/tests/**,dashboard/tests/**</sonar.exclusions>
+        <!-- Analyse every component, not only the Java API (NFR-06): the Python ETL pipeline
+             and dashboard, the Angular frontend and the NestJS auth service. Jenkins runs their
+             tests first to write the coverage reports below (ci/python-tests.sh, the Frontend
+             Tests and Auth Service Tests stages). The Angular specs sit next to the code they
+             test, so test.inclusions tells the two apart; src/app/api is generated. -->
+        <sonar.sources>src/main/java,etl,dashboard,frontend/src/app,shared/auth-service/src</sonar.sources>
+        <sonar.tests>src/test/java,etl/tests,dashboard/tests,frontend/src/app,frontend/e2e,shared/auth-service/tests</sonar.tests>
+        <sonar.exclusions>etl/tests/**,dashboard/tests/**,frontend/src/app/**/*.spec.ts,frontend/src/app/api/**,frontend/src/app/core/trading/testing/**</sonar.exclusions>
+        <sonar.test.inclusions>src/test/java/**,etl/tests/**,dashboard/tests/**,frontend/src/app/**/*.spec.ts,frontend/src/app/core/trading/testing/**,frontend/e2e/**,shared/auth-service/tests/**</sonar.test.inclusions>
         <sonar.python.version>3.12</sonar.python.version>
         <sonar.python.coverage.reportPaths>etl/coverage.xml,dashboard/coverage.xml</sonar.python.coverage.reportPaths>
+        <sonar.javascript.lcov.reportPaths>frontend/coverage/frontend/lcov.info,shared/auth-service/coverage/lcov.info</sonar.javascript.lcov.reportPaths>
     </properties>
 
     <dependencies>

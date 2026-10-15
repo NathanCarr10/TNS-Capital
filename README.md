@@ -437,6 +437,7 @@ See [etl/README.md](etl/README.md) for settings and the reporting schema.
 | API unit tests | `mvn test` | No external services needed |
 | API unit and integration tests | `mvn verify` | `*IT` tests start PostgreSQL and Kafka with Testcontainers, so Docker must be running. JaCoCo writes a coverage report to `target/site/jacoco/` |
 | Auth service | `cd shared/auth-service && npm ci && npm test` | `users.service.spec.ts` also runs against a real database when `DB_HOST` is set |
+| Auth service, with its database tests | `ci/auth-tests.sh` | Needs only Docker: starts a throwaway Postgres from `db/` and removes it afterwards. Writes `coverage/lcov.info` |
 | ETL | `cd etl && pip install -r requirements-dev.txt && python -m pytest` | Database integration tests run only with `ETL_IT=1`; see [etl/README.md](etl/README.md) |
 | Dashboard | `cd dashboard && pip install -r requirements.txt -r requirements-dev.txt && python -m pytest` | The `data.py` database tests run only with `DASHBOARD_IT=1` |
 | ETL and dashboard, with their database tests | `ci/python-tests.sh etl` / `ci/python-tests.sh dashboard` | Needs only Docker: starts a throwaway Postgres and removes it afterwards. Writes `coverage.xml` |
@@ -458,10 +459,10 @@ Jenkins runs the [`Jenkinsfile`](Jenkinsfile) on every branch and pull request:
 | Test | `mvn verify` (unit and integration tests); results published as JUnit reports |
 | ETL Tests | The ETL pytest suite, including its Postgres integration tests against a throwaway database, with coverage (`ci/python-tests.sh etl`) |
 | Dashboard Tests | The dashboard's tests (insights, the headless Streamlit page, `data.py` against a throwaway database), with coverage |
-| Auth Service Tests | The auth service's Jest suite in a `node:22-alpine` container |
-| Frontend Tests | The Angular unit tests in headless Chromium, then a production build |
+| Auth Service Tests | The auth service's Jest suite in a `node:22-alpine` container, including its database tests against a throwaway Postgres, with coverage (`ci/auth-tests.sh`) |
+| Frontend Tests | The Angular unit tests in headless Chromium with coverage, then a production build |
 | E2E Tests | The Playwright journeys against a throwaway copy of the whole stack (`ci/e2e-tests.sh`); the report and traces of failed tests are archived |
-| SonarQube Analysis | Analyses the Java API and the Python ETL and dashboard, uploads their coverage and waits for the quality gate |
+| SonarQube Analysis | Analyses every component (the Java API, the Python ETL and dashboard, the Angular frontend and the NestJS auth service), uploads their coverage and waits for the quality gate |
 | Dependency Scan | Trivy scans the manifests and the built image. Fails on fixable CRITICAL CVEs. Accepted risks go in `.trivyignore` |
 
 Security reports (SARIF) are archived with every build. See [docs/SONARQUBE.md](docs/SONARQUBE.md)
