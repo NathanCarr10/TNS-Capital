@@ -19,6 +19,7 @@ be explained at the showcase and revisited later.
 | 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
+| 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -150,10 +151,19 @@ tab without the Angular session, lands on the account viewer and not back on ana
 
 The Angular app's nginx (and `ng serve`'s `proxy.conf.json`) forwards `/analytics/` to the
 Streamlit container, which runs with the base path `analytics` (`dashboard/.streamlit/config.toml`),
-WebSocket included. The Admin card, the admin login and the Analytics button all go to that
+WebSocket included. The home page's admin link, the admin login and the Analytics button all go to that
 relative path. Linking to `http://localhost:8501` only worked when the browser ran on the Docker
 host with that port open: through a forwarded or remote address it gave "page not found", and a
 browser in the end-to-end tests could not reach it either. The same pattern carries over to the
 sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. The
 Streamlit **Trading dashboard** button is the relative `/portfolio` for the same reason. Port 8501
 stays published for direct access (`http://localhost:8501/analytics/`).
+
+## 14. Angular 19
+
+§4 lists Angular 21+. The frontend was generated with Angular 19.2 and the team stays on it for
+now: everything the spec asks of the UI (standalone components, signals, the new control flow,
+functional guards and interceptors, typed API clients) is available in 19, and a two-major
+upgrade during the build would touch every component, the test setup and the generated API
+clients for no change a user would see. The upgrade (`ng update @angular/core@21
+@angular/cli@21`, one major at a time) is revisited if the tutor asks for it.

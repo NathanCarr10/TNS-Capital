@@ -1,4 +1,4 @@
-import { APIRequestContext, Page, expect } from '@playwright/test';
+import { APIRequestContext, Locator, Page, expect } from '@playwright/test';
 
 /** The seeded admin (db/data/06_users_seed.sql). */
 export const ADMIN = { username: 'admin', password: 'adminPassword' };
@@ -27,4 +27,42 @@ export async function submitLogin(page: Page, username: string, password: string
   await page.getByLabel('Username').fill(username);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Login' }).click();
+}
+
+/** Deposits cash with the portfolio page's Deposit cash form (the page must be on /portfolio). */
+export async function depositViaUi(page: Page, amount: number): Promise<void> {
+  await page.getByRole('button', { name: 'Deposit cash' }).click();
+  const form = page.locator('form.deposit-form');
+  await form.getByLabel('Amount').fill(String(amount));
+  await form.getByRole('button', { name: 'Confirm deposit' }).click();
+  await expect(form.getByRole('status')).toHaveText('Cash deposited successfully.');
+}
+
+/**
+ * Submits a limit order from /trade/:symbol and returns the ticket. Each order carries its own
+ * limit price, so the tests don't depend on market data being configured.
+ */
+export async function submitOrder(
+  page: Page,
+  order: { side: 'BUY' | 'SELL'; symbol: string; quantity: number; price: number }
+): Promise<Locator> {
+  await page.goto(`/trade/${order.symbol}`);
+  const ticket = page.locator('form.ticket-body');
+  await ticket.getByRole('radio', { name: order.side }).click();
+  await expect(ticket.getByRole('radio', { name: order.side })).toHaveAttribute('aria-checked', 'true');
+  await ticket.getByLabel('Quantity').fill(String(order.quantity));
+  await ticket.getByLabel('Limit price').fill(String(order.price));
+  const verb = order.side === 'BUY' ? 'Buy' : 'Sell';
+  await ticket.getByRole('button', { name: `${verb} ${order.quantity} ${order.symbol}` }).click();
+  return ticket;
+}
+
+/** A new trader, signed in on /portfolio. */
+export async function signInNewTrader(page: Page, request: APIRequestContext): Promise<Trader> {
+  const trader = newTrader();
+  await registerViaApi(request, trader);
+  await page.goto('/login');
+  await submitLogin(page, trader.username, trader.password);
+  await expect(page).toHaveURL(/\/portfolio$/);
+  return trader;
 }
