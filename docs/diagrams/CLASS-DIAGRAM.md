@@ -20,6 +20,7 @@ classDiagram
         -BigDecimal cashBalance
         -AccountStatus status
         -Integer version
+        -Instant openedOn
         -Instant lastUpdated
         +debit(BigDecimal amount)
         +credit(BigDecimal amount)

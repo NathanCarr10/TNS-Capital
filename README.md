@@ -358,7 +358,7 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 
 | Resource | Endpoints |
 |---|---|
-| Accounts | `GET /accounts` · `POST /accounts` (ADMIN) · `GET/PATCH/DELETE /accounts/{id}` · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
+| Accounts | `GET /accounts` · `POST /accounts` (ADMIN) · `GET/PATCH/DELETE /accounts/{id}` · `PUT /accounts/{id}/status` (ADMIN: suspend or reactivate) · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
 | Orders | `POST /orders` · `GET /orders` · `GET /orders/{orderId}` · `DELETE /orders/{orderId}` (cancel) · `GET /orders/{orderId}/events` (status history) · `GET /orders/history/{orderId}` · `GET /orders/{accountId}/history` |
 | Positions | `GET /positions/{accountId}` · `GET /positions/{accountId}/{symbol}` |
 | Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (ADMIN) · `PUT /instruments/{symbol}` (ADMIN) |
