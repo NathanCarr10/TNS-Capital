@@ -1,14 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Subscription, of, throwError, timer } from 'rxjs';
-import { catchError, map, startWith, switchMap, take, timeout } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
+import { map, startWith } from 'rxjs/operators';
 
-import { InstrumentResponse, OrderResponse, PlaceOrderRequest, PlaceOrderResponse } from '../../../api/trading';
+import { InstrumentResponse, PlaceOrderRequest, PlaceOrderResponse } from '../../../api/trading';
 import { AccountStore } from '../../../core/trading/account.store';
 import { readApiError, readErrorMessage } from '../../../core/trading/api-error';
+import { OrderTrackerService } from '../../../core/trading/order-tracker.service';
 import { OrderSide } from '../../../core/trading/trading.models';
 import { TradingService } from '../../../core/trading/trading.service';
 import { SideToggleComponent } from './side-toggle/side-toggle.component';
@@ -18,7 +18,7 @@ export type OrderType = 'MARKET' | 'LIMIT';
 
 const LIMIT_PRICE_VALIDATORS = [Validators.required, Validators.min(0.01), Validators.max(999999.99)];
 
-/** Places a buy or sell order for one instrument and follows it until it fills or is rejected. */
+/** Places a buy or sell order for one instrument; the OrderTrackerService follows it and toasts the result. */
 @Component({
   selector: 'app-order-ticket',
   imports: [CommonModule, ReactiveFormsModule, SideToggleComponent],
@@ -26,13 +26,11 @@ const LIMIT_PRICE_VALIDATORS = [Validators.required, Validators.min(0.01), Valid
   styleUrl: './order-ticket.component.scss',
 })
 export class OrderTicketComponent {
-  static readonly POLL_INTERVAL_MS = 1500;
-  static readonly POLL_MAX_ATTEMPTS = 40;
-
   private readonly formBuilder = inject(FormBuilder);
   private readonly tradingService = inject(TradingService);
   private readonly store = inject(AccountStore);
-  private pollingSubscription?: Subscription;
+  private readonly orderTracker = inject(OrderTrackerService);
+  private trackingSubscription?: Subscription;
 
   /** The instrument to trade, or null while it is still loading. */
   readonly instrument = input<InstrumentResponse | null>(null);
@@ -120,7 +118,7 @@ export class OrderTicketComponent {
       price.updateValueAndValidity();
     });
 
-    inject(DestroyRef).onDestroy(() => this.pollingSubscription?.unsubscribe());
+    inject(DestroyRef).onDestroy(() => this.trackingSubscription?.unsubscribe());
   }
 
   isSubmitDisabled(): boolean {
@@ -158,7 +156,7 @@ export class OrderTicketComponent {
         this.isSubmitting.set(false);
         this.isTracking.set(true);
         this.successMessage.set(`Order ${accepted.status || 'ACCEPTED'}. Tracking order ${accepted.orderId}.`);
-        this.startPolling(accepted.orderId);
+        this.follow(accepted.orderId);
       },
       error: (error: unknown) => {
         this.isSubmitting.set(false);
@@ -183,51 +181,13 @@ export class OrderTicketComponent {
     return request;
   }
 
-  private startPolling(orderId: string): void {
-    this.pollingSubscription?.unsubscribe();
-    let resolved = false;
-
-    this.pollingSubscription = timer(0, OrderTicketComponent.POLL_INTERVAL_MS)
-      .pipe(
-        take(OrderTicketComponent.POLL_MAX_ATTEMPTS),
-        switchMap(() =>
-          this.tradingService.getOrder(orderId).pipe(
-            timeout(8000),
-            catchError((error: HttpErrorResponse) => (error.status === 404 ? of(null) : throwError(() => error)))
-          )
-        )
-      )
-      .subscribe({
-        next: (order: OrderResponse | null) => {
-          if (order?.status === 'FILLED') {
-            resolved = true;
-            this.isTracking.set(false);
-            this.successMessage.set(
-              `Order FILLED: ${order.side} ${order.quantity} ${order.symbol} at ${order.price.toFixed(2)}.`
-            );
-            this.errorMessage.set(null);
-            this.store.refresh();
-            this.pollingSubscription?.unsubscribe();
-          } else if (order?.status === 'REJECTED') {
-            resolved = true;
-            this.isTracking.set(false);
-            this.successMessage.set(null);
-            this.errorMessage.set(mapRejectedError(order.statusReason));
-            this.pollingSubscription?.unsubscribe();
-          }
-        },
-        error: (error: unknown) => {
-          this.isTracking.set(false);
-          this.successMessage.set(null);
-          this.errorMessage.set(readErrorMessage(error, 'Failed to retrieve final order status.'));
-        },
-        complete: () => {
-          if (!resolved) {
-            this.isTracking.set(false);
-            this.errorMessage.set('Order accepted but final status is taking too long. Check the order history.');
-          }
-        },
-      });
+  private follow(orderId: string): void {
+    this.trackingSubscription?.unsubscribe();
+    // The tracker announces the result with a toast; the ticket only unlocks for the next order
+    this.trackingSubscription = this.orderTracker.track(orderId).subscribe(() => {
+      this.isTracking.set(false);
+      this.successMessage.set(null);
+    });
   }
 
   private mapImmediateError(error: unknown): string {
@@ -240,17 +200,6 @@ export class OrderTicketComponent {
     const code = readApiError(error)?.errorCode;
     return (code && messages[code]) || readErrorMessage(error, 'Order submission failed.');
   }
-}
-
-function mapRejectedError(statusReason?: string): string {
-  const reason = (statusReason || '').toLowerCase();
-  if (reason.includes('insufficient funds')) {
-    return 'Insufficient funds (ORD-400).';
-  }
-  if (reason.includes('insufficient holdings') || reason.includes('no position')) {
-    return 'Insufficient holdings (ORD-409).';
-  }
-  return statusReason || 'Order rejected during processing.';
 }
 
 function generateIdempotencyKey(): string {
