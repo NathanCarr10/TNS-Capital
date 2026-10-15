@@ -44,10 +44,11 @@ goes back to the sign-in form. The seeded admin is `admin` / `adminPassword`.
 | Stuck orders: still NEW after 5 minutes | `stuck_orders` |
 | Dead-letter queue by failure type: total, awaiting review, retryable | `dlq_summary` |
 
-Below the per-user table, choose a user to see their fill rate, average trade size, buy/sell
-mix and every order they placed. Each trade is labelled with the username that owns the
-account (`users.account_id`); accounts no user owns, such as the seeded ones, show as
-`(no login)`.
+Below the per-user table, choose an account holder (listed by holder name and account number)
+to see their fill rate, average trade size, buy/sell mix and every order they placed. The list
+is keyed by account, since holder names can repeat. Each trade is also labelled with the
+username that owns the account (`users.account_id`); accounts no user owns, such as the seeded
+ones, show as `(no login)`.
 
 The top of the page also states the main findings in plain sentences.
 
