@@ -56,6 +56,8 @@ export class PortfolioComponent {
   readonly depositLoading = signal(false);
   readonly depositMessage = signal<string | null>(null);
   readonly depositError = signal<string | null>(null);
+  readonly statusLoading = signal(false);
+  readonly statusError = signal<string | null>(null);
   readonly depositForm = inject(FormBuilder).nonNullable.group({
     amount: [0, [Validators.required, Validators.min(0.01)]],
   });
@@ -64,7 +66,30 @@ export class PortfolioComponent {
   readonly firstName = computed(() => this.account()?.holderName.split(/\s+/)[0] ?? '');
 
   viewAccount(accountId: number): void {
+    this.statusError.set(null);
     this.store.viewAccount(accountId);
+  }
+
+  /** Admin view: suspend the account if it is active, otherwise reactivate it. */
+  toggleStatus(): void {
+    const account = this.account();
+    if (!account || this.statusLoading()) {
+      return;
+    }
+
+    this.statusLoading.set(true);
+    this.statusError.set(null);
+    this.store
+      .setStatus(account.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => this.statusLoading.set(false),
+        error: (error: unknown) => {
+          this.statusLoading.set(false);
+          // e.g. the account is closed (ACC-403)
+          this.statusError.set(readErrorMessage(error, 'Could not change the account status. Please try again.'));
+        },
+      });
   }
 
   openAnalytics(): void {

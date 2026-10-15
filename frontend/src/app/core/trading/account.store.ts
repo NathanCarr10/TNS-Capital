@@ -68,6 +68,20 @@ export class AccountStore {
     return this.tradingService.deposit(account.id, { amount }).pipe(tap((updated) => this.account.set(updated)));
   }
 
+  /** Admin view: suspend the shown account or reactivate it. */
+  setStatus(status: AccountResponse.StatusEnum): Observable<AccountResponse> {
+    const account = this.account();
+    if (!account) {
+      return EMPTY;
+    }
+    return this.tradingService.updateAccountStatus(account.id, { status }).pipe(
+      tap((updated) => {
+        this.account.set(updated);
+        this.adminAccounts.update((accounts) => accounts.map((item) => (item.id === updated.id ? updated : item)));
+      })
+    );
+  }
+
   /** Reloads cash and positions after a fill, without the loading state so the panels do not flicker. */
   refresh(): void {
     const account = this.account();

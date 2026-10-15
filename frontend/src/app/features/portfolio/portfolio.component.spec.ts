@@ -75,6 +75,7 @@ describe('PortfolioComponent', () => {
     const element = create();
 
     expect(element.querySelector('#admin-account')).toBeNull();
+    expect(element.querySelector('[role="switch"]')).toBeNull();
     expect(tradingService.getAccounts).not.toHaveBeenCalled();
   });
 
@@ -93,7 +94,7 @@ describe('PortfolioComponent', () => {
       );
       expect(options).toEqual(['ACC-U000011 - Trader One', 'ACC-U000012 - Trader Two']);
       expect(element.querySelector('.account-number')?.textContent).toContain('ACC-U000011');
-      expect(element.textContent).toContain('Admin view: read-only');
+      expect(element.textContent).toContain("Admin view: orders can only be placed by the account's owner.");
       expect(element.querySelector('.place-order')).toBeNull();
     });
 
@@ -118,6 +119,51 @@ describe('PortfolioComponent', () => {
         .click();
 
       expect(analyticsSpy.open).toHaveBeenCalled();
+    });
+
+    it('suspends the active account and reactivates it', () => {
+      const suspended = { ...ACCOUNT, status: 'SUSPENDED' as const };
+      tradingService.updateAccountStatus.and.returnValue(of(suspended));
+      const element = create();
+      const toggle = element.querySelector<HTMLButtonElement>('[role="switch"]')!;
+      expect(toggle.getAttribute('aria-checked')).toBe('true');
+
+      toggle.click();
+      fixture.detectChanges();
+
+      expect(tradingService.updateAccountStatus).toHaveBeenCalledWith(ACCOUNT.id, { status: 'SUSPENDED' });
+      expect(toggle.getAttribute('aria-checked')).toBe('false');
+      expect(toggle.textContent).toContain('Suspended');
+      expect(element.querySelector('.account-number .badge')?.textContent).toContain('SUSPENDED');
+
+      tradingService.updateAccountStatus.and.returnValue(of(ACCOUNT));
+      toggle.click();
+      fixture.detectChanges();
+
+      expect(tradingService.updateAccountStatus).toHaveBeenCalledWith(ACCOUNT.id, { status: 'ACTIVE' });
+      expect(toggle.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it("shows the API's reason when the status change is refused", () => {
+      tradingService.updateAccountStatus.and.returnValue(
+        throwError(() => ({ status: 403, error: { errorCode: 'ACC-403', message: 'The account is not in an active state for this operation' } }))
+      );
+      const element = create();
+
+      element.querySelector<HTMLButtonElement>('[role="switch"]')!.click();
+      fixture.detectChanges();
+
+      expect(element.querySelector('.status-control [role="alert"]')?.textContent).toContain(
+        'The account is not in an active state for this operation'
+      );
+      expect(element.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('true');
+    });
+
+    it('cannot reactivate a closed account', () => {
+      tradingService.getAccounts.and.returnValue(of([{ ...ACCOUNT, status: 'CLOSED' as const }]));
+      const element = create();
+
+      expect(element.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBeTrue();
     });
 
     it('says so when there are no accounts', () => {

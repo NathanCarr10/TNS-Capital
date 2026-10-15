@@ -4,6 +4,7 @@ import com.neueda.leap.dtos.AccountResponse;
 import com.neueda.leap.dtos.CashTransactionRequest;
 import com.neueda.leap.dtos.CreateAccountRequest;
 import com.neueda.leap.dtos.UpdateAccountRequest;
+import com.neueda.leap.dtos.UpdateAccountStatusRequest;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.PositionResponse;
 
@@ -76,6 +77,16 @@ public class AccountController {
                 accessGuard.checkAccess(accountId);
                 Account updatedAccount = accountService.updateHolderName(accountId, request.holderName());
                 return ResponseEntity.ok(mapToResponse(updatedAccount));
+        }
+
+        /**
+         * Suspends or reactivates an account; an admin task.
+         */
+        @PutMapping("/{accountId}/status")
+        @PreAuthorize("hasRole('ADMIN')")
+        public ResponseEntity<AccountResponse> updateAccountStatus(@PathVariable @NotNull Long accountId,
+                        @Valid @RequestBody UpdateAccountStatusRequest request) {
+                return ResponseEntity.ok(mapToResponse(accountService.updateStatus(accountId, request.status())));
         }
 
         /**

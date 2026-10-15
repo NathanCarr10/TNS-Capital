@@ -3,7 +3,7 @@
     <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
     @if (isAdmin) {
       <h1>Account viewer</h1>
-      <p class="muted">Admin view: read-only. Orders can only be placed by the account's owner.</p>
+      <p class="muted">Admin view: orders can only be placed by the account's owner.</p>
     } @else {
       <h1>Welcome{{ firstName() ? ', ' + firstName() : '' }}</h1>
       <p class="muted">Here's how your portfolio is performing today.</p>
@@ -32,7 +32,7 @@
   <p class="note error" role="alert">{{ accountError() }}</p>
 }
 
-<section class="card account-card" aria-label="Account details">
+<section class="card account-card" [class.admin]="isAdmin" aria-label="Account details">
   @if (accountLoading()) {
     <p class="eyebrow">Account details</p>
     <span class="skeleton skeleton-title" aria-hidden="true"></span>
@@ -46,6 +46,26 @@
       </p>
       <p class="muted holder">{{ details.holderName }} &middot; Updated {{ details.lastUpdated | date:'MMM d, HH:mm' }}</p>
     </div>
+    @if (isAdmin) {
+      <div class="status-control">
+        <span class="muted">Account status</span>
+        <button
+          type="button"
+          role="switch"
+          class="status-switch"
+          aria-label="Account active"
+          [attr.aria-checked]="details.status === 'ACTIVE'"
+          [disabled]="statusLoading() || details.status === 'CLOSED'"
+          (click)="toggleStatus()"
+        >
+          <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+          <span class="status-label">{{ details.status === 'ACTIVE' ? 'Active' : details.status === 'SUSPENDED' ? 'Suspended' : 'Closed' }}</span>
+        </button>
+        @if (statusError()) {
+          <p class="form-error" role="alert">{{ statusError() }}</p>
+        }
+      </div>
+    }
     <div class="cash">
       <span class="muted">Cash balance</span>
       <strong class="num">{{ details.cashBalance | currency:'USD':'symbol':'1.2-2' }}</strong>

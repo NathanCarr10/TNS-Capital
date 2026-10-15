@@ -36,6 +36,7 @@ export function tradingServiceStub(): jasmine.SpyObj<TradingService> {
     'getOrder',
     'cancelOrder',
     'deposit',
+    'updateAccountStatus',
   ]);
   spy.getCurrentUserProfile.and.returnValue(of({ username: 'trader1', roles: ['USER'], accountId: ACCOUNT.id }));
   spy.getAccount.and.returnValue(of(ACCOUNT));
