@@ -12,7 +12,7 @@ and what the team decided to do about it. Built from [OWASP_REVIEW_TEMPLATE.md](
 | Commit reviewed | `3c6b7eea` (Development, after PR #91) |
 | Review date | 2026-10-08 |
 | Reviewers | Nokuvimba |
-| Updated | 2026-10-15 (`fix/security-hardening`): A01-4, A01-5, A02-5, A04-1, A05-1, A05-2, A06-3, A06-4, A07-3, A07-4, A07-11, A08-4 and A09-2 marked Fixed with their evidence |
+| Updated | 2026-10-15 (`fix/security-hardening`): A01-4, A01-5, A02-5, A04-1, A05-1, A05-2, A06-3, A06-4, A07-3, A07-4, A07-11, A08-4 and A09-2 marked Fixed with their evidence; `fix/review-gaps`: A09-4 Fixed, A01-8 added |
 | Standard | [OWASP Top 10 (2021)](https://owasp.org/Top10/) |
 
 ## Keeping this review current
@@ -53,7 +53,7 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 
 | Category | Dispositions | Findings |
 |---|---|---|
-| A01 Broken Access Control | No action, Fixed | 7 |
+| A01 Broken Access Control | No action, Fixed | 8 |
 | A02 Cryptographic Failures | No action, Fixed, Accepted | 7 |
 | A03 Injection | No action, Fixed | 9 |
 | A04 Insecure Design | Fixed, No action, Accepted | 4 |
@@ -61,14 +61,12 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 | A06 Vulnerable and Outdated Components | No action, Fixed | 4 |
 | A07 Identification and Authentication Failures | No action, Accepted, Fixed | 11 |
 | A08 Software and Data Integrity Failures | Accepted, No action, Fixed | 4 |
-| A09 Security Logging and Monitoring Failures | No action, Fixed, Open, Accepted | 5 |
+| A09 Security Logging and Monitoring Failures | No action, Fixed, Accepted | 5 |
 | A10 Server-Side Request Forgery | Not applicable | 1 |
 
 ### Open findings, highest risk first
 
-| ID | Finding | Risk |
-|---|---|---|
-| A09-4 | Failed orders in the DLQ are marked RESOLVED after 10 seconds without review | Medium |
+None. Every finding is Fixed, Accepted (with its residual risk), No action or Not applicable.
 
 ---
 
@@ -83,6 +81,7 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 | A01-5 | **Orders produced to Kafka bypassed ownership.** `OrderMessageListener` executes any message on `orders` for the account inside it; ownership is checked at the REST layer. Producing is now limited to the compose network: kafka-ui is read-only (A05-1) and Kafka's host port listens on `127.0.0.1` only (A05-2). SASL and ACLs on Kafka itself stay a deployment concern (docs/DECISIONS.md 8). | `docker-compose.yml` (`kafka-ui`: `KAFKA_CLUSTERS_0_READONLY`, port on `127.0.0.1`; `kafka`: port on `127.0.0.1`) | Fixed | — |
 | A01-6 | **Auth service default deny.** `JwtAuthGuard` and `RolesGuard` are registered globally. Only register, login, refresh, logout and health are `@Public()`. `/auth/me` needs an access token. | `shared/auth-service/src/auth/auth.module.ts` (`APP_GUARD`); `src/auth/auth.controller.ts`; `src/health/health.controller.ts`; `tests/guards.spec.ts`; `tests/auth-api.spec.ts` (`GET /auth/me (protected by JwtAuthGuard)`) | No action | — |
 | A01-7 | **CORS.** Checked `SecurityConfig.java` and the auth service's `main.ts` / `app.module.ts`. Neither enables CORS, so browsers block cross-origin calls to both APIs. | `src/main/java/com/neueda/leap/security/SecurityConfig.java`; `shared/auth-service/src/main.ts` | No action | — |
+| A01-8 | **Account status changes are admin-only.** `PUT /api/v1/accounts/{id}/status` (#135) suspends or reactivates any account, so it needs `ROLE_ADMIN`. Checked: `@PreAuthorize("hasRole('ADMIN')")` on the route; a `USER` gets 403 `AUTH-403` even for their own account and the status is unchanged; the service only accepts `ACTIVE` or `SUSPENDED` and never changes a `CLOSED` account. | `src/main/java/com/neueda/leap/controllers/AccountController.java` (`updateAccountStatus`); `services/AccountService.java` (`updateStatus`); `src/test/java/com/neueda/leap/integration/AccountOwnershipIT.java` (`cannot suspend or reactivate any account...`, `can suspend and reactivate an account`) | No action | — |
 
 ## A02 Cryptographic Failures — focus
 
@@ -136,7 +135,7 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 |---|---|---|---|---|
 | A06-1 | **None.** Checked that dependency scanning exists and gates the build. Trivy scans the repo manifests (`pom.xml`, `shared/auth-service/package-lock.json`, `etl/requirements.txt`) and the trading API image, failing on fixable CRITICAL CVEs. ETL dependencies are pinned to exact versions so Trivy can match them. | `Jenkinsfile` stage `Dependency Scan`; `etl/requirements.txt`; SARIF reports under `security-reports/` in each Jenkins build | No action | — |
 | A06-2 | **Vulnerable `tar` removed.** `argon2` was upgraded to 0.44, which dropped a dependency on a vulnerable `tar`. | Commit `729721d3`; `shared/auth-service/package.json` (`"argon2": "^0.44.0"`) | Fixed | — |
-| A06-3 | **Node.js 22 LTS.** The auth service ran on Node.js 20, end of life since 2026-04-30. It now builds, tests and runs on `node:22-alpine` (Node 22 LTS). This goes beyond the spec's "20 LTS"; see docs/DECISIONS.md 15. | `shared/auth-service/Dockerfile`; `shared/auth-service/package.json` (`engines`, `@types/node`); `Jenkinsfile` stage `Auth Service Tests` (`node:22-alpine`) | Fixed | — |
+| A06-3 | **Node.js 22 LTS.** The auth service ran on Node.js 20, end of life since 2026-04-30. It now builds, tests and runs on `node:22-alpine` (Node 22 LTS), and so does the frontend's build stage. This goes beyond the spec's "20 LTS"; see docs/DECISIONS.md 15. | `shared/auth-service/Dockerfile`; `frontend/Dockerfile` (build stage); `shared/auth-service/package.json` (`engines`, `@types/node`); `Jenkinsfile` stage `Auth Service Tests` (`node:22-alpine`) | Fixed | — |
 | A06-4 | **The auth service image is scanned.** Jenkins now builds the auth service image and Trivy scans it like the API image: HIGH and CRITICAL go to the report, fixable CRITICAL fails the build. HIGH triage (2026-10-15): all 11 HIGH findings were in the npm CLI bundled with the base image, which the container never runs; the runtime stage now deletes npm and corepack, leaving 0 HIGH and 0 CRITICAL. | `Jenkinsfile` stage `Dependency Scan` (`AUTH_IMAGE_NAME`; report `security-reports/trivy-auth-image.sarif`); `shared/auth-service/Dockerfile` (runtime stage removes npm) | Fixed | — |
 
 ## A07 Identification and Authentication Failures — focus
@@ -171,7 +170,7 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 | A09-1 | **Token reuse is logged.** A reused refresh token is logged as a warning with the user id, never the token. | `shared/auth-service/src/auth/auth.service.ts` (`refresh`); `tests/auth.service.spec.ts` (`rejects a reused token with AUTH-401 and logs the reuse`) | No action | — |
 | A09-2 | **Logins are logged.** Every login logs `Login succeeded` or `Login failed` with the username and client IP, never the password or tokens. The username is JSON-quoted, so a crafted one cannot forge extra log lines. | `shared/auth-service/src/auth/auth.service.ts` (`login`); `src/auth/auth.controller.ts` (`@Ip()`); `tests/auth.service.spec.ts` (`logs a successful login...`, `logs a failed login...`) | Fixed | — |
 | A09-3 | **None.** Checked that logs carry no secrets. Searched both services for logged passwords, tokens or `Authorization` headers and found none. The trading API logs 403s with the account id only. | `src/main/java/com/neueda/leap/controllers/GlobalExceptionHandler.java` (`handleAccessDenied`); `shared/auth-service/src/` | No action | — |
-| A09-4 | **Failed orders are auto-resolved.** With the default config, any DLQ message still `PENDING` after 10 seconds is marked `RESOLVED`. A failed order therefore leaves the pending queue before an admin can see or replay it. **Fix:** set `dlq.auto-resolve.enabled: false` outside demos, or alert before resolving. | `src/main/resources/application.yml` (`dlq.auto-resolve`); `src/main/java/com/neueda/leap/services/DeadLetterService.java` (`autoResolvePendingMessages`) | Open | Tracked: _ticket to raise_ |
+| A09-4 | **Failed orders wait for review.** With the old default, any DLQ message still `PENDING` after 10 seconds was marked `RESOLVED`, so a failed order left the pending queue before an admin could see or replay it. Auto-resolve is now off by default; `DLQ_AUTO_RESOLVE=true` turns it back on for a demo. | `src/main/resources/application.yml` (`dlq.auto-resolve.enabled: ${DLQ_AUTO_RESOLVE:false}`); `src/main/java/com/neueda/leap/services/DeadLetterService.java` (`autoResolveEnabled`, default `false`) | Fixed | — |
 | A09-5 | **No alerting.** Logs only go to container stdout. Nothing collects them or alerts on reuse warnings, 401 or 403 spikes, or SYS-500s. | `docker-compose.yml` (no logging driver or collector) | Accepted | **Residual risk:** an attack in progress is only noticed if someone happens to read the logs. **Why carried:** on a single developer machine a log pipeline costs more than it returns. A collector with alerts on the A09-1 and A09-2 events is required before any shared deployment. |
 
 ## A10 Server-Side Request Forgery
