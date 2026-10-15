@@ -11,6 +11,8 @@ export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.e2e.ts',
   globalSetup: './e2e/global-setup.ts',
+  // Deletes the traders the journeys registered from a local stack's database
+  globalTeardown: './e2e/global-teardown.ts',
   // The journeys share one database and the auth rate limit, so they run one at a time
   workers: 1,
   fullyParallel: false,

@@ -52,6 +52,7 @@ describe('TradingService', () => {
       holderName: 'Trader One',
       cashBalance: 5000,
       status: 'ACTIVE',
+      openedOn: '2026-09-01T09:30:00Z',
       lastUpdated: '2026-10-13T09:00:00Z',
     };
     let result: AccountResponse | undefined;
@@ -62,6 +63,15 @@ describe('TradingService', () => {
     request.flush(account);
 
     expect(result).toEqual(account);
+  });
+
+  it('renames the account holder with a PATCH', () => {
+    service.updateAccount(11, { holderName: 'Ada Lovelace' }).subscribe();
+
+    const request = httpMock.expectOne('/api/v1/accounts/11');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ holderName: 'Ada Lovelace' });
+    request.flush({});
   });
 
   it('gets instruments', () => {

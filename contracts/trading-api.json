@@ -1256,6 +1256,7 @@
           "holderName",
           "id",
           "lastUpdated",
+          "openedOn",
           "status"
         ],
         "type": "object",
@@ -1280,6 +1281,10 @@
               "SUSPENDED",
               "CLOSED"
             ]
+          },
+          "openedOn": {
+            "type": "string",
+            "format": "date-time"
           },
           "lastUpdated": {
             "type": "string",

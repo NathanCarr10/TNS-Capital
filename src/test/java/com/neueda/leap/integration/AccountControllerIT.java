@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -201,13 +202,18 @@ class AccountControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should update the holder name")
+    @DisplayName("Should update the holder name and keep the opening date")
     void testUpdateHolderName() throws Exception {
+        java.time.Instant openedOn = accountRepository.findById(testAccount.getId()).orElseThrow().getOpenedOn();
+
         mockMvc.perform(patch("/api/v1/accounts/{id}", testAccount.getId())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"holderName\":\"Johnny Doe\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.holderName", is("Johnny Doe")));
+                .andExpect(jsonPath("$.holderName", is("Johnny Doe")))
+                .andExpect(jsonPath("$.openedOn", notNullValue()));
+
+        assertEquals(openedOn, accountRepository.findById(testAccount.getId()).orElseThrow().getOpenedOn());
     }
 
     @Test

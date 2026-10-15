@@ -38,7 +38,8 @@ class AccountTest {
                 "Initial cash balance should match constructor argument");
         assertEquals(AccountStatus.ACTIVE, account.getStatus(), "New account should have ACTIVE status");
         assertEquals(0, account.getVersion(), "Initial version should be 0");
-        assertNotNull(account.getLastUpdated(), "Last updated timestamp should be set");
+        assertNotNull(account.getOpenedOn(), "Opened timestamp should be set");
+        assertEquals(account.getOpenedOn(), account.getLastUpdated(), "A new account was last updated when opened");
     }
 
     @DisplayName("Debit Operation Tests")

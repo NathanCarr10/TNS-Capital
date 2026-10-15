@@ -13,6 +13,7 @@ export const ACCOUNT: AccountResponse = {
   holderName: 'Trader One',
   cashBalance: 5000,
   status: 'ACTIVE',
+  openedOn: '2026-09-01T09:30:00Z',
   lastUpdated: '2026-10-13T10:00:00Z',
 };
 
@@ -36,6 +37,7 @@ export function tradingServiceStub(): jasmine.SpyObj<TradingService> {
     'getOrder',
     'cancelOrder',
     'deposit',
+    'updateAccount',
     'updateAccountStatus',
   ]);
   spy.getCurrentUserProfile.and.returnValue(of({ username: 'trader1', roles: ['USER'], accountId: ACCOUNT.id }));
