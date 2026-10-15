@@ -7,6 +7,7 @@ Run with:  streamlit run app.py
 """
 
 import os
+from urllib.parse import urlsplit
 
 import pandas as pd
 import plotly.express as px
@@ -20,7 +21,8 @@ st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
 # The Angular trading app; admins can view any account there, read-only
-TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "http://localhost:4200/dashboard")
+TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL")
+TRADING_DASHBOARD_PORT = 8086
 ASSET_CLASS_LABEL = "Asset class"
 
 
@@ -44,6 +46,14 @@ def duration(seconds):
 def utc_now():
     """Now as a naive UTC timestamp, to compare with the database's UTC timestamps."""
     return pd.Timestamp.now(tz="UTC").tz_localize(None)
+
+
+def trading_dashboard_url():
+    """The trading app runs on the same machine, so link to it on the host the browser used for this page."""
+    if TRADING_DASHBOARD_URL:
+        return TRADING_DASHBOARD_URL
+    page = urlsplit(st.context.url or "")
+    return f"{page.scheme or 'http'}://{page.hostname or 'localhost'}:{TRADING_DASHBOARD_PORT}/dashboard"
 
 
 def sign_out():
@@ -87,7 +97,7 @@ def require_admin():
 admin = require_admin()
 with st.sidebar:
     st.write(f"Signed in as **{admin['sub']}**")
-    st.link_button("Trading dashboard", TRADING_DASHBOARD_URL,
+    st.link_button("Trading dashboard", trading_dashboard_url(),
                    help="View any trader's account, read-only, in the trading app")
     st.button("Sign out", on_click=sign_out)
 

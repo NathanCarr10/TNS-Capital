@@ -1,7 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { ANALYTICS_DASHBOARD_URL } from '../../core/analytics/analytics-dashboard.service';
+import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 
 @Component({
   selector: 'app-home',
@@ -10,5 +10,5 @@ import { ANALYTICS_DASHBOARD_URL } from '../../core/analytics/analytics-dashboar
   styleUrl: './home.component.scss',
 })
 export class HomeComponent {
-  readonly analyticsDashboardUrl = ANALYTICS_DASHBOARD_URL;
+  readonly analyticsDashboardUrl = inject(AnalyticsDashboardService).url;
 }

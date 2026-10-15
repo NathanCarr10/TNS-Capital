@@ -8,14 +8,11 @@ import { HomeComponent } from './home.component';
 
 describe('HomeComponent', () => {
   let fixture: ComponentFixture<HomeComponent>;
-  let analyticsSpy: jasmine.SpyObj<AnalyticsDashboardService>;
 
   beforeEach(async () => {
-    analyticsSpy = jasmine.createSpyObj<AnalyticsDashboardService>('AnalyticsDashboardService', ['open']);
-
     await TestBed.configureTestingModule({
       imports: [HomeComponent],
-      providers: [provideRouter([]), { provide: AnalyticsDashboardService, useValue: analyticsSpy }],
+      providers: [provideRouter([]), { provide: AnalyticsDashboardService, useValue: { url: 'http://10.9.73.140:8501' } }],
     }).compileComponents();
 
     fixture = TestBed.createComponent(HomeComponent);
@@ -23,16 +20,14 @@ describe('HomeComponent', () => {
   });
 
   it('links traders to the login page', () => {
-    const traderLink: HTMLAnchorElement = fixture.nativeElement.querySelector('a.home-option');
+    const traderLink: HTMLAnchorElement = fixture.nativeElement.querySelector('a.trader-entry');
 
     expect(traderLink.getAttribute('href')).toBe('/login');
   });
 
-  it('sends admins to the analytics dashboard', () => {
-    const adminButton: HTMLButtonElement = fixture.nativeElement.querySelector('button.home-option');
+  it('links admins to the analytics dashboard', () => {
+    const adminLink: HTMLAnchorElement = fixture.nativeElement.querySelector('.admin-access a');
 
-    adminButton.click();
-
-    expect(analyticsSpy.open).toHaveBeenCalled();
+    expect(adminLink.getAttribute('href')).toBe('http://10.9.73.140:8501');
   });
 });
