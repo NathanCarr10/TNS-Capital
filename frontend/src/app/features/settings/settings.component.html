@@ -1,0 +1,88 @@
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Settings</p>
+    <h1>Account settings</h1>
+    <p class="muted">Details of your trading account.</p>
+  </div>
+</header>
+
+@if (isAdmin) {
+  <p class="note">Admins have no trading account of their own. <a routerLink="/portfolio">View accounts</a></p>
+} @else if (accountError()) {
+  <p class="note error" role="alert">{{ accountError() }}</p>
+} @else {
+  <section class="card" aria-label="Account details">
+    <div class="card-header">
+      <h2 class="card-title">Account details</h2>
+    </div>
+
+    @if (accountLoading()) {
+      <span class="skeleton skeleton-title" aria-hidden="true"></span>
+    } @else if (account()) {
+      @let details = account()!;
+      <dl class="details">
+        <div class="detail holder-row">
+          <dt>Account holder</dt>
+          <dd>
+            @if (editing()) {
+              <form class="name-form" [formGroup]="nameForm" (ngSubmit)="saveHolderName()" novalidate>
+                <label class="visually-hidden" for="holder-name">Account holder name</label>
+                <div class="name-fields">
+                  <input
+                    id="holder-name"
+                    class="input"
+                    type="text"
+                    formControlName="holderName"
+                    autocomplete="name"
+                    maxlength="255"
+                  />
+                  <button class="btn btn-primary" type="submit" [disabled]="saving()">
+                    {{ saving() ? 'Saving...' : 'Save' }}
+                  </button>
+                  <button class="btn" type="button" [disabled]="saving()" (click)="cancelEditing()">Cancel</button>
+                </div>
+                @if (nameForm.controls.holderName.touched && nameForm.controls.holderName.hasError('pattern')) {
+                  <p class="field-error" role="alert">Account holder name can only contain letters, numbers, spaces and . , ' -</p>
+                } @else if (nameForm.controls.holderName.touched && (nameForm.controls.holderName.invalid || !nameForm.controls.holderName.value.trim())) {
+                  <p class="field-error" role="alert">Enter the account holder's name.</p>
+                }
+                @if (saveError()) {
+                  <p class="field-error" role="alert">{{ saveError() }}</p>
+                }
+              </form>
+            } @else {
+              <span class="holder-name">{{ details.holderName }}</span>
+              <button class="btn btn-small edit-name" type="button" (click)="startEditing()">Edit</button>
+            }
+          </dd>
+        </div>
+        <div class="detail">
+          <dt>Account number</dt>
+          <dd class="num account-number">{{ details.accountNumber }}</dd>
+        </div>
+        <div class="detail">
+          <dt>Username</dt>
+          <dd>{{ username() }}</dd>
+        </div>
+        <div class="detail">
+          <dt>Status</dt>
+          <dd><span class="badge" [class.badge-positive]="details.status === 'ACTIVE'">{{ details.status }}</span></dd>
+        </div>
+        <div class="detail">
+          <dt>Opened</dt>
+          <dd class="opened-on">{{ details.openedOn | date:'MMM d, y, HH:mm' }}</dd>
+        </div>
+        <div class="detail">
+          <dt>Last changed</dt>
+          <dd class="last-updated">{{ details.lastUpdated | date:'MMM d, y, HH:mm' }}</dd>
+        </div>
+        <div class="detail">
+          <dt>Cash balance</dt>
+          <dd class="num">{{ details.cashBalance | currency:'USD':'symbol':'1.2-2' }}</dd>
+        </div>
+      </dl>
+    } @else {
+      <p class="note error">Account details unavailable.</p>
+    }
+  </section>
+}

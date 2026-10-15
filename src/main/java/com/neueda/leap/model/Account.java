@@ -36,6 +36,9 @@ public class Account {
     @Version
     private Integer version;
 
+    @Column(nullable = false, updatable = false)
+    private Instant openedOn;
+
     @Column(nullable = false)
     private Instant lastUpdated;
 
@@ -49,7 +52,8 @@ public class Account {
         this.cashBalance = new BigDecimal(cashBalance.toPlainString());
         this.status = AccountStatus.ACTIVE;
         this.version = 0;
-        this.lastUpdated = clock.now();
+        this.openedOn = clock.now();
+        this.lastUpdated = this.openedOn;
     }
 
     public Account(Account other) {
@@ -63,6 +67,7 @@ public class Account {
         this.cashBalance = new BigDecimal(other.cashBalance.toPlainString());
         this.status = other.status;
         this.version = other.version;
+        this.openedOn = other.openedOn;
         this.lastUpdated = other.lastUpdated;
     }
 
@@ -158,6 +163,10 @@ public class Account {
         return version;
     }
 
+    public Instant getOpenedOn() {
+        return openedOn;
+    }
+
     public Instant getLastUpdated() {
         return lastUpdated;
     }
@@ -186,6 +195,7 @@ public class Account {
                 ", cashBalance=" + cashBalance +
                 ", status=" + status +
                 ", version=" + version +
+                ", openedOn=" + openedOn +
                 ", lastUpdated=" + lastUpdated +
                 '}';
     }

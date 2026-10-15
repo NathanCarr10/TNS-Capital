@@ -154,6 +154,7 @@ public class AccountController {
                                 account.getHolderName(),
                                 account.getCashBalance(),
                                 account.getStatus(),
+                                account.getOpenedOn(),
                                 account.getLastUpdated()
                 );
         }

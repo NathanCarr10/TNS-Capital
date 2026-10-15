@@ -1,0 +1,88 @@
+:host {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.page-header {
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  p.muted {
+    margin: 0.4rem 0 0;
+  }
+}
+
+.details {
+  display: grid;
+  margin: 0;
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 1rem;
+  min-height: 3rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+
+  &:first-child {
+    border-top: none;
+  }
+
+  dt {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.holder-row dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.holder-name {
+  font-weight: 600;
+}
+
+.name-form {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.name-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  .input {
+    flex: 1 1 14rem;
+    width: auto;
+  }
+}
+
+.skeleton-title {
+  display: block;
+  width: 12rem;
+  height: 1.5rem;
+}
+
+@media (max-width: 560px) {
+  .detail {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+}
