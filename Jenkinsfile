@@ -8,6 +8,8 @@ pipeline {
 
     environment {
         IMAGE_NAME = "tns-capital-skeleton"
+        // The auth service image, built only so Trivy can scan its OS packages and Node runtime
+        AUTH_IMAGE_NAME = "tns-capital-auth"
 
         // Security scanners run as pinned Docker images so the Jenkins agent only
         // needs the Docker CLI — nothing to install, and every build uses the same
@@ -149,11 +151,11 @@ pipeline {
         stage('Auth Service Tests') {
             steps {
                 // The NestJS auth service's Jest suite, in the same Node image its
-                // container uses. The Postgres tests in users.service.spec.ts skip
+                // container uses (Node 22 LTS). The Postgres tests in users.service.spec.ts skip
                 // here (they need DB_HOST and a database).
                 sh '''
                     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:20-alpine \
+                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:22-alpine \
                         sh -c "npm ci --no-audit --no-fund && npm test"
                 '''
             }
@@ -219,7 +221,9 @@ pipeline {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     // Trivy checks libraries against known CVEs in two places:
                     //   fs    — the manifests in the repo (pom.xml, auth-service package-lock.json)
-                    //   image — the built image: every jar inside the fat jar plus OS packages
+                    //   image — the built images: every jar inside the API's fat jar plus OS
+                    //           packages, and the auth service's Node runtime, node_modules and
+                    //           OS packages (OWASP A06-4)
                     // Reports include HIGH and CRITICAL. The gate fails only on CRITICAL
                     // findings that have a fixed version available (--ignore-unfixed).
                     // Accepted risks go in .trivyignore. The trivy-cache volume keeps the
@@ -227,6 +231,7 @@ pipeline {
                     // The databases come from GitHub's registry: Trivy's default mirror
                     // (mirror.gcr.io) served a broken copy, failing the stage on every branch.
                     sh '''
+                        docker build -q -t "$AUTH_IMAGE_NAME:$BUILD_NUMBER" shared/auth-service > /dev/null
                         TRIVY="docker run --rm -v trivy-cache:/root/.cache/ \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -v $WORKSPACE:/src:ro -w /src $TRIVY_IMAGE"
@@ -238,12 +243,16 @@ pipeline {
                             --format sarif /src > "$REPORTS_DIR/trivy-fs.sarif"
                         $TRIVY image $COMMON --severity HIGH,CRITICAL \
                             --format sarif "$IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-image.sarif"
+                        $TRIVY image $COMMON --severity HIGH,CRITICAL \
+                            --format sarif "$AUTH_IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-auth-image.sarif"
 
                         GATE_FAILED=0
                         $TRIVY fs $COMMON --severity CRITICAL --ignore-unfixed \
                             --exit-code 1 /src || GATE_FAILED=1
                         $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
                             --exit-code 1 "$IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
+                        $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
+                            --exit-code 1 "$AUTH_IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
                         exit $GATE_FAILED
                     '''
                 }
@@ -259,7 +268,7 @@ pipeline {
 
             // Each build tags a ~300MB image that nothing uses afterwards; remove it so
             // the agent's disk doesn't fill up.
-            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} || true"
+            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} || true"
         }
         failure {
             // Notifies the team on build failure. Replace with your notification
