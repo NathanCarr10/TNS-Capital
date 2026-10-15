@@ -296,6 +296,20 @@ describe('DashboardComponent', () => {
     expect(component.priceLoading()).toBeFalse();
   });
 
+  it('shows a stored script payload in the holder name as text instead of running it', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    tradingServiceSpy.getAccount.and.returnValue(of({ ...account, holderName: payload }));
+
+    const xssFixture = TestBed.createComponent(DashboardComponent);
+    xssFixture.detectChanges();
+    const element: HTMLElement = xssFixture.nativeElement;
+    const holderName = Array.from(element.querySelectorAll('dd')).find((dd) => dd.textContent?.includes(payload));
+
+    expect(holderName).toBeDefined();
+    expect(holderName!.innerHTML).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(element.querySelector('img[src="x"]')).toBeNull();
+  });
+
   it('does not show admin controls to a trader', () => {
     const element: HTMLElement = fixture.nativeElement;
 

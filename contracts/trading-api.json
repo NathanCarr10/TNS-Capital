@@ -1198,7 +1198,8 @@
             "type": "string"
           },
           "holderName": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[\\p{L}\\p{M}\\p{N} .,'-]+$"
           },
           "cashBalance": {
             "minimum": 0,
@@ -1265,7 +1266,8 @@
         "type": "object",
         "properties": {
           "holderName": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[\\p{L}\\p{M}\\p{N} .,'-]+$"
           }
         }
       },

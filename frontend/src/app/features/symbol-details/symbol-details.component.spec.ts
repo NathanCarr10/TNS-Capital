@@ -170,4 +170,12 @@ describe('SymbolDetailsComponent', () => {
     expect(fixture.nativeElement.querySelector('.chart-panel')).toBeNull();
     discardPeriodicTasks();
   }));
+
+  it('shows a script payload from the URL as text instead of running it', fakeAsync(() => {
+    open('<img src=x onerror=alert(1)>');
+
+    expect(text('.note.error')).toContain('No instrument with the symbol <IMG SRC=X ONERROR=ALERT(1)> exists.');
+    expect(fixture.nativeElement.querySelector('img')).toBeNull();
+    discardPeriodicTasks();
+  }));
 });

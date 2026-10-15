@@ -20,6 +20,7 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /repo/frontend/dist/frontend/browser /usr/share/nginx/html
 
 # The unprivileged image runs as the "nginx" user and listens on 8080
