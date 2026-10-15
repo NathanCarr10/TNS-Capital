@@ -67,6 +67,16 @@ class FakeResponse:
         return self.body
 
 
+def test_refuses_to_trust_the_placeholder_secret(monkeypatch):
+    placeholder = "change-me-to-a-random-value-of-at-least-32-bytes"
+    monkeypatch.setenv("JWT_SECRET", placeholder)
+    forged = jwt.encode({"sub": "attacker", "roles": ["ADMIN"], "typ": "access", "iss": auth.ISSUER,
+                         "iat": int(time.time()), "exp": int(time.time()) + 900}, placeholder, algorithm="HS256")
+
+    with pytest.raises(auth.AuthError, match="placeholder"):
+        auth.verify(forged)
+
+
 def test_login_returns_the_access_token(monkeypatch):
     calls = []
 

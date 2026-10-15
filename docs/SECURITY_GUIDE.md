@@ -276,7 +276,7 @@ All password handling is tested in `shared/auth-service/tests/`:
 
 **auth-api.spec.ts** — HTTP tests (no database): claims, roles, refresh, logout, guards, error envelope, validation.
 
-**Run tests** (Node 20+; set `DB_*` to reach a Postgres with the `db/` schema):
+**Run tests** (Node 22+; set `DB_*` to reach a Postgres with the `db/` schema):
 ```bash
 cd shared/auth-service
 npm install

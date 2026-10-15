@@ -104,7 +104,7 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 | Area | Technology |
 |---|---|
 | Trading API | Java 21, Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
-| Auth service | Node.js 20, NestJS 11, TypeScript, Argon2, `pg` |
+| Auth service | Node.js 22, NestJS 11, TypeScript, Argon2, `pg` |
 | Messaging | Apache Kafka 7.5 (Confluent) with ZooKeeper, Kafka UI |
 | Database | PostgreSQL 16 |
 | ETL | Python 3.12, pandas, psycopg2, schedule |
@@ -189,8 +189,8 @@ Edit `.env` and set:
 |---|---|
 | `DB_USER` | PostgreSQL user. The default `tns-capital-db-user` is fine. |
 | `DB_PASSWORD` | Any password for the local database. |
-| `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API to verify them. Must be at least 32 bytes. Generate one with `openssl rand -hex 32`. |
-| `JWT_REFRESH_SECRET` | Reserved for the auth service and never given to the API. Nothing reads it yet (refresh tokens are random values stored as hashes), but set it to a different random value with `openssl rand -hex 32`. |
+| `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API and dashboard to verify them. At least 32 bytes; generate one with `openssl rand -hex 32`. All three refuse to start (or to sign anyone in) with the `change-me` placeholder. |
+| `ADMIN_PASSWORD` | Password of the `admin` account, which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
 `DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `8086`) and
@@ -237,10 +237,11 @@ API's startup with `docker compose logs -f app`.
 curl http://localhost:4000/health
 # -> {"status":"up"}
 
-# Log in as the seeded admin and keep the access token
+# Log in as the admin (ADMIN_PASSWORD from .env) and keep the access token
+source .env
 TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"adminPassword"}' \
+  -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 
 # Trading API health (needs a token)
@@ -292,7 +293,7 @@ and logout.
 
 | User | Password | Role | Access |
 |---|---|---|---|
-| `admin` (seeded) | `adminPassword` | `ADMIN` | Every account, opening accounts, adding and changing instruments, the DLQ |
+| `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | Every account, opening accounts, adding and changing instruments, the DLQ |
 | A user you register | your own | `USER` | Only the account opened at registration |
 
 The seeded users `alice` and `bob` have placeholder password hashes and cannot log in.
@@ -457,7 +458,7 @@ Jenkins runs the [`Jenkinsfile`](Jenkinsfile) on every branch and pull request:
 | Test | `mvn verify` (unit and integration tests); results published as JUnit reports |
 | ETL Tests | The ETL pytest suite, including its Postgres integration tests against a throwaway database, with coverage (`ci/python-tests.sh etl`) |
 | Dashboard Tests | The dashboard's tests (insights, the headless Streamlit page, `data.py` against a throwaway database), with coverage |
-| Auth Service Tests | The auth service's Jest suite in a `node:20-alpine` container |
+| Auth Service Tests | The auth service's Jest suite in a `node:22-alpine` container |
 | Frontend Tests | The Angular unit tests in headless Chromium, then a production build |
 | E2E Tests | The Playwright journeys against a throwaway copy of the whole stack (`ci/e2e-tests.sh`); the report and traces of failed tests are archived |
 | SonarQube Analysis | Analyses the Java API and the Python ETL and dashboard, uploads their coverage and waits for the quality gate |

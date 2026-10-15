@@ -31,6 +31,13 @@ export class UsernameTakenError extends Error {
   }
 }
 
+/** The admin username belongs to a trader, so it cannot be made the admin. */
+export class AdminNameTakenError extends Error {
+  constructor(username: string) {
+    super(`"${username}" is a trader's username, so it cannot be the admin account`);
+  }
+}
+
 // Postgres error code for a unique constraint violation
 const UNIQUE_VIOLATION = '23505';
 
@@ -104,6 +111,29 @@ export class UsersService {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Creates the ADMIN user, or sets a new password on it. Admins have no trading account.
+   *
+   * @throws AdminNameTakenError if a trader (USER) already has this username
+   */
+  async saveAdmin(username: string, passwordHash: string): Promise<void> {
+    const existing = await this.findByUsername(username);
+    if (existing && !existing.roles.includes('ADMIN')) {
+      throw new AdminNameTakenError(username);
+    }
+    if (existing) {
+      await this.pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [
+        passwordHash,
+        existing.id,
+      ]);
+      return;
+    }
+    await this.pool.query(
+      "INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, 'ADMIN', NOW(), NOW())",
+      [username, passwordHash],
+    );
   }
 
   async findByUsername(username: string): Promise<UserRecord | null> {

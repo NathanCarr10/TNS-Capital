@@ -7,7 +7,7 @@ an access token's *signature*; it never sees a password.
 ## Run it
 
 Normally it runs from the project's `docker-compose.yml` (service `auth-service`, port 4000).
-To run it on its own (Node 20+):
+To run it on its own (Node 22+):
 
 ```bash
 cd shared/auth-service
@@ -72,9 +72,12 @@ curl -X POST http://localhost:4000/auth/login \
 | User | Password | roles | Can access |
 |---|---|---|---|
 | any registered user | their own | `["USER"]` | only their own account |
-| `admin` (seeded) | `adminPassword` | `["ADMIN"]` | every account, the DLQ, opening accounts |
+| `admin` | `ADMIN_PASSWORD` | `["ADMIN"]` | every account, the DLQ, opening accounts |
 
-Roles come from `users.role`. The trading API resolves which account a USER owns from the
+Roles come from `users.role`. Nothing is seeded with a known password: when the service
+starts, `src/users/admin-bootstrap.ts` creates the `admin` user (`ADMIN_USERNAME` to rename it)
+from `ADMIN_PASSWORD`, or sets that password on it if it differs, so changing the variable and
+restarting rotates it. It never promotes a trader who registered the same username. The trading API resolves which account a USER owns from the
 token's `sub`.
 
 ## Refresh and log out

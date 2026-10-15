@@ -20,6 +20,7 @@ be explained at the showcase and revisited later.
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
+| 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -167,3 +168,11 @@ functional guards and interceptors, typed API clients) is available in 19, and a
 upgrade during the build would touch every component, the test setup and the generated API
 clients for no change a user would see. The upgrade (`ng update @angular/core@21
 @angular/cli@21`, one major at a time) is revisited if the tutor asks for it.
+
+## 15. Node.js 22 for the auth service
+
+§4.2 lists Node.js 20 LTS. Node 20 reached end of life on 2026-04-30 and no longer gets security
+fixes (docs/OWASP_REVIEW.md A06-3), so the auth service builds, tests (Jenkins) and runs on
+`node:22-alpine`, the current LTS. NestJS 11, Argon2 and the test suite run unchanged on it. The
+runtime image also drops the npm CLI, which only the build needs; it carried every HIGH finding
+in Trivy's scan of the image (A06-4).

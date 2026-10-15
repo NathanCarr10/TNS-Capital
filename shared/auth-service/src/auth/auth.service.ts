@@ -73,11 +73,15 @@ export class AuthService {
    *
    * Wrong username and wrong password get the same 401, so usernames cannot be probed.
    */
-  async login(username: string, password: string): Promise<LoginResult> {
+  async login(username: string, password: string, clientIp = 'unknown'): Promise<LoginResult> {
     const user = await this.validate(username, password);
+    // Every attempt is logged, so password guessing leaves a trace (OWASP A09-2). Never the
+    // password or tokens; the username is quoted so a crafted one cannot forge log lines.
     if (!user) {
+      this.logger.warn(`Login failed: username=${JSON.stringify(username)} ip=${clientIp}`);
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
+    this.logger.log(`Login succeeded: username=${JSON.stringify(user.username)} id=${user.id} ip=${clientIp}`);
 
     const refreshToken = this.tokens.generateRefreshToken();
     await this.refreshTokens.create(user.id, refreshToken.hash, randomUUID(), REFRESH_TOKEN_TTL_SECONDS);

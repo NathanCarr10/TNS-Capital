@@ -1,7 +1,10 @@
 import { APIRequestContext, Locator, Page, expect } from '@playwright/test';
 
-/** The seeded admin (db/data/06_users_seed.sql). */
-export const ADMIN = { username: 'admin', password: 'adminPassword' };
+/**
+ * The admin, which the auth service creates from ADMIN_PASSWORD: ci/e2e-tests.sh generates one
+ * and passes it in; against your own stack, set E2E_ADMIN_PASSWORD to the one in your .env.
+ */
+export const ADMIN = { username: 'admin', password: process.env['E2E_ADMIN_PASSWORD'] ?? '' };
 
 export interface Trader {
   username: string;

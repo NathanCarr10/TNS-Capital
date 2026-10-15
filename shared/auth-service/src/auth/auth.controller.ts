@@ -1,4 +1,4 @@
-import { All, Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { All, Body, Controller, Get, HttpCode, HttpStatus, Ip, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { methodNotAllowed } from '../common/method-not-allowed';
@@ -57,8 +57,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Log in and receive an access token and a refresh token' })
   @ApiResponse({ status: 200, description: 'accessToken (15 min) and refreshToken (7 days)' })
   @ApiResponse({ status: 401, description: 'Invalid username or password' })
-  login(@Body() body: LoginDto): Promise<LoginResult> {
-    return this.authService.login(body.username, body.password);
+  login(@Body() body: LoginDto, @Ip() clientIp: string): Promise<LoginResult> {
+    return this.authService.login(body.username, body.password, clientIp);
   }
 
   /** POST /auth/refresh - Spend a refresh token for a new access token and refresh token */
