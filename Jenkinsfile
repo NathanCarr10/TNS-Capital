@@ -204,9 +204,12 @@ pipeline {
                     // sonar.qualitygate.wait=true blocks until SonarQube has evaluated the
                     // Quality Gate and fails the stage if it does not pass — without it the
                     // stage would succeed as soon as the report was uploaded.
+                    // The heap caps keep the scanner JVM and the Node.js process of the
+                    // TypeScript analysis (which sizes itself to 1.4 GB by default) small
+                    // enough that systemd-oomd does not kill Jenkins on this host.
                     withSonarQubeEnv('sonarserver') {
                         withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                            sh 'mvn -B sonar:sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true'
+                            sh 'MAVEN_OPTS="-Xmx768m" mvn -B sonar:sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true -Dsonar.javascript.node.maxspace=768'
                         }
                     }
                 }
