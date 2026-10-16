@@ -28,6 +28,7 @@ import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Order;
+import com.neueda.leap.model.Position;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.repositories.PositionRepository;
@@ -366,11 +367,13 @@ class AccountServiceTest {
             verify(accountRepository, never()).save(any());
         }
 
-        @DisplayName("Should close an account by setting CLOSED instead of deleting it")
+        @DisplayName("Should close an empty account by setting CLOSED instead of deleting it")
         @Test
         void testCloseAccountKeepsRecord() {
+            testAccount.debit(testAccount.getCashBalance());
             when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
             when(orderRepository.findByAccountId(1L)).thenReturn(List.of());
+            when(positionRepository.findByAccountId(1L)).thenReturn(List.of());
             when(accountRepository.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
 
             Account closed = accountService.closeAccount(1L);
@@ -388,6 +391,36 @@ class AccountServiceTest {
 
             assertThrows(AccountDeletionConflictException.class, () -> accountService.closeAccount(1L));
             assertEquals(AccountStatus.ACTIVE, testAccount.getStatus());
+        }
+
+        @DisplayName("Should refuse to close an account that still holds positions")
+        @Test
+        void testCloseAccountWithHoldings() {
+            testAccount.debit(testAccount.getCashBalance());
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderRepository.findByAccountId(1L)).thenReturn(List.of());
+            when(positionRepository.findByAccountId(1L))
+                    .thenReturn(List.of(new Position(1L, "AAPL", 5, new BigDecimal("150.00"))));
+
+            AccountDeletionConflictException ex = assertThrows(AccountDeletionConflictException.class,
+                    () -> accountService.closeAccount(1L));
+            assertTrue(ex.getMessage().contains("holding"));
+            assertEquals(AccountStatus.ACTIVE, testAccount.getStatus());
+            verify(accountRepository, never()).save(any());
+        }
+
+        @DisplayName("Should refuse to close an account that still holds cash")
+        @Test
+        void testCloseAccountWithCash() {
+            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(orderRepository.findByAccountId(1L)).thenReturn(List.of());
+            when(positionRepository.findByAccountId(1L)).thenReturn(List.of());
+
+            AccountDeletionConflictException ex = assertThrows(AccountDeletionConflictException.class,
+                    () -> accountService.closeAccount(1L));
+            assertTrue(ex.getMessage().contains("cash"));
+            assertEquals(AccountStatus.ACTIVE, testAccount.getStatus());
+            verify(accountRepository, never()).save(any());
         }
     }
 
