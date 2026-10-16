@@ -199,7 +199,9 @@ Edit `.env` and set:
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
 `DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `8086`) and
-`AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute).
+`AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute) and
+`AUTH_TRUST_PROXY` (default `loopback, uniquelocal`: the proxies whose `X-Forwarded-For` the
+auth service believes; see [shared/auth-service/README.md](shared/auth-service/README.md#rate-limiting)).
 
 ### 3. Start the stack
 

@@ -77,6 +77,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
+      # Proxies whose X-Forwarded-For gives the client IP: nginx on the Docker network
+      AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-loopback, uniquelocal}
     # Localhost only: browsers reach it through the frontend's /auth/ proxy
     ports:
       - "127.0.0.1:4000:4000"

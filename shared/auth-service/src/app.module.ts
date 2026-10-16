@@ -1,7 +1,8 @@
 import { INestApplication, Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
+import { parseTrustProxy } from './auth/rate-limit';
 import { ApiExceptionFilter } from './common/api-exception.filter';
 import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
 import { createValidationPipe } from './common/validation';
@@ -28,6 +29,9 @@ export class AppModule {}
  * by main.ts and the tests so both run the same pipeline.
  */
 export function configureApp<T extends INestApplication>(app: T): T {
+  // Take the client's IP from the frontend's nginx, for the rate limit and the login log
+  const trustProxy = parseTrustProxy(app.get(ConfigService).get<string>('AUTH_TRUST_PROXY'));
+  app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
   app.useGlobalPipes(createValidationPipe());
   app.useGlobalFilters(new ApiExceptionFilter());
   setupSwagger(app);

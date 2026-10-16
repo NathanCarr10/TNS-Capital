@@ -1,3 +1,5 @@
+import { parseTrustProxy } from '../auth/rate-limit';
+
 /**
  * Validates the environment at startup; the service refuses to start without
  * a usable JWT_SECRET, or with a weak ADMIN_PASSWORD.
@@ -36,6 +38,10 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   const rateLimit = config.AUTH_RATE_LIMIT;
   if (rateLimit !== undefined && !(Number.isInteger(Number(rateLimit)) && Number(rateLimit) > 0)) {
     throw new Error('AUTH_RATE_LIMIT must be a positive whole number.');
+  }
+  const trustProxy = config.AUTH_TRUST_PROXY;
+  if (trustProxy !== undefined) {
+    parseTrustProxy(String(trustProxy));
   }
   return config;
 }
