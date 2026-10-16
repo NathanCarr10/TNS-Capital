@@ -310,21 +310,23 @@ public class KafkaConfig {
      */
     private void rejectIfStillNew(Order order, String failureReason) {
         OrderStatus status = order.getStatus();
-        if (status == OrderStatus.NEW) {
-            order.setStatus(OrderStatus.REJECTED);
-            order.setStatusReason(failureReason);
-            orderRepository.save(order);
-            log.info("Updated order status to REJECTED in recovery handler (was NEW): orderId={}", order.getId());
-            tradeEventPublisher.publish(order, status, "EXHAUSTED_RETRIES");
-        } else if (status == OrderStatus.REJECTED) {
-            if (order.getStatusReason() == null) {
+        switch (status) {
+            case NEW -> {
+                order.setStatus(OrderStatus.REJECTED);
                 order.setStatusReason(failureReason);
                 orderRepository.save(order);
+                log.info("Updated order status to REJECTED in recovery handler (was NEW): orderId={}", order.getId());
+                tradeEventPublisher.publish(order, status, "EXHAUSTED_RETRIES");
             }
-            log.debug("Order already REJECTED (trade event was published during processing): orderId={}",
-                    order.getId());
-        } else {
-            log.info("Order already {}, keeping its status: orderId={}", status, order.getId());
+            case REJECTED -> {
+                if (order.getStatusReason() == null) {
+                    order.setStatusReason(failureReason);
+                    orderRepository.save(order);
+                }
+                log.debug("Order already REJECTED (trade event was published during processing): orderId={}",
+                        order.getId());
+            }
+            default -> log.info("Order already {}, keeping its status: orderId={}", status, order.getId());
         }
     }
 
