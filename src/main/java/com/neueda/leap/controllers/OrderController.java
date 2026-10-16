@@ -5,6 +5,7 @@ import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
 import com.neueda.leap.dtos.PlaceOrderResponse;
 import com.neueda.leap.dtos.TradeEventResponse;
+import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
@@ -44,14 +45,16 @@ public class OrderController {
      * If the request has no price, the order is priced at the latest live
      * market price, which is returned in the response.
      * 
-     * An unknown account or instrument fails fast (404) and nothing is stored,
-     * since those can never succeed later.
+     * An unknown account or instrument (404), an account that is not ACTIVE
+     * (403 ACC-403) or an instrument that is not tradable (404 INS-404) fails
+     * fast and nothing is stored, since those can never succeed later.
      * 
      * @param request the order placement request with validation
      * @return 202 ACCEPTED with the order ID for tracking
      * @throws AccessDeniedException       if the caller does not own the account
      * @throws AccountNotFoundException    if account does not exist
-     * @throws InstrumentNotFoundException if instrument does not exist
+     * @throws AccountNotActiveException   if the account is SUSPENDED or CLOSED
+     * @throws InstrumentNotFoundException if instrument does not exist or is not tradable
      * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
      */

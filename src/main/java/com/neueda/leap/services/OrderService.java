@@ -25,6 +25,7 @@ import com.neueda.leap.exceptions.SettlementException;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.kafka.events.ExecutionEvent;
 import com.neueda.leap.model.Execution;
+import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.ExecutionRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -150,7 +151,8 @@ public class OrderService {
      * @param request the validated order request
      * @return the stored NEW order
      * @throws AccountNotFoundException    if the account does not exist
-     * @throws InstrumentNotFoundException if the instrument does not exist
+     * @throws AccountNotActiveException   if the account is SUSPENDED or CLOSED
+     * @throws InstrumentNotFoundException if the instrument does not exist or is not tradable
      * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
      * @throws OrderPublishException       if Kafka could not take the order; it
@@ -160,12 +162,19 @@ public class OrderService {
     public Order submitOrder(PlaceOrderRequest request) {
         Objects.requireNonNull(request);
 
-        // Fail fast: these cannot succeed later, so don't store or queue the order
-        accountRepository.findById(request.accountId())
+        // Fail fast: these cannot succeed later, so don't store or queue the order.
+        // The Trade Executor checks them again, in case they change while the order waits.
+        Account account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + request.accountId()));
+        if (!account.isActive()) {
+            throw new AccountNotActiveException("Account not active: " + request.accountId());
+        }
         String symbol = InputNormalizer.normalize(request.symbol());
-        instrumentRepository.findBySymbol(symbol)
+        Instrument instrument = instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
+        if (!instrument.isTradable()) {
+            throw new InstrumentNotFoundException("Instrument not tradable: " + symbol);
+        }
 
         // No price given: price the order now at the live market price, so it fills
         // at the price at the time it was accepted. Only known instruments get here,

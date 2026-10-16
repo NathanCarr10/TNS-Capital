@@ -24,7 +24,7 @@ sequenceDiagram
     UI->>API: POST /api/v1/orders (JWT, idempotencyKey)
     API->>API: AccountAccessGuard: the account is the caller's
     API->>OS: submitOrder(request)
-    OS->>DB: account and instrument exist?
+    OS->>DB: account exists and ACTIVE, instrument exists and tradable?
     OS->>DB: insert order, status NEW
     OS->>K: OrderEvent to "orders" (waits for the ack)
     API-->>UI: 202 Accepted, orderId
@@ -60,8 +60,10 @@ sequenceDiagram
   answers `409 ORD-409`, so a retried request cannot place the order twice.
 - **Audit (NFR-04):** every status change is published to `trade-events`, and
   `TradeEventAuditListener` stores it in `trade_event_log` (`GET /api/v1/orders/{id}/events`).
-- **Fail fast:** an unknown account or instrument is refused before anything is stored
-  (`404 ACC-404` / `INS-404`). If Kafka cannot take the order, it is stored `REJECTED` and the API
+- **Fail fast:** an unknown account or instrument, an account that is not `ACTIVE` or an
+  instrument that is not tradable is refused before anything is stored (`404 ACC-404`,
+  `403 ACC-403`, `404 INS-404`). The Trade Executor checks again, in case either changes
+  while the order waits. If Kafka cannot take the order, it is stored `REJECTED` and the API
   answers `503 SYS-503`.
 
 ## 2. A SELL, and an order that is rejected

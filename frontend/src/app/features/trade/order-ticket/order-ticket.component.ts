@@ -194,7 +194,7 @@ export class OrderTicketComponent {
     const messages: Record<string, string> = {
       'ACC-404': 'Account not found (ACC-404).',
       'ACC-403': 'Account inactive (ACC-403).',
-      'INS-404': 'Instrument not found (INS-404).',
+      'INS-404': 'Instrument not found or not tradable (INS-404).',
       'VAL-422': 'Invalid input (VAL-422). Check quantity and price.',
     };
     const code = readApiError(error)?.errorCode;

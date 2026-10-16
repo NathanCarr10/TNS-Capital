@@ -18,13 +18,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
@@ -173,6 +177,31 @@ class OrderServiceTest {
             assertThrows(InstrumentNotFoundException.class, () -> orderService.submitOrder(placeOrderRequest));
             verify(orderRepository, never()).saveAndFlush(any());
             verifyNoInteractions(orderEventPublisher);
+        }
+
+        @DisplayName("Should fail fast for an account that is not ACTIVE, storing and publishing nothing")
+        @ParameterizedTest
+        @EnumSource(value = AccountStatus.class, names = { "SUSPENDED", "CLOSED" })
+        void testSubmitInactiveAccount(AccountStatus status) {
+            testAccount.setStatus(status);
+
+            assertThrows(AccountNotActiveException.class, () -> orderService.submitOrder(placeOrderRequest));
+            verify(orderRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(orderEventPublisher, priceProvider);
+        }
+
+        @DisplayName("Should fail fast for an instrument that is not tradable, storing and publishing nothing")
+        @Test
+        void testSubmitUntradableInstrument() {
+            when(instrumentRepository.findBySymbol("AAPL"))
+                    .thenReturn(Optional.of(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", false)));
+            PlaceOrderRequest noPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, null, "ORDER-001");
+
+            InstrumentNotFoundException ex = assertThrows(InstrumentNotFoundException.class,
+                    () -> orderService.submitOrder(noPrice));
+            assertTrue(ex.getMessage().contains("not tradable"));
+            verify(orderRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(orderEventPublisher, priceProvider);
         }
 
         @DisplayName("Should price an order without a price at the live price, rounded to the cent")
@@ -645,7 +674,7 @@ class OrderServiceTest {
         @DisplayName("Should reject a fill for an account that was suspended meanwhile")
         @Test
         void testRejectsInactiveAccount() {
-            testAccount.setStatus(com.neueda.leap.enums.AccountStatus.SUSPENDED);
+            testAccount.setStatus(AccountStatus.SUSPENDED);
 
             ExecutionEvent fill = fillAt("149.50");
             assertThrows(SettlementException.class, () -> orderService.settleExecution(fill));

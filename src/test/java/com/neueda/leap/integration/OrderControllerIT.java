@@ -2,6 +2,7 @@ package com.neueda.leap.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.model.Account;
 import com.neueda.leap.model.Instrument;
@@ -23,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -342,6 +344,39 @@ class OrderControllerIT extends AbstractIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                                 .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("Should return 403 ACC-403 and store nothing for an order on a suspended account")
+        @SuppressWarnings("null")
+        void testPlaceOrderAccountNotActive() throws Exception {
+                testAccount.setStatus(AccountStatus.SUSPENDED);
+                accountRepository.save(testAccount);
+                PlaceOrderRequest request = new PlaceOrderRequest(testAccount.getId(), "AAPL", OrderSide.BUY, 10,
+                                new BigDecimal("150.00"), "IDEM-SUSPENDED");
+
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isForbidden())
+                                .andExpect(jsonPath("$.errorCode", equalTo("ACC-403")));
+                assertTrue(orderRepository.findByIdempotencyKey("IDEM-SUSPENDED").isEmpty());
+        }
+
+        @Test
+        @DisplayName("Should return 404 INS-404 and store nothing for an instrument that is not tradable")
+        @SuppressWarnings("null")
+        void testPlaceOrderInstrumentNotTradable() throws Exception {
+                instrumentRepository.save(new Instrument("HALT", "Halted Corp", "EQUITY", "USD", false));
+                PlaceOrderRequest request = new PlaceOrderRequest(testAccount.getId(), "HALT", OrderSide.BUY, 10,
+                                new BigDecimal("150.00"), "IDEM-HALTED");
+
+                mockMvc.perform(post("/api/v1/orders")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.errorCode", equalTo("INS-404")));
+                assertTrue(orderRepository.findByIdempotencyKey("IDEM-HALTED").isEmpty());
         }
 
         @Test

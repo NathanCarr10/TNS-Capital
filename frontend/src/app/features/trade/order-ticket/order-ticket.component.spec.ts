@@ -211,6 +211,23 @@ describe('OrderTicketComponent', () => {
     expect(component.errorMessage()).toContain('VAL-422');
   });
 
+  it('explains an order refused because the account is not active', () => {
+    create();
+    tradingService.placeOrder.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { errorCode: 'ACC-403', message: 'Account not active', timestamp: new Date().toISOString() },
+          })
+      )
+    );
+
+    component.onSubmit();
+
+    expect(component.errorMessage()).toBe('Account inactive (ACC-403).');
+  });
+
   it('estimates the cost and warns when it is more than the cash', () => {
     create(100);
     component.orderForm.patchValue({ quantity: 60 });
