@@ -1,5 +1,7 @@
 package com.neueda.leap.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.neueda.leap.dtos.OrderResponse;
 import com.neueda.leap.dtos.OrderHistoryResponse;
 import com.neueda.leap.dtos.PlaceOrderRequest;
@@ -58,6 +60,12 @@ public class OrderController {
      * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
      */
+    @Operation(summary = "Place an order", description = "Checks the account and instrument, stores the order as NEW and queues it for the Trade Executor. Poll GET /api/v1/orders/{orderId} until it is FILLED or REJECTED; funds and holdings are checked then. Without a price the order is priced at the live market price.")
+    @ApiResponse(responseCode = "202", description = "Accepted for execution")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's; ACC-403 the account is not ACTIVE")
+    @ApiResponse(responseCode = "404", description = "ACC-404 Account not found; INS-404 instrument not found or not tradable")
+    @ApiResponse(responseCode = "409", description = "ORD-409 The idempotency key was already used")
+    @ApiResponse(responseCode = "503", description = "PRC-503 No price given and no live price; SYS-503 the order could not be queued (it is stored as REJECTED)")
     @PostMapping
     public ResponseEntity<PlaceOrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
         // Checked first, so a non-owner cannot probe which account IDs exist
@@ -67,6 +75,7 @@ public class OrderController {
                 .body(PlaceOrderResponse.accepted(order.getId(), order.getPrice()));
     }
 
+    @Operation(summary = "List orders", description = "Admins get every order; other users get the orders on their own account.")
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getAllOrders() {
         // Admins see every order (monitoring of system order flow); other users
@@ -77,6 +86,10 @@ public class OrderController {
         return ResponseEntity.ok(orders.stream().map(this::mapToResponse).toList());
     }
 
+    @Operation(summary = "Get an order")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
+    @ApiResponse(responseCode = "404", description = "ORD-404 Order not found")
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID orderId) {
         Order order = orderService.getOrder(orderId);
@@ -88,6 +101,11 @@ public class OrderController {
      * Cancels a NEW order and returns it with its updated status (CANCELLED).
      * A FILLED, REJECTED or already CANCELLED order gets 409 ORD-409.
      */
+    @Operation(summary = "Cancel a working order", description = "Only NEW orders can be cancelled; returns the order, now CANCELLED.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
+    @ApiResponse(responseCode = "404", description = "ORD-404 Order not found")
+    @ApiResponse(responseCode = "409", description = "ORD-409 The order is not NEW (already filled, rejected or cancelled)")
     @DeleteMapping("/{orderId}")
     public ResponseEntity<OrderResponse> cancelOrder(@PathVariable UUID orderId) {
         // Looked up first so the ownership check runs before any change
@@ -100,6 +118,10 @@ public class OrderController {
      * The order's lifecycle (e.g. NEW -> FILLED), from the audit trail of the
      * trade-events topic, oldest first.
      */
+    @Operation(summary = "Lifecycle events of an order", description = "From the trade-events audit trail, oldest first.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
+    @ApiResponse(responseCode = "404", description = "ORD-404 Order not found")
     @GetMapping("/{orderId}/events")
     public ResponseEntity<List<TradeEventResponse>> getOrderEvents(@PathVariable UUID orderId) {
         accessGuard.checkAccess(orderService.getOrder(orderId).getAccountId());
@@ -110,6 +132,10 @@ public class OrderController {
     }
 
     /** The archived copy of a cancelled order */
+    @Operation(summary = "Archived copy of a cancelled order")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
+    @ApiResponse(responseCode = "404", description = "ORD-404 No archived copy of this order")
     @GetMapping("/history/{orderId}")
     public ResponseEntity<OrderHistoryResponse> getOrderHistory(@PathVariable UUID orderId) {
         OrderHistory history = orderService.getOrderHistory(orderId);
@@ -118,6 +144,9 @@ public class OrderController {
     }
 
     /** Archived cancelled orders for an account; works even for closed accounts */
+    @Operation(summary = "Cancelled orders of an account", description = "Works for closed accounts too.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
     @GetMapping("/{accountId}/history")
     public ResponseEntity<List<OrderHistoryResponse>> getAccountOrderHistory(@PathVariable Long accountId) {
         accessGuard.checkAccess(accountId);
