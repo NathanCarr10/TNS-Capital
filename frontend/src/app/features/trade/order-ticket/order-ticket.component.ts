@@ -66,6 +66,25 @@ export class OrderTicketComponent {
   readonly side = computed(() => this.formValue().side);
   readonly isLimit = computed(() => this.formValue().orderType === 'LIMIT');
 
+  /**
+   * Limit orders are immediate-or-cancel: the server refuses a BUY limit below the
+   * market price or a SELL limit above it (ORD-422), as it would not fill.
+   */
+  private readonly limitNotMarketable = computed(() => {
+    const price = this.formValue().price;
+    const live = this.livePrice();
+    if (!this.isLimit() || price == null || live == null) {
+      return null;
+    }
+    // Like the server, round the live price to the cent in the trader's favour
+    if (this.side() === 'BUY') {
+      const market = Math.floor(live * 100) / 100;
+      return price < market ? `A buy limit below the market price (${market.toFixed(2)}) will not fill.` : null;
+    }
+    const market = Math.ceil(live * 100) / 100;
+    return price > market ? `A sell limit above the market price (${market.toFixed(2)}) will not fill.` : null;
+  });
+
   /** Shares of this symbol held, which caps a sell. */
   readonly heldQuantity = computed(
     () => this.store.positions()?.find((position) => position.symbol === this.symbol())?.quantity ?? 0
@@ -80,6 +99,10 @@ export class OrderTicketComponent {
 
   /** A warning when the order looks like it will be rejected; the server still decides. */
   readonly shortfall = computed(() => {
+    const notMarketable = this.limitNotMarketable();
+    if (notMarketable) {
+      return notMarketable;
+    }
     const quantity = this.formValue().quantity;
     if (this.side() === 'SELL') {
       return quantity > this.heldQuantity() ? `You hold ${this.heldQuantity()} ${this.symbol()}.` : null;
@@ -106,7 +129,8 @@ export class OrderTicketComponent {
       const price = this.orderForm.controls.price;
       untracked(() => {
         if (livePrice != null && price.value == null) {
-          price.setValue(livePrice);
+          // Prices are in cents
+          price.setValue(Math.round(livePrice * 100) / 100);
         }
       });
     });
@@ -194,7 +218,7 @@ export class OrderTicketComponent {
     const messages: Record<string, string> = {
       'ACC-404': 'Account not found (ACC-404).',
       'ACC-403': 'Account inactive (ACC-403).',
-      'INS-404': 'Instrument not found (INS-404).',
+      'INS-404': 'Instrument not found or not tradable (INS-404).',
       'VAL-422': 'Invalid input (VAL-422). Check quantity and price.',
     };
     const code = readApiError(error)?.errorCode;

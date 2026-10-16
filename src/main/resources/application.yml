@@ -77,8 +77,10 @@ market-data:
 
 dlq:
   auto-resolve:
-    # PENDING DLQ messages are marked RESOLVED once older than after-ms
-    enabled: true
+    # PENDING DLQ messages are marked RESOLVED once older than after-ms. Off: a failed order
+    # stays PENDING until an admin reviews or replays it (OWASP A09-4). DLQ_AUTO_RESOLVE=true
+    # turns it back on, e.g. for a demo.
+    enabled: ${DLQ_AUTO_RESOLVE:false}
     after-ms: 10000
     interval-ms: 1000
 
@@ -104,7 +106,10 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      # /actuator/health is public (SecurityConfig): anyone gets UP or DOWN,
+      # only admins get the database and disk details
+      show-details: when-authorized
+      roles: ADMIN
   health:
     db:
       enabled: true

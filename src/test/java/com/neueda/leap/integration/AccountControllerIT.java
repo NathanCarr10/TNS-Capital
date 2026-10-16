@@ -238,13 +238,46 @@ class AccountControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Should close an account and keep the record")
+    @DisplayName("Should close an emptied account and keep the record")
     void testCloseAccountKeepsRecord() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts/{id}/withdraw", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amount\": 10000.00}"))
+                .andExpect(status().isOk());
+
         mockMvc.perform(delete("/api/v1/accounts/{id}", testAccount.getId()))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/v1/accounts/{id}", testAccount.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status", is("CLOSED")));
+    }
+
+    @Test
+    @DisplayName("Should refuse to close an account that still holds cash, with ACC-409")
+    void testCloseAccountWithCash() throws Exception {
+        mockMvc.perform(delete("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode", is("ACC-409")))
+                .andExpect(jsonPath("$.message", containsString("withdraw")));
+
+        mockMvc.perform(get("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(jsonPath("$.status", is("ACTIVE")));
+    }
+
+    @Test
+    @DisplayName("Should refuse to close an account that still holds positions, with ACC-409")
+    void testCloseAccountWithHoldings() throws Exception {
+        instrumentRepository.save(new Instrument("ACME", "Acme Corp", "Equity", "USD", true));
+        positionRepository.save(new Position(testAccount.getId(), "ACME", 10, new BigDecimal("25.00")));
+        mockMvc.perform(post("/api/v1/accounts/{id}/withdraw", testAccount.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"amount\": 10000.00}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/v1/accounts/{id}", testAccount.getId()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode", is("ACC-409")))
+                .andExpect(jsonPath("$.message", containsString("holding")));
     }
 }

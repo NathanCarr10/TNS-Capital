@@ -18,17 +18,23 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import com.neueda.leap.dtos.PlaceOrderRequest;
+import com.neueda.leap.enums.AccountStatus;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.InsufficientFundsException;
+import com.neueda.leap.exceptions.LimitNotMarketableException;
 import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.exceptions.OrderCancellationConflictException;
 import com.neueda.leap.exceptions.OrderNotFoundException;
@@ -175,6 +181,31 @@ class OrderServiceTest {
             verifyNoInteractions(orderEventPublisher);
         }
 
+        @DisplayName("Should fail fast for an account that is not ACTIVE, storing and publishing nothing")
+        @ParameterizedTest
+        @EnumSource(value = AccountStatus.class, names = { "SUSPENDED", "CLOSED" })
+        void testSubmitInactiveAccount(AccountStatus status) {
+            testAccount.setStatus(status);
+
+            assertThrows(AccountNotActiveException.class, () -> orderService.submitOrder(placeOrderRequest));
+            verify(orderRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(orderEventPublisher, priceProvider);
+        }
+
+        @DisplayName("Should fail fast for an instrument that is not tradable, storing and publishing nothing")
+        @Test
+        void testSubmitUntradableInstrument() {
+            when(instrumentRepository.findBySymbol("AAPL"))
+                    .thenReturn(Optional.of(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", false)));
+            PlaceOrderRequest noPrice = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, null, "ORDER-001");
+
+            InstrumentNotFoundException ex = assertThrows(InstrumentNotFoundException.class,
+                    () -> orderService.submitOrder(noPrice));
+            assertTrue(ex.getMessage().contains("not tradable"));
+            verify(orderRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(orderEventPublisher, priceProvider);
+        }
+
         @DisplayName("Should price an order without a price at the live price, rounded to the cent")
         @Test
         void testSubmitWithoutPriceUsesLivePrice() {
@@ -188,11 +219,57 @@ class OrderServiceTest {
             verify(orderEventPublisher).publish(order);
         }
 
-        @DisplayName("Should keep the price given in the request without looking up a live price")
+        @DisplayName("Should keep the price given in the request when there is no live price")
         @Test
         void testSubmitWithPriceKeepsIt() {
+            when(priceProvider.latestPrice("AAPL")).thenReturn(Optional.empty());
+
             assertEquals(new BigDecimal("150.00"), orderService.submitOrder(placeOrderRequest).getPrice());
-            verifyNoInteractions(priceProvider);
+        }
+
+        @DisplayName("Should accept a limit that would fill at the live price, keeping the limit")
+        @ParameterizedTest(name = "{0} limit 150.00, market {1}")
+        @CsvSource({ "BUY, 150.009", "BUY, 120.00", "SELL, 149.991", "SELL, 180.00" })
+        void testSubmitMarketableLimit(OrderSide side, String market) {
+            when(priceProvider.latestPrice("AAPL")).thenReturn(Optional.of(
+                    new PriceQuote("AAPL", new BigDecimal(market), Instant.parse("2026-10-16T14:30:00Z"))));
+            PlaceOrderRequest limit = new PlaceOrderRequest(1L, "AAPL", side, 100, new BigDecimal("150.00"),
+                    "ORDER-001");
+
+            Order order = orderService.submitOrder(limit);
+
+            assertEquals(new BigDecimal("150.00"), order.getPrice());
+            verify(orderEventPublisher).publish(order);
+        }
+
+        @DisplayName("Should accept a limit at the live price rounded to the cent in the trader's favour")
+        @ParameterizedTest(name = "{0} limit {1}, market 227.4651")
+        @CsvSource({ "BUY, 227.46", "BUY, 227.47", "SELL, 227.47", "SELL, 227.46" })
+        void testSubmitLimitAtRoundedMarket(OrderSide side, String limit) {
+            when(priceProvider.latestPrice("AAPL")).thenReturn(Optional.of(
+                    new PriceQuote("AAPL", new BigDecimal("227.4651"), Instant.parse("2026-10-16T14:30:00Z"))));
+
+            Order order = orderService.submitOrder(
+                    new PlaceOrderRequest(1L, "AAPL", side, 100, new BigDecimal(limit), "ORDER-001"));
+
+            assertEquals(new BigDecimal(limit), order.getPrice());
+        }
+
+        @DisplayName("Should refuse a limit that would not fill at the live price, storing nothing (ORD-422)")
+        @ParameterizedTest(name = "{0} limit {1}, market 227.4651")
+        @CsvSource({ "BUY, 1.00, 227.46", "BUY, 227.45, 227.46", "SELL, 10000.00, 227.47", "SELL, 227.48, 227.47" })
+        void testSubmitLimitNotMarketable(OrderSide side, String limit, String bound) {
+            when(priceProvider.latestPrice("AAPL")).thenReturn(Optional.of(
+                    new PriceQuote("AAPL", new BigDecimal("227.4651"), Instant.parse("2026-10-16T14:30:00Z"))));
+            PlaceOrderRequest request = new PlaceOrderRequest(1L, "AAPL", side, 100, new BigDecimal(limit),
+                    "ORDER-001");
+
+            LimitNotMarketableException ex = assertThrows(LimitNotMarketableException.class,
+                    () -> orderService.submitOrder(request));
+            assertEquals("ORD-422", ex.getErrorCode());
+            assertTrue(ex.getMessage().contains("(" + bound + ")"), ex.getMessage());
+            verify(orderRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(orderEventPublisher);
         }
 
         @DisplayName("Should reject an order without a price when no live price is available, storing nothing")
@@ -519,9 +596,21 @@ class OrderServiceTest {
             assertSame(storedOrder, result);
             assertEquals(OrderStatus.NEW, result.getStatus());
             assertEquals("CLIENT-KEY", result.getIdempotencyKey());
-            verify(brokerClient).submit(storedOrder);
+            // No live price (the mock has none): the broker fills relative to the limit
+            verify(brokerClient).submit(storedOrder, null);
             verifyNoInteractions(buyStrategy, tradeEventPublisher);
             assertEquals(new BigDecimal("100000.00"), testAccount.getCashBalance());
+        }
+
+        @DisplayName("Should send the live price, rounded to the cent, with the order to the broker")
+        @Test
+        void testSendsMarketPriceToBroker() {
+            when(priceProvider.latestPrice(storedOrder.getSymbol())).thenReturn(Optional.of(new PriceQuote(
+                    storedOrder.getSymbol(), new BigDecimal("148.1249"), Instant.parse("2026-10-16T14:30:00Z"))));
+
+            orderService.processOrderEvent(event);
+
+            verify(brokerClient).submit(storedOrder, new BigDecimal("148.12"));
         }
 
         @DisplayName("Should reject an order the account cannot afford at its limit price, without the broker")
@@ -556,7 +645,7 @@ class OrderServiceTest {
         @DisplayName("Should reject the order (retryable) when the broker cannot be reached")
         @Test
         void testRejectsWhenBrokerUnavailable() {
-            doThrow(new BrokerUnavailableException("down", new RuntimeException())).when(brokerClient).submit(any());
+            doThrow(new BrokerUnavailableException("down", new RuntimeException())).when(brokerClient).submit(any(), any());
 
             assertThrows(BrokerUnavailableException.class, () -> orderService.processOrderEvent(event));
             assertEquals(OrderStatus.REJECTED, storedOrder.getStatus());
@@ -645,7 +734,7 @@ class OrderServiceTest {
         @DisplayName("Should reject a fill for an account that was suspended meanwhile")
         @Test
         void testRejectsInactiveAccount() {
-            testAccount.setStatus(com.neueda.leap.enums.AccountStatus.SUSPENDED);
+            testAccount.setStatus(AccountStatus.SUSPENDED);
 
             ExecutionEvent fill = fillAt("149.50");
             assertThrows(SettlementException.class, () -> orderService.settleExecution(fill));

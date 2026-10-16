@@ -77,8 +77,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       PORT: 4000
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
+      # Proxies whose X-Forwarded-For gives the client IP: nginx on the Docker network
+      AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-loopback, uniquelocal}
+    # Localhost only: browsers reach it through the frontend's /auth/ proxy
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,8 +127,9 @@ services:
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
       ALPACA_FEED: ${ALPACA_FEED:-iex}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
+    # Localhost only: browsers reach it through the frontend's /api/ proxy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -135,6 +139,13 @@ services:
         condition: service_healthy
       broker-simulator:
         condition: service_healthy
+    healthcheck:
+      # /actuator/health is public and answers UP or DOWN without details
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   frontend:
     build:
@@ -186,8 +197,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DASHBOARD_AUTH_URL: http://auth-service:4000
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+    # Localhost only: browsers reach it through the frontend's /analytics/ proxy,
+    # which also adds the security headers
     ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
+      - "127.0.0.1:${DASHBOARD_PORT:-8501}:8501"
     depends_on:
       postgres:
         condition: service_healthy

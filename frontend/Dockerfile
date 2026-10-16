@@ -2,7 +2,7 @@
 # the runtime stage is nginx serving the static files and proxying the APIs.
 # docker-compose.yml passes ../contracts in as the "contracts" build context,
 # since openapitools.json reads the specs from ../contracts.
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 # openapi-generator-cli is a Java tool: npm's prebuild hook needs a JRE
 RUN apk add --no-cache openjdk17-jre-headless

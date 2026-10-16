@@ -25,10 +25,12 @@ import com.neueda.leap.exceptions.SettlementException;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.kafka.events.ExecutionEvent;
 import com.neueda.leap.model.Execution;
+import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.ExecutionRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import com.neueda.leap.exceptions.PriceUnavailableException;
+import com.neueda.leap.exceptions.LimitNotMarketableException;
 import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
@@ -150,9 +152,12 @@ public class OrderService {
      * @param request the validated order request
      * @return the stored NEW order
      * @throws AccountNotFoundException    if the account does not exist
-     * @throws InstrumentNotFoundException if the instrument does not exist
+     * @throws AccountNotActiveException   if the account is SUSPENDED or CLOSED
+     * @throws InstrumentNotFoundException if the instrument does not exist or is not tradable
      * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
+     * @throws LimitNotMarketableException if a live price is available and the limit would not
+     *                                     fill at it (a BUY below or a SELL above it)
      * @throws OrderPublishException       if Kafka could not take the order; it
      *                                     is then stored as REJECTED
      */
@@ -160,19 +165,33 @@ public class OrderService {
     public Order submitOrder(PlaceOrderRequest request) {
         Objects.requireNonNull(request);
 
-        // Fail fast: these cannot succeed later, so don't store or queue the order
-        accountRepository.findById(request.accountId())
+        // Fail fast: these cannot succeed later, so don't store or queue the order.
+        // The Trade Executor checks them again, in case they change while the order waits.
+        Account account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + request.accountId()));
+        if (!account.isActive()) {
+            throw new AccountNotActiveException("Account not active: " + request.accountId());
+        }
         String symbol = InputNormalizer.normalize(request.symbol());
-        instrumentRepository.findBySymbol(symbol)
+        Instrument instrument = instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
+        if (!instrument.isTradable()) {
+            throw new InstrumentNotFoundException("Instrument not tradable: " + symbol);
+        }
 
         // No price given: price the order now at the live market price, so it fills
-        // at the price at the time it was accepted. Only known instruments get here,
-        // so arbitrary symbols are never sent to the market data API.
-        PlaceOrderRequest priced = request.price() != null ? request
-                : new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
-                        livePrice(symbol), request.idempotencyKey());
+        // at the price at the time it was accepted. A limit order must be marketable
+        // at the live price, when there is one. Only known instruments get here, so
+        // arbitrary symbols are never sent to the market data API.
+        PlaceOrderRequest priced;
+        if (request.price() == null) {
+            priced = new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
+                    livePrice(symbol), request.idempotencyKey());
+        } else {
+            priceProvider.latestPrice(symbol)
+                    .ifPresent(quote -> requireMarketable(request.side(), request.price(), quote.price()));
+            priced = request;
+        }
 
         Order order = transactionTemplate.execute(status -> storeNewOrder(priced));
         try {
@@ -187,11 +206,34 @@ public class OrderService {
         return order;
     }
 
-    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
     private BigDecimal livePrice(String symbol) {
-        return priceProvider.latestPrice(symbol)
-                .map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP))
+        return marketPrice(symbol)
                 .orElseThrow(() -> new PriceUnavailableException("No live price for " + symbol));
+    }
+
+    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
+    private Optional<BigDecimal> marketPrice(String symbol) {
+        return priceProvider.latestPrice(symbol).map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP));
+    }
+
+    /**
+     * Limit orders are immediate-or-cancel: one that would not fill at the
+     * market price now (a BUY limit below it, a SELL limit above it) is refused
+     * instead of being filled at a price the market would not give.
+     *
+     * Limits are in cents and market prices may have more decimals, so the
+     * market price is rounded to the cent in the trader's favour: down for a
+     * BUY, up for a SELL. A limit at the rounded market price is accepted.
+     */
+    private static void requireMarketable(OrderSide side, BigDecimal limit, BigDecimal market) {
+        boolean buy = side == OrderSide.BUY;
+        BigDecimal bound = market.setScale(2, buy ? RoundingMode.FLOOR : RoundingMode.CEILING);
+        boolean marketable = buy ? limit.compareTo(bound) >= 0 : limit.compareTo(bound) <= 0;
+        if (!marketable) {
+            throw new LimitNotMarketableException(String.format(
+                    "A %s limit must be %s the market price (%s) to fill; this order would not fill at %s",
+                    side, buy ? "at or above" : "at or below", bound.toPlainString(), limit.toPlainString()));
+        }
     }
 
     private void rejectUnqueuedOrder(Order order, OrderPublishException cause) {
@@ -330,8 +372,9 @@ public class OrderService {
                 return prepareOrderEvent(event);
             });
             if (order != null) {
-                // Committed as NEW above, so the fill can always find the order
-                brokerClient.submit(order);
+                // Committed as NEW above, so the fill can always find the order. The
+                // broker fills at the current market price, within the order's limit
+                brokerClient.submit(order, marketPrice(order.getSymbol()).orElse(null));
             }
         } catch (AccountNotFoundException | InstrumentNotFoundException ex) {
             log.warn("Order rejected due to missing resource (non-retryable): orderId={}, error={}, type={}",

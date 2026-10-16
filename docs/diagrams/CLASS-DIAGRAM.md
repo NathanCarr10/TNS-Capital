@@ -207,19 +207,61 @@ classDiagram
 
 ## Exceptions
 
-Each exception is a `RuntimeException` that `GlobalExceptionHandler` maps to one of the spec's
-error codes (§21).
+Every custom exception extends the abstract `TradingException`, which carries the spec error
+code (§21). `GlobalExceptionHandler` returns that code with an HTTP status and a fixed, safe
+message. The code's prefix names the part of the domain that failed (`ACC`, `INS`, `ORD`, `POS`,
+`PRC`/`MKT`, `BRK`, `SYS`). The two Kafka wrappers, `NonRetryableOrderException` and
+`SettlementException`, keep the code of the failure they wrap.
+
+The exceptions extend `TradingException` directly. `Throwable`, `Exception` and
+`RuntimeException` already make the tree three deep, so a further layer of category classes
+would go past Sonar's inheritance limit (`java:S110`).
+
+```mermaid
+classDiagram
+    direction LR
+    class RuntimeException
+    class TradingException {
+        <<abstract>>
+        -String errorCode
+        +getErrorCode() String
+        #errorCodeOf(Throwable) String
+    }
+    RuntimeException <|-- TradingException
+    TradingException <|-- AccountNotFoundException
+    TradingException <|-- AccountNotActiveException
+    TradingException <|-- AccountAlreadyExistsException
+    TradingException <|-- AccountDeletionConflictException
+    TradingException <|-- InstrumentNotFoundException
+    TradingException <|-- DuplicateInstrumentException
+    TradingException <|-- InsufficientFundsException
+    TradingException <|-- InsufficientHoldingsException
+    TradingException <|-- DuplicateOrderException
+    TradingException <|-- OrderNotFoundException
+    TradingException <|-- OrderCancellationConflictException
+    TradingException <|-- LimitNotMarketableException
+    TradingException <|-- PositionNotFoundException
+    TradingException <|-- PriceUnavailableException
+    TradingException <|-- MarketDataUnavailableException
+    TradingException <|-- OrderPublishException
+    TradingException <|-- BrokerUnavailableException
+    TradingException <|-- NonRetryableOrderException
+    TradingException <|-- SettlementException
+```
 
 | Error code | HTTP | Exceptions |
 |---|---|---|
 | `ACC-404` | 404 | `AccountNotFoundException` |
 | `ACC-403` | 403 | `AccountNotActiveException` |
 | `ACC-409` | 409 | `AccountAlreadyExistsException`, `AccountDeletionConflictException` |
-| `INS-404` | 404 | `InstrumentNotFoundException` |
+| `INS-404` | 404 | `InstrumentNotFoundException` (unknown or not tradable) |
 | `INS-409` | 409 | `DuplicateInstrumentException` |
 | `ORD-400` | 400 | `InsufficientFundsException` |
 | `ORD-409` | 409 | `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` |
 | `ORD-404` | 404 | `OrderNotFoundException` |
+| `ORD-422` | 422 | `LimitNotMarketableException`: a BUY limit below the live price or a SELL limit above it |
 | `POS-404` | 404 | `PositionNotFoundException` |
 | `PRC-503`, `MKT-503`, `SYS-503` | 503 | `PriceUnavailableException`, `MarketDataUnavailableException`, `OrderPublishException` |
-| (internal) | | `BrokerUnavailableException`, `NonRetryableOrderException`, `SettlementException`: raised in the Kafka consumers, where they decide whether an order goes to the DLQ |
+| `SYS-409` | 409 | Spring's `OptimisticLockingFailureException`: two requests changed the same account at once, and its `version` column (NFR-02) refused the later one |
+| `BRK-503` (internal) | | `BrokerUnavailableException`: the order is stored as REJECTED and can be replayed from the DLQ |
+| cause's code (internal) | | `NonRetryableOrderException`, `SettlementException`: raised in the Kafka consumers, where they decide whether an order goes to the DLQ |

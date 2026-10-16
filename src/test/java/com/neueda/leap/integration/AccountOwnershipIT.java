@@ -207,6 +207,19 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
             mockMvc.perform(delete("/api/v1/orders/{id}", otherOrder.getId()))
                     .andExpect(status().isForbidden());
         }
+
+        @Test
+        @DisplayName("cannot suspend or reactivate any account, not even their own; that is an admin task")
+        void cannotChangeAccountStatus() throws Exception {
+            for (Account account : new Account[] {ownAccount, otherAccount}) {
+                mockMvc.perform(put("/api/v1/accounts/{id}/status", account.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"SUSPENDED\"}"))
+                        .andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.errorCode").value("AUTH-403"));
+            }
+            mockMvc.perform(get("/api/v1/accounts/{id}", ownAccount.getId()))
+                    .andExpect(jsonPath("$.status").value("ACTIVE"));
+        }
     }
 
     @Nested
@@ -236,6 +249,19 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
                     .andExpect(jsonPath("$.cashBalance").value(600.0));
             mockMvc.perform(get("/api/v1/orders/{id}", otherOrder.getId()))
                     .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("can suspend and reactivate an account")
+        void changesAccountStatus() throws Exception {
+            mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"SUSPENDED\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("SUSPENDED"));
+            mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"ACTIVE\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ACTIVE"));
         }
     }
 }

@@ -36,7 +36,7 @@ public class DeadLetterService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    @Value("${dlq.auto-resolve.enabled:true}")
+    @Value("${dlq.auto-resolve.enabled:false}")
     private boolean autoResolveEnabled;
 
     @Value("${dlq.auto-resolve.after-ms:10000}")
@@ -237,7 +237,8 @@ public class DeadLetterService {
      * Marks PENDING DLQ messages as RESOLVED once they are older than
      * {@code dlq.auto-resolve.after-ms} (default 10 seconds).
      * Runs every {@code dlq.auto-resolve.interval-ms} (default 1 second) when
-     * {@code dlq.auto-resolve.enabled} is true (the default).
+     * {@code dlq.auto-resolve.enabled} is true. Off by default, so failed orders wait for an admin
+     * to review or replay them (OWASP A09-4).
      */
     @Scheduled(fixedDelayString = "${dlq.auto-resolve.interval-ms:1000}")
     public void autoResolvePendingMessages() {

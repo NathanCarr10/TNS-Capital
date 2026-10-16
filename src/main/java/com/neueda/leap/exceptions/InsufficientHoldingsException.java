@@ -1,8 +1,8 @@
 package com.neueda.leap.exceptions;
 
-public class InsufficientHoldingsException extends RuntimeException {
+public class InsufficientHoldingsException extends TradingException {
 
     public InsufficientHoldingsException(String message) {
-        super(message);
+        super("ORD-409", message);
     }
 }

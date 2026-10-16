@@ -14,7 +14,7 @@ be explained at the showcase and revisited later.
 | 6 | Analytics in a PostgreSQL `analytics` schema, not Snowflake | §4.2, §18.2 | To confirm with tutor |
 | 7 | Jenkins instead of GitHub Actions | §4.1 | In place |
 | 8 | No TLS, SASL or Kafka ACLs in the local stack | §5 | Deployment concern |
-| 9 | Trading API contract generated live, not a hand-written OpenAPI file | §9.2 task 2 | In place |
+| 9 | Trading API contract generated from the code; the committed copy is checked by `ApiContractIT` | §9.2 task 2 | In place |
 | 10 | Only admins open accounts and manage instruments | §22 | Team decision |
 | 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
@@ -60,6 +60,18 @@ the course's reference execution engine: orders arrive over HTTP, and after 0.5 
 each is filled in full at or better than its limit price and published to the `executions`
 topic. If a real broker simulator is supplied, only `BrokerSimulatorClient` (the HTTP call)
 and the `ExecutionEvent` contract need to change.
+
+**Limit orders are immediate-or-cancel.** The simulator used to fill every order at its limit,
+so a BUY of a $227 stock with a $1 limit filled at $1. Now, when a live price is available:
+
+- the trading API refuses a limit that would not fill at it when the order is placed (a BUY
+  limit below the market or a SELL limit above it: `422 ORD-422`, nothing stored);
+- the Trade Executor sends the live price with the order, and the simulator fills at it, or
+  at the limit if the market has moved past the limit since (never worse than the limit).
+
+Without a live price (no Alpaca keys, as in local development and CI) orders fill relative to
+their limit as before. Resting limit orders that wait for the market to reach them would need
+the price stream to drive fills; they are left for a later extension.
 
 Settlement re-checks funds and holdings at the fill price, because another order may have
 used them while the broker worked this one; funds are not reserved when the order is
@@ -109,8 +121,15 @@ environment (sprint 11: CloudFront terminates TLS for the UI).
 
 The auth service has a hand-written contract (`contracts/auth-api.yaml`). The trading API's
 OpenAPI document is generated from the code by springdoc and served at `/v3/api-docs` (Swagger
-UI at `/swagger-ui.html`), so it cannot drift from the implementation. The sprint 9 Angular
-clients can be generated from that URL.
+UI at `/swagger-ui.html`). Each endpoint documents its success status and its errors with
+`@Operation` / `@ApiResponse`; an error's description starts with its code from the spec's
+catalogue (§21), and `OpenApiConfig` gives every coded error the `ErrorResponse` body and adds
+the 401, 422 and 500 that all endpoints share.
+
+A copy is committed as `contracts/trading-api.json`, and the Angular clients are generated from
+it. `ApiContractIT` fails when the copy no longer matches `/v3/api-docs`, writing the live spec
+to `target/trading-api.json`; after reviewing the difference, update the copy with
+`python3 -m json.tool --indent 2 target/trading-api.json contracts/trading-api.json`.
 
 ## 10. Roles
 

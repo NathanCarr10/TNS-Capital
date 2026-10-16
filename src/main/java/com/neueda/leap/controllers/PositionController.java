@@ -1,5 +1,7 @@
 package com.neueda.leap.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.neueda.leap.dtos.PositionResponse;
 import com.neueda.leap.security.AccountAccessGuard;
 import com.neueda.leap.services.AccountService;
@@ -28,6 +30,10 @@ public class PositionController {
                 this.valuationService = valuationService;
         }
 
+        @Operation(summary = "Holdings of an account", description = "Valued at the live market price when one is available.")
+        @ApiResponse(responseCode = "200", description = "OK")
+        @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
+        @ApiResponse(responseCode = "404", description = "ACC-404 Account not found")
         @GetMapping("/{accountId}")
         public ResponseEntity<List<PositionResponse>> getAccountPositions(@PathVariable @NotNull Long accountId) {
                 // Ownership first, so a non-owner cannot probe which account IDs exist
@@ -35,6 +41,10 @@ public class PositionController {
                 return ResponseEntity.ok(valuationService.toResponses(accountService.getPositions(accountId)));
         }
 
+        @Operation(summary = "One holding of an account")
+        @ApiResponse(responseCode = "200", description = "OK")
+        @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's")
+        @ApiResponse(responseCode = "404", description = "ACC-404 Account not found; POS-404 the account holds none of this symbol")
         @GetMapping("/{accountId}/{symbol}")
         public ResponseEntity<PositionResponse> getPosition(@PathVariable @NotNull Long accountId,
                         @PathVariable String symbol) {

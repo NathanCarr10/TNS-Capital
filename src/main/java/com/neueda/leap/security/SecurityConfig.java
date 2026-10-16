@@ -28,15 +28,20 @@ import java.time.ZoneOffset;
  * Security configuration for the API with JWT validation and security headers.
  *
  * Security Best Practices Implemented:
- * - JWT authentication with HMAC-SHA256; any valid token can call the trading
- *   API endpoints. The dead-letter queue admin endpoints also need the ADMIN
- *   role (method security on DeadLetterQueueController)
+ * - JWT authentication with HMAC-SHA256 on every endpoint except the API docs
+ *   and the health check
+ * - Admin-only operations need the ADMIN role through @PreAuthorize: opening
+ *   accounts, suspending or reactivating them, changing instruments and every
+ *   dead-letter queue endpoint. Everything else is limited to the caller's own
+ *   account by AccountAccessGuard (docs/DECISIONS.md, "Roles")
+ * - /actuator/health is public so containers and load balancers can probe it;
+ *   only admins see its details. Metrics and info need the ADMIN role
  * - Missing or invalid tokens get an AUTH-401 error body
  * - Security headers to prevent common attacks
  * - CSRF disabled for stateless API (appropriate for REST)
  * - X-Frame-Options set to prevent clickjacking
- * - The token's "roles" claim is mapped to Spring roles (ROLE_ADMIN etc.) so
- *   method-level @PreAuthorize checks can be added once roles are agreed
+ * - The token's "roles" claim is mapped to Spring roles (ROLE_ADMIN etc.) for
+ *   the @PreAuthorize checks
  */
 @Configuration
 @EnableMethodSecurity
@@ -100,7 +105,7 @@ public class SecurityConfig {
          * Configures the security filter chain with:
          * - JWT authentication for API endpoints
          * - Security headers to prevent common attacks
-         * - Public access to Swagger/OpenAPI documentation
+         * - Public access to Swagger/OpenAPI documentation and the health check
          */
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -135,6 +140,13 @@ public class SecurityConfig {
                                                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs",
                                                                 "/v3/api-docs/**")
                                                 .permitAll()
+                                                // Liveness for Docker and load balancers; details only for
+                                                // admins (management.endpoint.health.show-details)
+                                                .requestMatchers("/actuator/health", "/actuator/health/**")
+                                                .permitAll()
+                                                // Metrics and info describe the JVM, the database pool and
+                                                // every URL called: not for traders
+                                                .requestMatchers("/actuator/**").hasRole("ADMIN")
                                                 // Require authentication for all other requests
                                                 .anyRequest().authenticated())
 

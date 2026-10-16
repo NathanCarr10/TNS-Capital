@@ -11,9 +11,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 
 import com.neueda.leap.dtos.ErrorResponse;
+import com.neueda.leap.model.Account;
 import com.neueda.leap.exceptions.*;
 
 @DisplayName("GlobalExceptionHandler maps exceptions to the spec error catalog")
@@ -55,6 +57,33 @@ class GlobalExceptionHandlerTest {
         assertEquals(code, response.getBody().errorCode());
         assertFalse(response.getBody().message().contains("internal detail"),
                 "Should return a fixed message, not the exception's internal message");
+    }
+
+    @Test
+    @DisplayName("A limit that would not fill at the live price returns 422 ORD-422 with both prices")
+    void testLimitNotMarketable() {
+        var e = new LimitNotMarketableException(
+                "A BUY limit must be at or above the market price (227.47) to fill; this order would not fill at 1.00");
+
+        ResponseEntity<ErrorResponse> response = handler.handleLimitNotMarketable(e);
+
+        assertEquals(422, response.getStatusCode().value());
+        assertEquals("ORD-422", response.getBody().errorCode());
+        assertEquals(e.getMessage(), response.getBody().message());
+    }
+
+    @Test
+    @DisplayName("A concurrent update rejected by the version column returns 409 SYS-409, not 500")
+    void testOptimisticLockingFailure() {
+        var e = new ObjectOptimisticLockingFailureException(Account.class, 1L);
+
+        ResponseEntity<ErrorResponse> response = handler.handleOptimisticLockingFailure(e);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals("SYS-409", response.getBody().errorCode());
+        assertTrue(response.getBody().message().contains("try again"));
+        assertFalse(response.getBody().message().contains("Account"),
+                "Should not reveal the entity or its ID");
     }
 
     @Test

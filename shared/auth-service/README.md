@@ -165,6 +165,12 @@ unknown property), `AUTH-401` (wrong credentials, with no hint which part was wr
 (default 10) per client IP per minute, to slow down password guessing. Above that the
 service answers `429 AUTH-429` with a `Retry-After` header. The other routes are not limited.
 
+Browsers reach the service through the frontend's nginx, so the client IP comes from the
+`X-Forwarded-For` header nginx adds. Only proxies listed in `AUTH_TRUST_PROXY` are believed
+(default `loopback, uniquelocal`: nginx on the Docker network); a request from anywhere else is
+limited by its own address, so the header cannot be forged to dodge the limit. Behind other
+proxies, set `AUTH_TRUST_PROXY` to their addresses or subnets, a number of hops, or `false`.
+
 ## Tests
 
 ```bash
