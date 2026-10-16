@@ -42,7 +42,7 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   const trustProxy = config.AUTH_TRUST_PROXY;
   if (trustProxy !== undefined) {
     if (typeof trustProxy !== 'string') {
-      throw new Error('AUTH_TRUST_PROXY must be text: true, false, a number of hops or a list of addresses.');
+      throw new TypeError('AUTH_TRUST_PROXY must be text: true, false, a number of hops or a list of addresses.');
     }
     parseTrustProxy(trustProxy);
   }
