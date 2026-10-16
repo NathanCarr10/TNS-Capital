@@ -11,6 +11,7 @@ import com.neueda.leap.exceptions.AccountNotActiveException;
 import com.neueda.leap.exceptions.AccountNotFoundException;
 import com.neueda.leap.exceptions.DuplicateOrderException;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
+import com.neueda.leap.exceptions.LimitNotMarketableException;
 import com.neueda.leap.exceptions.PriceUnavailableException;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.model.OrderHistory;
@@ -59,12 +60,14 @@ public class OrderController {
      * @throws InstrumentNotFoundException if instrument does not exist or is not tradable
      * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
+     * @throws LimitNotMarketableException if the limit would not fill at the live price
      */
-    @Operation(summary = "Place an order", description = "Checks the account and instrument, stores the order as NEW and queues it for the Trade Executor. Poll GET /api/v1/orders/{orderId} until it is FILLED or REJECTED; funds and holdings are checked then. Without a price the order is priced at the live market price.")
+    @Operation(summary = "Place an order", description = "Checks the account and instrument, stores the order as NEW and queues it for the Trade Executor. Poll GET /api/v1/orders/{orderId} until it is FILLED or REJECTED; funds and holdings are checked then. Without a price the order is priced at the live market price. Limit orders are immediate-or-cancel: when a live price is available, a BUY limit below it or a SELL limit above it is refused with ORD-422; a marketable order fills at the market price, never worse than its limit.")
     @ApiResponse(responseCode = "202", description = "Accepted for execution")
     @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's; ACC-403 the account is not ACTIVE")
     @ApiResponse(responseCode = "404", description = "ACC-404 Account not found; INS-404 instrument not found or not tradable")
     @ApiResponse(responseCode = "409", description = "ORD-409 The idempotency key was already used")
+    @ApiResponse(responseCode = "422", description = "VAL-422 Invalid input; ORD-422 the limit would not fill at the live price (a BUY limit below it or a SELL limit above it)")
     @ApiResponse(responseCode = "503", description = "PRC-503 No price given and no live price; SYS-503 the order could not be queued (it is stored as REJECTED)")
     @PostMapping
     public ResponseEntity<PlaceOrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {

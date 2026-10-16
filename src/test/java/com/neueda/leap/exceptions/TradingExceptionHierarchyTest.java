@@ -37,6 +37,7 @@ class TradingExceptionHierarchyTest {
                 Arguments.of(new DuplicateInstrumentException("x"), "INS-409"),
                 Arguments.of(new DuplicateOrderException("x"), "ORD-409"),
                 Arguments.of(new OrderCancellationConflictException("x"), "ORD-409"),
+                Arguments.of(new LimitNotMarketableException("x"), "ORD-422"),
                 Arguments.of(new PriceUnavailableException("x"), "PRC-503"),
                 Arguments.of(new MarketDataUnavailableException("x"), "MKT-503"),
                 Arguments.of(new OrderPublishException("x", cause), "SYS-503"),

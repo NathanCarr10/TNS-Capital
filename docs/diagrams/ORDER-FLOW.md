@@ -25,6 +25,7 @@ sequenceDiagram
     API->>API: AccountAccessGuard: the account is the caller's
     API->>OS: submitOrder(request)
     OS->>DB: account exists and ACTIVE, instrument exists and tradable?
+    OS->>OS: limit marketable at the live price? (BUY limit >= market)
     OS->>DB: insert order, status NEW
     OS->>K: OrderEvent to "orders" (waits for the ack)
     API-->>UI: 202 Accepted, orderId
@@ -36,10 +37,10 @@ sequenceDiagram
     OL->>OS: processOrderEvent(event)
     OS->>OS: OrderValidator: account ACTIVE, instrument tradable
     OS->>OS: checkAffordable: cash >= 2 x $100
-    OS->>B: POST /api/v1/orders
+    OS->>B: POST /api/v1/orders (limit $100, live market price)
     B-->>OS: 202 Accepted
     Note over B: simulated market delay (0.5 to 2 s)
-    B->>K: ExecutionEvent to "executions" (fill price at or below the limit)
+    B->>K: ExecutionEvent to "executions" (fill at the market price, never above the limit)
 
     K->>EL: ExecutionEvent
     EL->>OS: settleExecution(fill)
@@ -62,7 +63,8 @@ sequenceDiagram
   `TradeEventAuditListener` stores it in `trade_event_log` (`GET /api/v1/orders/{id}/events`).
 - **Fail fast:** an unknown account or instrument, an account that is not `ACTIVE` or an
   instrument that is not tradable is refused before anything is stored (`404 ACC-404`,
-  `403 ACC-403`, `404 INS-404`). The Trade Executor checks again, in case either changes
+  `403 ACC-403`, `404 INS-404`), and so is a limit that would not fill at the live price
+  (`422 ORD-422`: limit orders are immediate-or-cancel, DECISIONS #4). The Trade Executor checks again, in case either changes
   while the order waits. If Kafka cannot take the order, it is stored `REJECTED` and the API
   answers `503 SYS-503`.
 

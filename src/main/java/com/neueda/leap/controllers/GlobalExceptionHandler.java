@@ -31,7 +31,7 @@ import java.time.ZoneOffset;
  * - Each TradingException carries its error code (see the exceptions package);
  *   this class picks the HTTP status and a fixed, safe message for it
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
- *   ACC-409, INS-409, ORD-404, POS-404, AUTH-403, NOT-404, REQ-405,
+ *   ACC-409, INS-409, ORD-404, ORD-422, POS-404, AUTH-403, NOT-404, REQ-405,
  *   REQ-415, PRC-503, MKT-503, SYS-409, SYS-500 and SYS-503 extend the catalog for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
@@ -123,6 +123,13 @@ public class GlobalExceptionHandler {
         logger.warn("Concurrent update rejected: {}", e.getMessage());
         return error(HttpStatus.CONFLICT, "SYS-409",
                 "The record was changed by another request at the same time; nothing was saved. Please try again");
+    }
+
+    // A limit order that would not fill at the live price; the message names both prices
+    @ExceptionHandler(LimitNotMarketableException.class)
+    public ResponseEntity<ErrorResponse> handleLimitNotMarketable(LimitNotMarketableException e) {
+        logger.warn("Limit not marketable: {}", e.getMessage());
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, e.getErrorCode(), e.getMessage());
     }
 
     @ExceptionHandler(OrderCancellationConflictException.class)

@@ -239,6 +239,7 @@ classDiagram
     TradingException <|-- DuplicateOrderException
     TradingException <|-- OrderNotFoundException
     TradingException <|-- OrderCancellationConflictException
+    TradingException <|-- LimitNotMarketableException
     TradingException <|-- PositionNotFoundException
     TradingException <|-- PriceUnavailableException
     TradingException <|-- MarketDataUnavailableException
@@ -258,6 +259,7 @@ classDiagram
 | `ORD-400` | 400 | `InsufficientFundsException` |
 | `ORD-409` | 409 | `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` |
 | `ORD-404` | 404 | `OrderNotFoundException` |
+| `ORD-422` | 422 | `LimitNotMarketableException`: a BUY limit below the live price or a SELL limit above it |
 | `POS-404` | 404 | `PositionNotFoundException` |
 | `PRC-503`, `MKT-503`, `SYS-503` | 503 | `PriceUnavailableException`, `MarketDataUnavailableException`, `OrderPublishException` |
 | `SYS-409` | 409 | Spring's `OptimisticLockingFailureException`: two requests changed the same account at once, and its `version` column (NFR-02) refused the later one |

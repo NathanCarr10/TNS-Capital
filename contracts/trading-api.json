@@ -323,7 +323,7 @@
           "order-controller"
         ],
         "summary": "Place an order",
-        "description": "Checks the account and instrument, stores the order as NEW and queues it for the Trade Executor. Poll GET /api/v1/orders/{orderId} until it is FILLED or REJECTED; funds and holdings are checked then. Without a price the order is priced at the live market price.",
+        "description": "Checks the account and instrument, stores the order as NEW and queues it for the Trade Executor. Poll GET /api/v1/orders/{orderId} until it is FILLED or REJECTED; funds and holdings are checked then. Without a price the order is priced at the live market price. Limit orders are immediate-or-cancel: when a live price is available, a BUY limit below it or a SELL limit above it is refused with ORD-422; a marketable order fills at the market price, never worse than its limit.",
         "operationId": "placeOrder",
         "requestBody": {
           "content": {
@@ -387,7 +387,7 @@
             }
           },
           "422": {
-            "description": "VAL-422 Invalid input",
+            "description": "VAL-422 Invalid input; ORD-422 the limit would not fill at the live price (a BUY limit below it or a SELL limit above it)",
             "content": {
               "application/json": {
                 "schema": {

@@ -61,6 +61,18 @@ each is filled in full at or better than its limit price and published to the `e
 topic. If a real broker simulator is supplied, only `BrokerSimulatorClient` (the HTTP call)
 and the `ExecutionEvent` contract need to change.
 
+**Limit orders are immediate-or-cancel.** The simulator used to fill every order at its limit,
+so a BUY of a $227 stock with a $1 limit filled at $1. Now, when a live price is available:
+
+- the trading API refuses a limit that would not fill at it when the order is placed (a BUY
+  limit below the market or a SELL limit above it: `422 ORD-422`, nothing stored);
+- the Trade Executor sends the live price with the order, and the simulator fills at it, or
+  at the limit if the market has moved past the limit since (never worse than the limit).
+
+Without a live price (no Alpaca keys, as in local development and CI) orders fill relative to
+their limit as before. Resting limit orders that wait for the market to reach them would need
+the price stream to drive fills; they are left for a later extension.
+
 Settlement re-checks funds and holdings at the fill price, because another order may have
 used them while the broker worked this one; funds are not reserved when the order is
 accepted. A fill for an order that was cancelled meanwhile is ignored. A real broker would

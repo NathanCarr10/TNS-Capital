@@ -18,8 +18,10 @@ Trading API (settlement)  <--- executions topic --------+  ExecutionEvent
 
 ```json
 { "orderId": "4f63fed9-6d52-424b-844b-504313595bb9", "accountId": 11, "symbol": "ACME",
-  "side": "BUY", "quantity": 10, "limitPrice": 30.00 }
+  "side": "BUY", "quantity": 10, "limitPrice": 30.00, "marketPrice": 29.87 }
 ```
+
+`marketPrice` is optional: the trading API sends its live price when it has one.
 
 Answers `202 {"orderId": "...", "status": "ACCEPTED"}` straight away, or `400 VAL-422` for an
 invalid order. The fill arrives later on Kafka, not in this response.
@@ -29,9 +31,15 @@ invalid order. The fill arrives later on Kafka, not in this response.
 ## The simulated market
 
 - **Delay:** random, between `BROKER_MIN_DELAY` and `BROKER_MAX_DELAY` (default 500 ms to 2 s).
-- **Price:** every order is a limit order filled in full, at or better than its limit by up to
-  `BROKER_MAX_PRICE_IMPROVEMENT_BPS` basis points (default 50, i.e. 0.5%). A BUY never fills
-  above its limit and a SELL never below it.
+- **Price:** every order is a limit order filled in full, and a BUY never fills above its limit
+  nor a SELL below it.
+  - With a `marketPrice`, the order fills at the market price. If the market has moved past the
+    limit since the order was sent, it fills at the limit. The trading API refuses limits that
+    are not marketable when the order is placed (`ORD-422`), so this only happens when the price
+    moves in the meantime.
+  - Without one (no live prices, e.g. local development without Alpaca keys), it fills at its
+    limit, improved by up to `BROKER_MAX_PRICE_IMPROVEMENT_BPS` basis points (default 50, i.e.
+    0.5%).
 
 ## The `executions` topic
 

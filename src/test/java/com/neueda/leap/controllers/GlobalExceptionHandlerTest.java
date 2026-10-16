@@ -60,6 +60,19 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("A limit that would not fill at the live price returns 422 ORD-422 with both prices")
+    void testLimitNotMarketable() {
+        var e = new LimitNotMarketableException(
+                "A BUY limit must be at or above the market price (227.47) to fill; this order would not fill at 1.00");
+
+        ResponseEntity<ErrorResponse> response = handler.handleLimitNotMarketable(e);
+
+        assertEquals(422, response.getStatusCode().value());
+        assertEquals("ORD-422", response.getBody().errorCode());
+        assertEquals(e.getMessage(), response.getBody().message());
+    }
+
+    @Test
     @DisplayName("A concurrent update rejected by the version column returns 409 SYS-409, not 500")
     void testOptimisticLockingFailure() {
         var e = new ObjectOptimisticLockingFailureException(Account.class, 1L);

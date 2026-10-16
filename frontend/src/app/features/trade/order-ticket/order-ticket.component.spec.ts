@@ -248,6 +248,62 @@ describe('OrderTicketComponent', () => {
     expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('You hold 3 AAPL');
   });
 
+  it('pre-fills the limit with the live price rounded to the cent', () => {
+    create(227.4651);
+
+    expect(component.orderForm.controls.price.value).toBe(227.47);
+    expect(fixture.nativeElement.querySelector('.hint.warning')).toBeNull();
+  });
+
+  it('warns that a buy limit below the market price will not fill', () => {
+    create(150.004);
+    component.orderForm.patchValue({ side: 'BUY', price: 149.98 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain(
+      'buy limit below the market price (150.00) will not fill'
+    );
+  });
+
+  it('warns that a sell limit above the market price will not fill', () => {
+    tradingService.getAccountPositions.and.returnValue(
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null }])
+    );
+    create(150);
+    component.orderForm.patchValue({ side: 'SELL', quantity: 1, price: 10000 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain(
+      'sell limit above the market price (150.00) will not fill'
+    );
+  });
+
+  it('does not warn about a limit that crosses the market', () => {
+    create(150);
+    component.orderForm.patchValue({ side: 'BUY', quantity: 1, price: 151 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.hint.warning')).toBeNull();
+  });
+
+  it('shows the server explanation when a limit is refused as not marketable', () => {
+    create();
+    const message = 'A BUY limit must be at or above the market price (227.47) to fill; this order would not fill at 1.00';
+    tradingService.placeOrder.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 422,
+            error: { errorCode: 'ORD-422', message, timestamp: new Date().toISOString() },
+          })
+      )
+    );
+
+    component.onSubmit();
+
+    expect(component.errorMessage()).toBe(message);
+  });
+
   it('cannot trade an instrument that is not tradable', () => {
     create(10, INSTRUMENTS[2]);
 

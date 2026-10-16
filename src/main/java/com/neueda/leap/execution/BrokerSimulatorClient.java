@@ -36,17 +36,20 @@ public class BrokerSimulatorClient {
 
     /** The order as the broker's API expects it */
     record BrokerOrder(UUID orderId, Long accountId, String symbol, String side, Integer quantity,
-            BigDecimal limitPrice) {
+            BigDecimal limitPrice, BigDecimal marketPrice) {
     }
 
     /**
      * Sends the order to the broker to be worked.
      *
+     * @param marketPrice the live price now, which the broker fills at within
+     *                    the order's limit; null if there is none, and the
+     *                    broker then fills relative to the limit
      * @throws BrokerUnavailableException if the broker cannot be reached or rejects the order
      */
-    public void submit(Order order) {
+    public void submit(Order order, BigDecimal marketPrice) {
         BrokerOrder request = new BrokerOrder(order.getId(), order.getAccountId(), order.getSymbol(),
-                order.getSide().name(), order.getQuantity(), order.getPrice());
+                order.getSide().name(), order.getQuantity(), order.getPrice(), marketPrice);
         try {
             restClient.post()
                     .uri("/api/v1/orders")

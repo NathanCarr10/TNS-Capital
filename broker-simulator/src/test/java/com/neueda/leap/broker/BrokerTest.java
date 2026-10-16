@@ -66,4 +66,18 @@ class BrokerTest {
         assertEquals(NOW, fill.executedOn());
         assertNotNull(fill.executionId());
     }
+
+    @Test
+    @DisplayName("fills at the market price the trading API sent, not at the limit")
+    void fillUsesMarketPrice() throws Exception {
+        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(new CompletableFuture<>());
+        BrokerOrder withMarket = new BrokerOrder(UUID.randomUUID(), 11L, "ACME", Side.BUY, 10,
+                new BigDecimal("30.00"), new BigDecimal("27.40"));
+
+        broker.fill(withMarket);
+
+        ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(eq("executions"), eq("11"), json.capture());
+        assertEquals(new BigDecimal("27.40"), objectMapper.readValue(json.getValue(), ExecutionEvent.class).price());
+    }
 }
