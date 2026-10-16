@@ -391,7 +391,7 @@ plain-text lines.
 ### Bruno collection
 
 The `bruno/` folder is a ready-made [Bruno](https://www.usebruno.com/) collection covering
-the auth, account and order endpoints.
+the auth, account, order and price endpoints, plus **API Health** (no token needed).
 
 1. Open the `bruno/` folder as a collection in Bruno and select the **local** environment.
 2. Set the secret variables `password` (and `accountId` once you have one).

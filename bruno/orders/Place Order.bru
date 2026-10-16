@@ -33,7 +33,10 @@ assert {
 docs {
   side: BUY or SELL. symbol: 1-10 uppercase letters (seeded tradable symbols include AAPL, MSFT, SPY).
   price is optional: without it the order is priced at the live market price, returned as "price".
-  Add "price": 100.00 to set it yourself (needed when the API runs without Alpaca keys).
+  Add "price": 230.00 to set a limit yourself (needed when the API runs without Alpaca keys).
+  With live prices, limits are immediate-or-cancel: a BUY limit must be at or above the market
+  price and a SELL limit at or below it, or the order is refused with 422 ORD-422. A marketable
+  limit fills at the market price, never worse than the limit.
   A fresh idempotencyKey is generated on every send.
   Saves orderId for Get Order / Order History / Cancel Order.
 }
