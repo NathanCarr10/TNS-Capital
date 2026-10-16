@@ -43,13 +43,15 @@ public abstract class AbstractIntegrationTest {
             .withUsername("test_user")
             .withPassword("test_password")
             .withEnv("DB_USER", "test_user")
-            // Same layout as db/Dockerfile: the init script runs tables, then views, then data
+            // Same layout as db/Dockerfile: the init script runs tables, views, the services' roles, then data
             .withCopyFileToContainer(MountableFile.forHostPath("db/docker-entrypoint-initdb.sh", 0755),
                     "/docker-entrypoint-initdb.d/00-run-sql.sh")
             .withCopyFileToContainer(MountableFile.forHostPath("db/tables"),
                     "/docker-entrypoint-initdb.d/tables")
             .withCopyFileToContainer(MountableFile.forHostPath("db/views"),
                     "/docker-entrypoint-initdb.d/views")
+            .withCopyFileToContainer(MountableFile.forHostPath("db/roles"),
+                    "/docker-entrypoint-initdb.d/roles")
             .withCopyFileToContainer(MountableFile.forHostPath("db/data"),
                     "/docker-entrypoint-initdb.d/data");
 
