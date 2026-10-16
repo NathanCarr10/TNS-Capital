@@ -165,7 +165,7 @@ pipeline {
             steps {
                 // The Angular unit tests in headless Chromium, then a production build so a
                 // compile error fails here. npm's pretest/prebuild hooks first generate the API
-                // clients in src/app/api from contracts/, which needs Java: the JDK21 tool is
+                // clients in src/app/api from contracts/, which needs Java: the JDK25 tool is
                 // mounted read-only, since the Playwright image ships Chromium but no JDK.
                 sh '''
                     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \

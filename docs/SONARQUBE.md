@@ -81,8 +81,8 @@ The `Jenkinsfile` expects these names exactly:
 |--------------------------------|----------------|-----------------------------------------------|
 | System → SonarQube servers     | `sonarserver`  | Server URL `http://<host>:8082`               |
 | Credentials → Secret text      | `sonar-token`  | The token from step 3                         |
-| Tools → Maven installations    | `maven-3.8.4`  | Install automatically, 3.8.4                  |
-| Tools → JDK installations      | `JDK21`        | A JDK 21 install                              |
+| Tools → Maven installations    | `maven-3.9.15`  | Install automatically, 3.9.15                  |
+| Tools → JDK installations      | `JDK25`        | A JDK 25 install                              |
 
 The **SonarQube Scanner for Jenkins** plugin must be installed for `sonarserver` to appear.
 
