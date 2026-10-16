@@ -2,20 +2,22 @@ package com.neueda.leap.exceptions;
 
 /**
  * Root of the platform's exception hierarchy. Every failure the trading
- * platform raises on purpose carries the error code from the spec's error
- * catalogue (§21), e.g. ACC-404, which GlobalExceptionHandler returns to the
- * client.
+ * platform raises on purpose extends it and carries the error code from the
+ * spec's error catalogue (§21), e.g. ACC-404, which GlobalExceptionHandler
+ * returns to the client.
  *
- * The four categories below it say what kind of failure it is:
- * - {@link ResourceNotFoundException}: something the request names does not exist (404)
- * - {@link BusinessRuleException}: a trading rule refuses the request (§20)
- * - {@link ConflictException}: the request clashes with the current state (409)
- * - {@link ServiceUnavailableException}: a service the platform depends on is down (503)
+ * The prefix of the code says which part of the domain failed (ACC account,
+ * INS instrument, ORD order, POS position, PRC/MKT market data, BRK broker,
+ * SYS platform). The two Kafka wrappers, NonRetryableOrderException and
+ * SettlementException, keep the code of the failure they wrap.
  *
- * {@link OrderProcessingException} wraps failures in the Kafka consumers,
- * where they decide whether an order goes to the dead-letter queue.
+ * Exceptions extend this class directly: Throwable, Exception and
+ * RuntimeException already make the tree three deep, so a further layer of
+ * category classes would go past Sonar's inheritance limit (java:S110).
  */
 public abstract class TradingException extends RuntimeException {
+    private static final String UNEXPECTED_ERROR = "SYS-500";
+
     private final String errorCode;
 
     protected TradingException(String errorCode, String message) {
@@ -33,5 +35,13 @@ public abstract class TradingException extends RuntimeException {
      */
     public String getErrorCode() {
         return errorCode;
+    }
+
+    /**
+     * The error code of a wrapped failure: its own code if it is a
+     * TradingException, otherwise SYS-500.
+     */
+    protected static String errorCodeOf(Throwable cause) {
+        return cause instanceof TradingException trading ? trading.getErrorCode() : UNEXPECTED_ERROR;
     }
 }

@@ -209,50 +209,43 @@ classDiagram
 
 Every custom exception extends the abstract `TradingException`, which carries the spec error
 code (§21). `GlobalExceptionHandler` returns that code with an HTTP status and a fixed, safe
-message. The four categories under it say what kind of failure it is, and
-`OrderProcessingException` wraps failures inside the Kafka consumers.
+message. The code's prefix names the part of the domain that failed (`ACC`, `INS`, `ORD`, `POS`,
+`PRC`/`MKT`, `BRK`, `SYS`). The two Kafka wrappers, `NonRetryableOrderException` and
+`SettlementException`, keep the code of the failure they wrap.
+
+The exceptions extend `TradingException` directly. `Throwable`, `Exception` and
+`RuntimeException` already make the tree three deep, so a further layer of category classes
+would go past Sonar's inheritance limit (`java:S110`).
 
 ```mermaid
 classDiagram
-    direction TB
+    direction LR
     class RuntimeException
     class TradingException {
         <<abstract>>
         -String errorCode
         +getErrorCode() String
-    }
-    class ResourceNotFoundException { <<abstract>> }
-    class BusinessRuleException { <<abstract>> }
-    class ConflictException { <<abstract>> }
-    class ServiceUnavailableException { <<abstract>> }
-    class OrderProcessingException {
-        <<abstract>>
-        keeps the error code of its cause
+        #errorCodeOf(Throwable) String
     }
     RuntimeException <|-- TradingException
-    TradingException <|-- ResourceNotFoundException
-    TradingException <|-- BusinessRuleException
-    TradingException <|-- ConflictException
-    TradingException <|-- ServiceUnavailableException
-    TradingException <|-- OrderProcessingException
-    ResourceNotFoundException <|-- AccountNotFoundException
-    ResourceNotFoundException <|-- InstrumentNotFoundException
-    ResourceNotFoundException <|-- OrderNotFoundException
-    ResourceNotFoundException <|-- PositionNotFoundException
-    BusinessRuleException <|-- AccountNotActiveException
-    BusinessRuleException <|-- InsufficientFundsException
-    BusinessRuleException <|-- InsufficientHoldingsException
-    ConflictException <|-- AccountAlreadyExistsException
-    ConflictException <|-- AccountDeletionConflictException
-    ConflictException <|-- DuplicateInstrumentException
-    ConflictException <|-- DuplicateOrderException
-    ConflictException <|-- OrderCancellationConflictException
-    ServiceUnavailableException <|-- PriceUnavailableException
-    ServiceUnavailableException <|-- MarketDataUnavailableException
-    ServiceUnavailableException <|-- OrderPublishException
-    ServiceUnavailableException <|-- BrokerUnavailableException
-    OrderProcessingException <|-- NonRetryableOrderException
-    OrderProcessingException <|-- SettlementException
+    TradingException <|-- AccountNotFoundException
+    TradingException <|-- AccountNotActiveException
+    TradingException <|-- AccountAlreadyExistsException
+    TradingException <|-- AccountDeletionConflictException
+    TradingException <|-- InstrumentNotFoundException
+    TradingException <|-- DuplicateInstrumentException
+    TradingException <|-- InsufficientFundsException
+    TradingException <|-- InsufficientHoldingsException
+    TradingException <|-- DuplicateOrderException
+    TradingException <|-- OrderNotFoundException
+    TradingException <|-- OrderCancellationConflictException
+    TradingException <|-- PositionNotFoundException
+    TradingException <|-- PriceUnavailableException
+    TradingException <|-- MarketDataUnavailableException
+    TradingException <|-- OrderPublishException
+    TradingException <|-- BrokerUnavailableException
+    TradingException <|-- NonRetryableOrderException
+    TradingException <|-- SettlementException
 ```
 
 | Error code | HTTP | Exceptions |
