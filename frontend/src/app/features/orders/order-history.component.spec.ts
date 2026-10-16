@@ -168,7 +168,7 @@ describe('OrderHistoryComponent', () => {
 
       expect(tradingService.cancelOrder).toHaveBeenCalledWith('open-1');
       expect(statusOf('AAPL')).toBe('CANCELLED');
-      expect(cancelButtons().length).toBe(0);
+      expect(cancelButtons()).toHaveSize(0);
     });
 
     it('explains when the order filled before it could be cancelled, and shows its status', () => {
@@ -194,7 +194,7 @@ describe('OrderHistoryComponent', () => {
       tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
       create(true);
 
-      expect(cancelButtons().length).toBe(0);
+      expect(cancelButtons()).toHaveSize(0);
     });
   });
 });

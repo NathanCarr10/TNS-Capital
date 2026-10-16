@@ -100,7 +100,7 @@
     <div class="main-column">
       <section class="card chart-panel" aria-label="Price history">
         <div class="card-header">
-          <div class="segmented" role="group" aria-label="Bar size">
+          <fieldset class="segmented" aria-label="Bar size">
             @for (option of timeframes; track option.value) {
               <button
                 type="button"
@@ -111,8 +111,8 @@
                 {{ option.label }}
               </button>
             }
-          </div>
-          <div class="indicators" role="group" aria-label="Moving averages">
+          </fieldset>
+          <fieldset class="indicators" aria-label="Moving averages">
             @for (option of movingAverageOptions; track option.period; let index = $index) {
               <button
                 type="button"
@@ -123,7 +123,7 @@
                 <span class="line-key" aria-hidden="true"></span>{{ option.label }}
               </button>
             }
-          </div>
+          </fieldset>
         </div>
 
         @if (barsLoading()) {

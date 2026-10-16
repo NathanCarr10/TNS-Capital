@@ -51,14 +51,17 @@ describe('Rate limiting', () => {
       for (let i = 0; i < LIMIT; i++) {
         await request(app.getHttpServer()).post(path).send({});
       }
-      await request(app.getHttpServer()).post(path).send({}).expect(429);
+      const response = await request(app.getHttpServer()).post(path).send({}).expect(429);
+      expect(response.body.errorCode).toBe('AUTH-429');
     }
   });
 
   it('does not limit the health check', async () => {
+    const statuses: number[] = [];
     for (let i = 0; i <= LIMIT; i++) {
-      await request(app.getHttpServer()).get('/health').expect(200);
+      statuses.push((await request(app.getHttpServer()).get('/health')).status);
     }
+    expect(statuses).toEqual(Array(LIMIT + 1).fill(200));
   });
 });
 

@@ -60,15 +60,22 @@ describe('authInterceptor', () => {
   });
 
   it('sends one refresh for requests that fail together, since a refresh token is single use', () => {
-    http.get('/api/v1/accounts').subscribe();
-    http.get('/api/v1/instruments').subscribe();
+    const results: unknown[] = [];
+    http.get('/api/v1/accounts').subscribe((body) => results.push(body));
+    http.get('/api/v1/instruments').subscribe((body) => results.push(body));
 
     httpMock.expectOne('/api/v1/accounts').flush(null, { status: 401, statusText: 'Unauthorized' });
     httpMock.expectOne('/api/v1/instruments').flush(null, { status: 401, statusText: 'Unauthorized' });
+    // expectOne fails the test if the second 401 sent a refresh of its own
     httpMock.expectOne('/auth/refresh').flush({ accessToken: 'new-access', refreshToken: 'new-refresh' });
 
-    httpMock.expectOne('/api/v1/accounts').flush([]);
-    httpMock.expectOne('/api/v1/instruments').flush([]);
+    const retries = [httpMock.expectOne('/api/v1/accounts'), httpMock.expectOne('/api/v1/instruments')];
+    expect(retries.map((retry) => retry.request.headers.get('Authorization'))).toEqual([
+      'Bearer new-access',
+      'Bearer new-access',
+    ]);
+    retries.forEach((retry) => retry.flush(['ok']));
+    expect(results).toEqual([['ok'], ['ok']]);
   });
 
   it('logs out when the refresh is refused', () => {

@@ -197,7 +197,7 @@ describe('PortfolioComponent', () => {
       depositAmount(250);
 
       expect(tradingService.deposit).toHaveBeenCalledWith(ACCOUNT.id, { amount: 250 });
-      expect(element.querySelector('[role="status"]')!.textContent).toContain('Cash deposited successfully.');
+      expect(element.querySelector('.deposit-form output')!.textContent).toContain('Cash deposited successfully.');
       expect(element.querySelector('.account-card')!.textContent).toContain(
         (ACCOUNT.cashBalance + 250).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
       );

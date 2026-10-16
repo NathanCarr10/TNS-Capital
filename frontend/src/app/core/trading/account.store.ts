@@ -111,7 +111,7 @@ export class AccountStore {
         if (this.isAdmin) {
           this.loadAdminAccounts();
         } else if (profile.accountId == null) {
-          this.failAccount(new Error(), 'No trading account is linked to this user. Please contact support.');
+          this.failAccount(new Error('No trading account linked'), 'No trading account is linked to this user. Please contact support.');
         } else {
           this.viewAccount(profile.accountId);
         }
@@ -126,7 +126,7 @@ export class AccountStore {
         const sorted = [...accounts].sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
         this.adminAccounts.set(sorted);
         if (sorted.length === 0) {
-          this.failAccount(new Error(), 'There are no trading accounts yet.');
+          this.failAccount(new Error('No trading accounts'), 'There are no trading accounts yet.');
           this.positions.set([]);
           return;
         }

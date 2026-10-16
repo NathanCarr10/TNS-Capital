@@ -82,9 +82,14 @@ test.describe('Trading', () => {
     await historyRow.getByRole('button', { name: 'Cancel BUY 1 AAPL' }).click();
     await expect(historyRow.locator('.status-badge')).toHaveText('CANCELLED');
 
-    // The broker's fill arrives after the cancel and is ignored: no cash is spent
-    await page.waitForTimeout(6_000);
-    await expect(page.locator('.toast')).toHaveCount(0);
+    // The broker's fill arrives 4-5 s after the order and is ignored: no "filled" toast within
+    // that window, and no cash is spent
+    const filledToast = page.locator('.toast', { hasText: 'Order filled' });
+    const filledShown = await filledToast.waitFor({ state: 'visible', timeout: 6_000 }).then(
+      () => true,
+      () => false
+    );
+    expect(filledShown).toBe(false);
     await page.goto('/portfolio');
     await expect(page.locator('.account-card')).toContainText('$1,000.00');
   });

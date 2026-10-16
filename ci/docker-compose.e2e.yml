@@ -1,11 +1,20 @@
 # Overrides for ci/e2e-tests.sh: a throwaway stack that publishes no host ports, so it can
 # run next to a developer's own stack (or another build) on the same machine. The browser
 # reaches the app over the Compose network instead.
+#
+# It is also kept small: it runs on the Jenkins host next to SonarQube and the IDE, where
+# running out of memory got Jenkins and SonarQube killed. Each test run is short and light,
+# so the JVMs get small heaps and the serial collector, and stop at C1 (no C2 compiler threads).
 services:
   zookeeper:
     ports: !reset []
+    mem_limit: 192m
+    environment:
+      # The image's default 512 MB heap; ZooKeeper only tracks one broker here
+      KAFKA_HEAP_OPTS: -Xms64m -Xmx64m
   kafka:
     ports: !reset []
+    mem_limit: 640m
     environment:
       # The image's default 1 GB heap is more than a test run needs
       KAFKA_HEAP_OPTS: -Xms256m -Xmx256m
@@ -15,6 +24,13 @@ services:
     ports: !reset []
   app:
     ports: !reset []
+    mem_limit: 448m
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:MaxHeapSize=256m -XX:+UseSerialGC -XX:TieredStopAtLevel=1
+  broker-simulator:
+    mem_limit: 256m
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:MaxHeapSize=128m -XX:+UseSerialGC -XX:TieredStopAtLevel=1
   frontend:
     ports: !reset []
   dashboard:

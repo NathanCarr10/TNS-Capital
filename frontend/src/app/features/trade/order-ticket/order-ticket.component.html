@@ -101,7 +101,7 @@
     <p class="note">{{ symbol() }} is not tradable.</p>
   }
   @if (successMessage()) {
-    <p class="note success" role="status">{{ successMessage() }}</p>
+    <output class="note success">{{ successMessage() }}</output>
   }
   @if (errorMessage()) {
     <p class="note error" role="alert">{{ errorMessage() }}</p>

@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { ApiException } from '../common/api.exception';
 import { hashPassword, verifyPassword } from '../users/password-hasher';
 import { RefreshTokensService } from '../users/refresh-tokens.service';

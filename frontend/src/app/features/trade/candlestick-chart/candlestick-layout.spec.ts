@@ -18,7 +18,7 @@ describe('layoutCandlesticks', () => {
     const plain = layoutCandlesticks(bars, 364, 300)!;
     const layout = layoutCandlesticks(bars, 364, 300, [[null, 20, 20]])!;
 
-    expect(layout.overlayPaths.length).toBe(1);
+    expect(layout.overlayPaths).toHaveSize(1);
     expect(layout.overlayPaths[0]).toMatch(/^M150\.0,[\d.]+L250\.0,[\d.]+$/);
     // 20 is far above every bar, so the candles are squeezed lower to make room
     expect(layout.candles[0].wickTop).toBeGreaterThan(plain.candles[0].wickTop);

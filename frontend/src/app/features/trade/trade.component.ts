@@ -170,7 +170,7 @@ export class TradeComponent {
           this.session.set(null);
           return symbol
             ? this.marketDataService.getBars(symbol, '1Day', 1).pipe(
-                map((bars) => bars[bars.length - 1] ?? null),
+                map((bars) => bars.at(-1) ?? null),
                 catchError(() => of(null))
               )
             : EMPTY;

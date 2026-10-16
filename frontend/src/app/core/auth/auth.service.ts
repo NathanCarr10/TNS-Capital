@@ -133,8 +133,8 @@ export class AuthService {
 
     try {
       const payload = parts[1]
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
+        .replaceAll('-', '+')
+        .replaceAll('_', '/');
       const normalizedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, '=');
       const claimsJson = atob(normalizedPayload);
       return JSON.parse(claimsJson) as JwtClaims;

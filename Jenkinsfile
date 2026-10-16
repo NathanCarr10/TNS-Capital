@@ -150,14 +150,10 @@ pipeline {
 
         stage('Auth Service Tests') {
             steps {
-                // The NestJS auth service's Jest suite, in the same Node image its
-                // container uses (Node 22 LTS). The Postgres tests in users.service.spec.ts skip
-                // here (they need DB_HOST and a database).
-                sh '''
-                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:22-alpine \
-                        sh -c "npm ci --no-audit --no-fund && npm test"
-                '''
+                // The NestJS auth service's Jest suite in node:22-alpine (the image its
+                // container uses), including its Postgres tests against a throwaway database
+                // built from db/, with coverage for SonarQube (see ci/auth-tests.sh)
+                sh 'ci/auth-tests.sh'
             }
         }
 
@@ -167,6 +163,7 @@ pipeline {
                 // compile error fails here. npm's pretest/prebuild hooks first generate the API
                 // clients in src/app/api from contracts/, which needs Java: the JDK21 tool is
                 // mounted read-only, since the Playwright image ships Chromium but no JDK.
+                // --code-coverage writes frontend/coverage/frontend/lcov.info for SonarQube.
                 sh '''
                     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
                         -v "$JAVA_HOME":/opt/jdk:ro -e JAVA_HOME=/opt/jdk \
@@ -174,7 +171,7 @@ pipeline {
                         bash -c 'export PATH="$JAVA_HOME/bin:$PATH" \
                             CHROME_BIN="$(ls -d /ms-playwright/chromium-*/chrome-linux64/chrome | head -n 1)" \
                             && npm ci --no-audit --no-fund \
-                            && npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox \
+                            && npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage \
                             && npm run build'
                 '''
             }
@@ -277,6 +274,13 @@ pipeline {
         }
         success {
             echo "Build ${BUILD_NUMBER} passed."
+        }
+        cleanup {
+            // Runs last, after the reports are archived. Each workspace holds node_modules and
+            // build output (~1 GB); without this, every branch ever built keeps one, which
+            // filled the disk and took the agent offline. Nothing is lost: every stage
+            // reinstalls its dependencies (npm ci) on the next build anyway.
+            deleteDir()
         }
     }
 }

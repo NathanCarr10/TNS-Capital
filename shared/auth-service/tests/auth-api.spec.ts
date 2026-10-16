@@ -7,7 +7,7 @@
  */
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import * as jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { AppModule, configureApp } from '../src/app.module';
@@ -386,10 +386,14 @@ describe('Auth API contract', () => {
 
     it('keeps a session going through successive rotations', async () => {
       let { refreshToken } = await tokensFor(TRADER);
+      const issued = [refreshToken];
 
       for (let i = 0; i < 3; i++) {
         refreshToken = (await refresh(refreshToken).expect(200)).body.refreshToken;
+        issued.push(refreshToken);
       }
+      // Every rotation hands out a new token
+      expect(new Set(issued).size).toBe(4);
     });
 
     it('revokes the whole session when a spent refresh token is reused', async () => {
@@ -398,7 +402,8 @@ describe('Auth API contract', () => {
 
       // Someone replays the spent token: the latest token of that session stops working too
       await refresh(spent).expect(401);
-      await refresh(latest).expect(401);
+      const response = await refresh(latest).expect(401);
+      expect(response.body.message).toBe('invalid or expired refresh token');
     });
 
     it('leaves the user\'s other sessions alone when one is revoked for reuse', async () => {
@@ -407,15 +412,17 @@ describe('Auth API contract', () => {
       await refresh(phone.refreshToken).expect(200);
       await refresh(phone.refreshToken).expect(401);
 
-      await refresh(laptop.refreshToken).expect(200);
+      const response = await refresh(laptop.refreshToken).expect(200);
+      expect(response.body.refreshToken).not.toBe(laptop.refreshToken);
     });
 
     it('keeps the previous session working when the user logs in again', async () => {
       const first = await tokensFor(TRADER);
       const second = await tokensFor(TRADER);
 
-      await refresh(first.refreshToken).expect(200);
-      await refresh(second.refreshToken).expect(200);
+      const fromFirst = await refresh(first.refreshToken).expect(200);
+      const fromSecond = await refresh(second.refreshToken).expect(200);
+      expect(fromFirst.body.refreshToken).not.toBe(fromSecond.body.refreshToken);
     });
 
     it('rejects an unknown refresh token with AUTH-401', async () => {
@@ -437,7 +444,8 @@ describe('Auth API contract', () => {
     });
 
     it('rejects an access token used as a refresh token', async () => {
-      await refresh(await tokenFor(TRADER)).expect(401);
+      const response = await refresh(await tokenFor(TRADER)).expect(401);
+      expect(response.body.message).toBe('invalid or expired refresh token');
     });
 
     it.each([
@@ -472,7 +480,8 @@ describe('Auth API contract', () => {
       const { refreshToken: latest } = (await refresh(first).expect(200)).body;
 
       await logout(first).expect(200);
-      await refresh(latest).expect(401);
+      const response = await refresh(latest).expect(401);
+      expect(response.body.message).toBe('invalid or expired refresh token');
     });
 
     it('leaves the user\'s other sessions alone', async () => {
@@ -480,7 +489,8 @@ describe('Auth API contract', () => {
       const laptop = await tokensFor(TRADER);
 
       await logout(phone.refreshToken).expect(200);
-      await refresh(laptop.refreshToken).expect(200);
+      const response = await refresh(laptop.refreshToken).expect(200);
+      expect(response.body.refreshToken).not.toBe(laptop.refreshToken);
     });
 
     it('rejects logging out twice with the same token', async () => {
@@ -496,7 +506,8 @@ describe('Auth API contract', () => {
     });
 
     it('rejects an unknown refresh token', async () => {
-      await logout('not-a-real-token').expect(401);
+      const response = await logout('not-a-real-token').expect(401);
+      expect(response.body.message).toBe('invalid or expired refresh token');
     });
 
     it('rejects a missing refresh token with VAL-422', async () => {
@@ -545,7 +556,8 @@ describe('Auth API contract', () => {
       const { refreshToken } = await tokensFor(TRADER);
       const { accessToken } = (await refresh(refreshToken).expect(200)).body;
 
-      await me(`Bearer ${accessToken}`).expect(200);
+      const response = await me(`Bearer ${accessToken}`).expect(200);
+      expect(response.body.username).toBe('trader');
     });
 
     it.each([
@@ -578,7 +590,8 @@ describe('Auth API contract', () => {
 
     it('rejects a refresh token used as an access token', async () => {
       const { refreshToken } = await tokensFor(TRADER);
-      await me(`Bearer ${refreshToken}`).expect(401);
+      const response = await me(`Bearer ${refreshToken}`).expect(401);
+      expect(response.body).toEqual(unauthorised);
     });
 
     it('takes roles from the database, not the token', async () => {
@@ -587,7 +600,8 @@ describe('Auth API contract', () => {
     });
 
     it('accepts the scheme in any case', async () => {
-      await me(`bearer ${await tokenFor(TRADER)}`).expect(200);
+      const response = await me(`bearer ${await tokenFor(TRADER)}`).expect(200);
+      expect(response.body.username).toBe('trader');
     });
   });
 
