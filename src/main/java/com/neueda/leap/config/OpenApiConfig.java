@@ -70,22 +70,33 @@ public class OpenApiConfig {
             Content errorBody = new Content().addMediaType("application/json",
                     new MediaType().schema(new Schema<>().$ref("#/components/schemas/" + ERROR_SCHEMA)));
 
-            openApi.getPaths().values().forEach(path -> path.readOperations().forEach(operation -> {
-                ApiResponses responses = operation.getResponses();
-                responses.putIfAbsent("401", new ApiResponse().description("AUTH-401 Missing, invalid or expired access token"));
-                if (takesInput(operation)) {
-                    responses.putIfAbsent("422", new ApiResponse().description("VAL-422 Invalid input"));
-                }
-                responses.putIfAbsent("500", new ApiResponse().description("SYS-500 Unexpected error"));
-
-                responses.forEach((status, response) -> {
-                    if (status.startsWith("4") || status.startsWith("5")) {
-                        response.setContent(ERROR_CODE.matcher(response.getDescription()).matches() ? errorBody : null);
-                    }
-                });
-                operation.setResponses(sortedByStatus(responses));
-            }));
+            openApi.getPaths().values().forEach(path -> path.readOperations()
+                    .forEach(operation -> documentErrors(operation, errorBody)));
         };
+    }
+
+    private static void documentErrors(Operation operation, Content errorBody) {
+        ApiResponses responses = operation.getResponses();
+        responses.putIfAbsent("401", new ApiResponse().description("AUTH-401 Missing, invalid or expired access token"));
+        if (takesInput(operation)) {
+            responses.putIfAbsent("422", new ApiResponse().description("VAL-422 Invalid input"));
+        }
+        responses.putIfAbsent("500", new ApiResponse().description("SYS-500 Unexpected error"));
+
+        responses.forEach((status, response) -> {
+            if (isError(status)) {
+                response.setContent(hasErrorCode(response) ? errorBody : null);
+            }
+        });
+        operation.setResponses(sortedByStatus(responses));
+    }
+
+    private static boolean isError(String status) {
+        return status.startsWith("4") || status.startsWith("5");
+    }
+
+    private static boolean hasErrorCode(ApiResponse response) {
+        return response.getDescription() != null && ERROR_CODE.matcher(response.getDescription()).matches();
     }
 
     private static ApiResponses sortedByStatus(ApiResponses responses) {
