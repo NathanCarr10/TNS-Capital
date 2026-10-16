@@ -11,7 +11,7 @@ package com.neueda.leap.exceptions;
  * This prevents wasted retry cycles on impossible scenarios where the root cause
  * is permanent (e.g., account was deleted after order placement).
  */
-public class NonRetryableOrderException extends RuntimeException {
+public class NonRetryableOrderException extends OrderProcessingException {
 
     /**
      * The original exception that caused this non-retryable error.

@@ -1,8 +1,8 @@
 package com.neueda.leap.exceptions;
 
-public class MarketDataUnavailableException extends RuntimeException {
+public class MarketDataUnavailableException extends ServiceUnavailableException {
 
     public MarketDataUnavailableException(String message) {
-        super(message);
+        super("MKT-503", message);
     }
 }

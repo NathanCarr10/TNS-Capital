@@ -1,8 +1,8 @@
 package com.neueda.leap.exceptions;
 
-public class AccountNotFoundException extends RuntimeException {
+public class AccountNotFoundException extends ResourceNotFoundException {
 
     public AccountNotFoundException(String message) {
-        super(message);
+        super("ACC-404", message);
     }
 }

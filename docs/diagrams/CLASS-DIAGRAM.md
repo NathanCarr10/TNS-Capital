@@ -207,19 +207,66 @@ classDiagram
 
 ## Exceptions
 
-Each exception is a `RuntimeException` that `GlobalExceptionHandler` maps to one of the spec's
-error codes (§21).
+Every custom exception extends the abstract `TradingException`, which carries the spec error
+code (§21). `GlobalExceptionHandler` returns that code with an HTTP status and a fixed, safe
+message. The four categories under it say what kind of failure it is, and
+`OrderProcessingException` wraps failures inside the Kafka consumers.
+
+```mermaid
+classDiagram
+    direction TB
+    class RuntimeException
+    class TradingException {
+        <<abstract>>
+        -String errorCode
+        +getErrorCode() String
+    }
+    class ResourceNotFoundException { <<abstract>> }
+    class BusinessRuleException { <<abstract>> }
+    class ConflictException { <<abstract>> }
+    class ServiceUnavailableException { <<abstract>> }
+    class OrderProcessingException {
+        <<abstract>>
+        keeps the error code of its cause
+    }
+    RuntimeException <|-- TradingException
+    TradingException <|-- ResourceNotFoundException
+    TradingException <|-- BusinessRuleException
+    TradingException <|-- ConflictException
+    TradingException <|-- ServiceUnavailableException
+    TradingException <|-- OrderProcessingException
+    ResourceNotFoundException <|-- AccountNotFoundException
+    ResourceNotFoundException <|-- InstrumentNotFoundException
+    ResourceNotFoundException <|-- OrderNotFoundException
+    ResourceNotFoundException <|-- PositionNotFoundException
+    BusinessRuleException <|-- AccountNotActiveException
+    BusinessRuleException <|-- InsufficientFundsException
+    BusinessRuleException <|-- InsufficientHoldingsException
+    ConflictException <|-- AccountAlreadyExistsException
+    ConflictException <|-- AccountDeletionConflictException
+    ConflictException <|-- DuplicateInstrumentException
+    ConflictException <|-- DuplicateOrderException
+    ConflictException <|-- OrderCancellationConflictException
+    ServiceUnavailableException <|-- PriceUnavailableException
+    ServiceUnavailableException <|-- MarketDataUnavailableException
+    ServiceUnavailableException <|-- OrderPublishException
+    ServiceUnavailableException <|-- BrokerUnavailableException
+    OrderProcessingException <|-- NonRetryableOrderException
+    OrderProcessingException <|-- SettlementException
+```
 
 | Error code | HTTP | Exceptions |
 |---|---|---|
 | `ACC-404` | 404 | `AccountNotFoundException` |
 | `ACC-403` | 403 | `AccountNotActiveException` |
 | `ACC-409` | 409 | `AccountAlreadyExistsException`, `AccountDeletionConflictException` |
-| `INS-404` | 404 | `InstrumentNotFoundException` |
+| `INS-404` | 404 | `InstrumentNotFoundException` (unknown or not tradable) |
 | `INS-409` | 409 | `DuplicateInstrumentException` |
 | `ORD-400` | 400 | `InsufficientFundsException` |
 | `ORD-409` | 409 | `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` |
 | `ORD-404` | 404 | `OrderNotFoundException` |
 | `POS-404` | 404 | `PositionNotFoundException` |
 | `PRC-503`, `MKT-503`, `SYS-503` | 503 | `PriceUnavailableException`, `MarketDataUnavailableException`, `OrderPublishException` |
-| (internal) | | `BrokerUnavailableException`, `NonRetryableOrderException`, `SettlementException`: raised in the Kafka consumers, where they decide whether an order goes to the DLQ |
+| `SYS-409` | 409 | Spring's `OptimisticLockingFailureException`: two requests changed the same account at once, and its `version` column (NFR-02) refused the later one |
+| `BRK-503` (internal) | | `BrokerUnavailableException`: the order is stored as REJECTED and can be replayed from the DLQ |
+| cause's code (internal) | | `NonRetryableOrderException`, `SettlementException`: raised in the Kafka consumers, where they decide whether an order goes to the DLQ |

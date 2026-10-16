@@ -1,8 +1,8 @@
 package com.neueda.leap.exceptions;
 
-public class DuplicateInstrumentException extends RuntimeException {
+public class DuplicateInstrumentException extends ConflictException {
 
     public DuplicateInstrumentException(String message) {
-        super(message);
+        super("INS-409", message);
     }
 }
