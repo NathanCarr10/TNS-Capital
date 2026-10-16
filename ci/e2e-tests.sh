@@ -48,8 +48,8 @@ rm -rf "$ROOT/frontend/playwright-report" "$ROOT/frontend/test-results" \
     "$ROOT/frontend/e2e-results.xml" "$ROOT/frontend/e2e-stack.log"
 
 # The frontend depends on the API, auth service and dashboard, and those on the rest.
-# --wait returns once the health checks pass; the suite's global setup then waits for
-# the API itself (it has no health check).
+# --wait returns once the health checks pass, the API's (/actuator/health) included; the
+# suite's global setup then checks each route through the frontend.
 $COMPOSE up --detach --build --wait --wait-timeout 300 frontend
 
 # --ipc=host: Chromium needs more shared memory than Docker's 64 MB default

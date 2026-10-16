@@ -225,13 +225,13 @@ API's startup with `docker compose logs -f app`.
 | Service | URL | Notes |
 |---|---|---|
 | Web app | http://localhost:8086 | Angular frontend; nginx forwards `/api`, `/auth` and `/analytics/` to the services |
-| Trading API | http://localhost:3000 | All endpoints need a bearer token |
+| Trading API | http://localhost:3000 | All endpoints need a bearer token, except `/actuator/health` (details for admins only). This machine only: other machines use port 8086 |
 | Swagger UI | http://localhost:3000/swagger-ui.html | Public. Click **Authorize** and paste an access token |
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
-| Auth service | http://localhost:4000 | `GET /health` is public |
+| Auth service | http://localhost:4000 | `GET /health` is public. This machine only |
 | Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
 | Kafka UI | http://localhost:8090 | Browse topics and messages (read-only, this machine only) |
-| Dashboard | http://localhost:8086/analytics/ | Admin analytics (Streamlit); also directly on http://localhost:8501/analytics/. Run the ETL once to fill the batch view |
+| Dashboard | http://localhost:8086/analytics/ | Admin analytics (Streamlit); also directly on http://localhost:8501/analytics/ from this machine. Run the ETL once to fill the batch view |
 | PostgreSQL | `localhost:5432`, database `tns_capital` | Credentials from `.env` |
 | Kafka | `kafka:9092` | Reachable from inside the Compose network (see [Troubleshooting](#troubleshooting)) |
 
@@ -249,9 +249,11 @@ TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 
-# Trading API health (needs a token)
+# Trading API health: public; an admin token adds the details (database, disk)
+curl -s http://localhost:3000/actuator/health
+# -> {"status":"UP"}
 curl -s http://localhost:3000/actuator/health -H "Authorization: Bearer $TOKEN"
-# -> {"status":"UP", ...}
+# -> {"status":"UP","components":{"db":{"status":"UP", ...}, ...}}
 
 # Read a seeded account's balance
 curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $TOKEN"
@@ -517,6 +519,7 @@ for the quality gate.
 | [docs/SONARQUBE.md](docs/SONARQUBE.md) | SonarQube quality gate |
 | [shared/auth-service/README.md](shared/auth-service/README.md) | Auth endpoints, tokens, guards and error codes |
 | [contracts/auth-api.yaml](contracts/auth-api.yaml) | OpenAPI contract for the auth service |
+| [contracts/trading-api.json](contracts/trading-api.json) | OpenAPI contract for the trading API, kept in step with the code by `ApiContractIT` (docs/DECISIONS.md #9) |
 | [etl/README.md](etl/README.md) | ETL pipeline, settings and the analytics schema |
 | [dashboard/README.md](dashboard/README.md) | Dashboard insights, data sources and how to run it |
 

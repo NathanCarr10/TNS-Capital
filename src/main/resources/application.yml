@@ -106,7 +106,10 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      # /actuator/health is public (SecurityConfig): anyone gets UP or DOWN,
+      # only admins get the database and disk details
+      show-details: when-authorized
+      roles: ADMIN
   health:
     db:
       enabled: true
