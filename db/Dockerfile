@@ -6,6 +6,9 @@ COPY tables/ /docker-entrypoint-initdb.d/tables/
 # Copy reporting views (the init script runs them after the tables)
 COPY views/ /docker-entrypoint-initdb.d/views/
 
+# Copy the services' login roles (the init script runs them after the views)
+COPY roles/ /docker-entrypoint-initdb.d/roles/
+
 # Copy initial data
 COPY data/ /docker-entrypoint-initdb.d/data/
 

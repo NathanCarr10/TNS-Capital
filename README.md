@@ -64,7 +64,7 @@ flowchart LR
 | **Broker Simulator** (`broker-simulator/`) | Stands in for a real broker: takes orders over a REST API and, after 0.5 to 2 seconds, fills each one at or better than its limit price and publishes the fill to the `executions` topic. Has its own README. |
 | **Auth service** (`shared/auth-service/`) | Registers users (opening a trading account for each), logs them in and issues access and refresh tokens. Passwords are hashed with Argon2id; refresh tokens are stored only as SHA-256 hashes in `refresh_tokens`. |
 | **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), and trade lifecycle events (`trade-events`), each with a `.dlq` topic. An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
-| **PostgreSQL** | System of record. The `db/` image creates the schema, views and seed data on first start. |
+| **PostgreSQL** | System of record. The `db/` image creates the schema, views, the services' login roles and seed data on first start. Each service connects with its own least-privilege role (`tns_api`, `tns_auth`, `tns_etl`, `tns_reader`); the `DB_USER` owner is for administrators only. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
 | **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
 
@@ -138,7 +138,7 @@ TNS-Capital/
 ├── frontend/                        Angular app, served by nginx; e2e/ holds the Playwright tests
 ├── shared/auth-service/             NestJS auth service (has its own README)
 ├── broker-simulator/                Spring Boot Broker Simulator: fills orders after a delay
-├── db/                              PostgreSQL image: tables/, views/, seed data/
+├── db/                              PostgreSQL image: tables/, views/, roles/, seed data/
 ├── etl/                             Python ETL pipeline (has its own README)
 ├── dashboard/                       Streamlit analytics dashboard (has its own README)
 ├── bruno/                           Bruno API collection for manual testing
@@ -270,9 +270,14 @@ docker compose down -v     # stop the stack and delete the database volume
 ```
 
 The database scripts in `db/` only run when the data volume is empty. **After pulling
-changes to `db/tables` or `db/data`, run `docker compose down -v` and start again** so
-PostgreSQL rebuilds the schema. The same applies to `DB_PASSWORD`: PostgreSQL only reads it
-when the volume is created, so changing it later locks the services out until you reset.
+changes to `db/tables`, `db/roles` or `db/data`, run `docker compose down -v` and start again**
+so PostgreSQL rebuilds the schema. The same applies to `DB_PASSWORD` and the services'
+`DB_*_PASSWORD`s: PostgreSQL only reads them when the volume is created, so changing them later
+locks the services out until you reset.
+
+The seed data is six weeks of sample trading on ten accounts (ACC-1001 to ACC-1010), dated back
+from the day the database is created, for the analytics. No logins are seeded: register a trader
+(it gets a new account to deposit into), and log in as `admin` with `ADMIN_PASSWORD`.
 
 ### ETL pipeline (optional)
 
@@ -386,7 +391,7 @@ plain-text lines.
 ### Bruno collection
 
 The `bruno/` folder is a ready-made [Bruno](https://www.usebruno.com/) collection covering
-the auth, account and order endpoints.
+the auth, account, order and price endpoints, plus **API Health** (no token needed).
 
 1. Open the `bruno/` folder as a collection in Bruno and select the **local** environment.
 2. Set the secret variables `password` (and `accountId` once you have one).
@@ -501,6 +506,7 @@ for the quality gate.
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
+| `password authentication failed for user "tns_api"` (or `tns_auth`, `tns_etl`, `tns_reader`), or `role ... does not exist` | The database volume predates the services' roles, or a `DB_*_PASSWORD` changed after it was created. Run `docker compose down -v` and start again. |
 | Port already in use (3000, 4000, 8086, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |

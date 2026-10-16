@@ -44,6 +44,12 @@ services:
       POSTGRES_USER: ${DB_USER:-tns-capital-db-user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_USER: ${DB_USER:-tns-capital-db-user}
+      # Passwords of the services' own login roles (db/roles/roles.sql), set when
+      # the database is created; each defaults to DB_PASSWORD
+      DB_API_PASSWORD: ${DB_API_PASSWORD:-${DB_PASSWORD}}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-${DB_PASSWORD}}
+      DB_ETL_PASSWORD: ${DB_ETL_PASSWORD:-${DB_PASSWORD}}
+      DB_READER_PASSWORD: ${DB_READER_PASSWORD:-${DB_PASSWORD}}
     ports:
       - "127.0.0.1:5432:5432"
     command:
@@ -73,8 +79,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: tns_capital
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      # Least-privilege role: users, refresh tokens, opening accounts (db/roles/roles.sql)
+      DB_USER: tns_auth
+      DB_PASSWORD: ${DB_AUTH_PASSWORD:-${DB_PASSWORD}}
       PORT: 4000
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
       # Proxies whose X-Forwarded-For gives the client IP: nginx on the Docker network
@@ -116,8 +123,9 @@ services:
     mem_limit: 512m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-tns-capital-db-user}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Least-privilege role: the trading tables only (db/roles/roles.sql)
+      SPRING_DATASOURCE_USERNAME: tns_api
+      SPRING_DATASOURCE_PASSWORD: ${DB_API_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       BROKER_URL: http://broker-simulator:8085
@@ -176,8 +184,9 @@ services:
     mem_limit: 384m
     environment:
       ETL_DB_HOST: postgres
-      DB_USER: ${DB_USER:-tns-capital-db-user}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Least-privilege role: reads the trading tables, owns the analytics schema
+      DB_USER: tns_etl
+      DB_PASSWORD: ${DB_ETL_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
       ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
@@ -193,8 +202,9 @@ services:
     mem_limit: 384m
     environment:
       DASHBOARD_DB_HOST: postgres
-      DB_USER: ${DB_USER:-tns-capital-db-user}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Least-privilege role: read only (db/roles/roles.sql)
+      DB_USER: tns_reader
+      DB_PASSWORD: ${DB_READER_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       DASHBOARD_AUTH_URL: http://auth-service:4000
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     # Localhost only: browsers reach it through the frontend's /analytics/ proxy,

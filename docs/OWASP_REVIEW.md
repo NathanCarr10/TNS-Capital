@@ -12,7 +12,7 @@ and what the team decided to do about it. Built from [OWASP_REVIEW_TEMPLATE.md](
 | Commit reviewed | `3c6b7eea` (Development, after PR #91) |
 | Review date | 2026-10-08 |
 | Reviewers | Nokuvimba |
-| Updated | 2026-10-15 (`fix/security-hardening`): A01-4, A01-5, A02-5, A04-1, A05-1, A05-2, A06-3, A06-4, A07-3, A07-4, A07-11, A08-4 and A09-2 marked Fixed with their evidence; `fix/review-gaps`: A09-4 Fixed, A01-8 added; 2026-10-16: A05-5 Fixed, A05-2 extended to the API, auth and dashboard ports, A07-3 per-client limit behind the proxy |
+| Updated | 2026-10-15 (`fix/security-hardening`): A01-4, A01-5, A02-5, A04-1, A05-1, A05-2, A06-3, A06-4, A07-3, A07-4, A07-11, A08-4 and A09-2 marked Fixed with their evidence; `fix/review-gaps`: A09-4 Fixed, A01-8 added; 2026-10-16: A05-5 Fixed, A05-2 extended to the API, auth and dashboard ports, A07-3 per-client limit behind the proxy, A05-7 least-privilege database roles added |
 | Standard | [OWASP Top 10 (2021)](https://owasp.org/Top10/) |
 
 ## Keeping this review current
@@ -57,7 +57,7 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 | A02 Cryptographic Failures | No action, Fixed, Accepted | 7 |
 | A03 Injection | No action, Fixed | 9 |
 | A04 Insecure Design | Fixed, No action, Accepted | 4 |
-| A05 Security Misconfiguration | Fixed, No action, Accepted | 6 |
+| A05 Security Misconfiguration | Fixed, No action, Accepted | 7 |
 | A06 Vulnerable and Outdated Components | No action, Fixed | 4 |
 | A07 Identification and Authentication Failures | No action, Accepted, Fixed | 11 |
 | A08 Software and Data Integrity Failures | Accepted, No action, Fixed | 4 |
@@ -128,6 +128,7 @@ None. Every finding is Fixed, Accepted (with its residual risk), No action or No
 | A05-4 | **Auth service sends no security headers.** The trading API sets `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and HSTS. The auth service sets none (no `helmet`). | `SecurityConfig.java` (`headers`); `JwtSecurityTest.validTokenIsAccepted` (asserts the headers); `shared/auth-service/package.json` (no `helmet`) | Accepted | **Residual risk:** a browser rendering an auth service response gets no clickjacking or MIME-sniffing protection. **Why carried:** the service returns only JSON to API clients and serves no HTML, so these headers protect nothing today. Add `helmet` if a browser UI is ever served from it. |
 | A05-5 | **Actuator details are for admins only.** `/actuator/health` showed database status to every logged-in user (`show-details: always`), and `/actuator/info` and `/actuator/metrics` needed a token but no role. Health is now public with no details (so Docker and load balancers can probe it), its details need `ADMIN` (`show-details: when-authorized`, `roles: ADMIN`), and every other actuator endpoint needs `ADMIN`. | `src/main/resources/application.yml` (`management.endpoint.health`); `SecurityConfig.java` (`/actuator/health` permitted, `/actuator/**` `hasRole('ADMIN')`); `HealthControllerIT` (public without details, hidden from traders, metrics 401 / 403 / 200) | Fixed | — |
 | A05-6 | **None.** Checked container users and dev-only settings. The trading API, auth service and ETL images all drop root (`USER app`, `USER node`, `USER etl`). The H2 console and SQL TRACE logging are only in `application-dev.yml`, which `docker-compose.yml` does not activate. | `Dockerfile`; `shared/auth-service/Dockerfile`; `etl/Dockerfile`; `src/main/resources/application-dev.yml` | No action | — |
+| A05-7 | **Services connected as the database superuser.** `POSTGRES_USER` (`DB_USER`) is a superuser in the official image, and the API, auth service, ETL and dashboard all logged in as it: a flaw in any of them could drop tables, read every password hash or run commands on the database server (`COPY ... TO PROGRAM`). Each service now has its own least-privilege login role (spec §5): `tns_api` reads and writes the trading tables and only `username, account_id` of `users`; `tns_auth` has `users`, `refresh_tokens` and opening accounts; `tns_etl` reads the trading tables and owns the `analytics` schema; `tns_reader` (dashboard) only reads, never `password_hash`. None can create objects in `public`, and other roles cannot connect. The owner is for administrators and the init scripts only. | `db/roles/roles.sql`; `db/docker-entrypoint-initdb.sh`; `docker-compose.yml` (each service's database user); `DatabaseRolesIT` (12 allowed and 14 refused statements, e.g. `tns_api` cannot `DROP TABLE`, read `password_hash` or `COPY ... TO PROGRAM`); e2e suite on the full stack | Fixed | — |
 
 ## A06 Vulnerable and Outdated Components
 

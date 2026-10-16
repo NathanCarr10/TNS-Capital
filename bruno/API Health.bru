@@ -1,0 +1,21 @@
+meta {
+  name: API Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{apiUrl}}/actuator/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq UP
+}
+
+docs {
+  The trading API's health check. Public: no token needed, and it answers only UP or DOWN.
+  Log in as admin and send it with the admin's token to see each component (database, disk).
+}
