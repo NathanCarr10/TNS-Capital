@@ -103,7 +103,7 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 
 | Area | Technology |
 |---|---|
-| Trading API | Java 21, Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
+| Trading API | Java 25, Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
 | Auth service | Node.js 22, NestJS 11, TypeScript, Argon2, `pg` |
 | Messaging | Apache Kafka 7.5 (Confluent) with ZooKeeper, Kafka UI |
 | Database | PostgreSQL 16 |

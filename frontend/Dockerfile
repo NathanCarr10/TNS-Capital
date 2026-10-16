@@ -5,7 +5,7 @@
 FROM node:22-alpine AS build
 
 # openapi-generator-cli is a Java tool: npm's prebuild hook needs a JRE
-RUN apk add --no-cache openjdk17-jre-headless
+RUN apk add --no-cache openjdk25-jre-headless
 
 WORKDIR /repo/frontend
 
