@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.model.Position;
 
 @DisplayName("Position Test Suite")
@@ -146,6 +147,58 @@ class PositionTest {
 
             assertEquals(10, holding.getQuantity());
             assertEquals(new BigDecimal("180.00"), holding.getAverageCost());
+        }
+    }
+
+    @DisplayName("Reservation Tests")
+    @Nested
+    class ReservationTests {
+        @DisplayName("Reserving holds shares without removing them from the position")
+        @Test
+        void testReserveHoldsShares() {
+            position.reserve(30);
+
+            assertEquals(100, position.getQuantity());
+            assertEquals(30, position.getReservedQuantity());
+            assertEquals(70, position.getAvailableQuantity());
+        }
+
+        @DisplayName("Reserved shares cannot be reserved again")
+        @Test
+        void testReserveBeyondAvailableShares() {
+            position.reserve(60);
+
+            assertThrows(InsufficientHoldingsException.class, () -> position.reserve(41));
+            assertEquals(60, position.getReservedQuantity());
+        }
+
+        @DisplayName("Reserved shares cannot be sold by another order")
+        @Test
+        void testSellCannotTakeReservedShares() {
+            position.reserve(60);
+            BigDecimal price = new BigDecimal("150.00");
+
+            assertThrows(IllegalArgumentException.class, () -> position.apply(-41, price));
+            position.apply(-40, price);
+            assertEquals(60, position.getQuantity());
+        }
+
+        @DisplayName("Releasing gives the shares back")
+        @Test
+        void testReleaseGivesSharesBack() {
+            position.reserve(60);
+            position.release(60);
+
+            assertEquals(0, position.getReservedQuantity());
+            assertEquals(100, position.getAvailableQuantity());
+        }
+
+        @DisplayName("Releasing more than is reserved is a bug, not a no-op")
+        @Test
+        void testReleaseMoreThanReserved() {
+            position.reserve(5);
+
+            assertThrows(IllegalStateException.class, () -> position.release(6));
         }
     }
 }

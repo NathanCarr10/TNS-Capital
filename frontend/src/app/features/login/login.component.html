@@ -1,5 +1,6 @@
 <section class="login-page">
   <div class="login-card">
+    <img class="auth-logo" src="brand/company-logo.png" alt="TNS Capital" />
     <h1>Welcome Back</h1>
     <p>Sign in to access your account and trading tools.</p>
 
@@ -22,11 +23,11 @@
         placeholder="Enter password"
       />
 
-      <p class="field-error" *ngIf="loginForm.invalid && loginForm.touched">
+      <p class="field-error" [class.visible]="loginForm.invalid && loginForm.touched">
         Username and password are required.
       </p>
 
-      <p class="server-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+      <p class="server-error" [class.visible]="!!errorMessage()">{{ errorMessage() }}</p>
 
       <button type="submit" [disabled]="isSubmitting()">
         {{ isSubmitting() ? 'Signing In...' : 'Login' }}

@@ -1,0 +1,19 @@
+meta {
+  name: Strategy Signals
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{strategyUrl}}/api/v1/strategies/{{strategyId}}/signals
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Every time the rule fired, newest first, with the order it placed and that order's status.
+}

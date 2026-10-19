@@ -34,6 +34,19 @@ export class RegisterComponent {
     return this.registerForm.touched && (usernameTooShort || password.invalid || confirmPassword.invalid);
   }
 
+  validationMessage(): string {
+    if (this.errorMessage()) {
+      return this.errorMessage()!;
+    }
+    if (this.registerForm.controls.username.hasError('pattern') && this.registerForm.controls.username.touched) {
+      return 'Username can only contain letters, numbers, dots, underscores and hyphens.';
+    }
+    if (this.registerForm.controls.holderName.hasError('pattern') && this.registerForm.controls.holderName.touched) {
+      return "Account holder name can only contain letters, numbers, spaces and . , ' -";
+    }
+    return this.hasCredentialsError() ? 'Enter a username and passwords with at least 8 characters.' : '';
+  }
+
   onSubmit(): void {
     if (this.registerForm.invalid || this.isSubmitting()) {
       this.registerForm.markAllAsTouched();

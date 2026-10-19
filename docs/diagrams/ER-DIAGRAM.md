@@ -12,12 +12,17 @@ erDiagram
     ORDERS ||--o| EXECUTIONS : "filled by"
     ACCOUNTS |o--o| USERS : "owned by"
     USERS ||--o{ REFRESH_TOKENS : "signed in with"
+    ACCOUNTS ||--o{ STRATEGIES : "runs"
+    INSTRUMENTS ||--o{ STRATEGIES : "traded by"
+    STRATEGIES ||--o{ STRATEGY_SIGNALS : "fired"
+    STRATEGY_SIGNALS |o--o| ORDERS : "placed"
 
     ACCOUNTS {
         BIGINT id PK "generated identity"
         VARCHAR(32) account_number UK "business identifier, e.g. ACC-1001"
         VARCHAR(255) holder_name
         NUMERIC(18-2) cash_balance "CHECK >= 0"
+        NUMERIC(18-2) reserved_cash "held for accepted BUY orders, <= cash_balance"
         VARCHAR(20) status "ACTIVE | SUSPENDED | CLOSED"
         INT version "optimistic lock"
         TIMESTAMP opened_on "set once, when the account is opened"
@@ -42,6 +47,7 @@ erDiagram
         VARCHAR(20) status "NEW | FILLED | REJECTED | CANCELLED"
         VARCHAR(100) idempotency_key UK
         VARCHAR(255) status_reason "reason text (seed data)"
+        BOOLEAN reserved "holds cash or shares on its account"
         TIMESTAMP created_on
     }
 
@@ -49,6 +55,7 @@ erDiagram
         BIGINT account_id PK, FK
         VARCHAR(20) symbol PK, FK
         INT quantity "CHECK >= 0"
+        INT reserved_quantity "held for accepted SELL orders, <= quantity"
         NUMERIC(18-2) average_cost "CHECK >= 0"
     }
 
@@ -122,6 +129,35 @@ erDiagram
         TIMESTAMP expires_at
         TIMESTAMP used_at "NULL until spent"
         TIMESTAMP created_at
+    }
+
+    STRATEGIES {
+        BIGINT id PK
+        BIGINT account_id FK
+        VARCHAR name
+        VARCHAR symbol FK
+        VARCHAR rule_type "MA_CROSSOVER, BOLLINGER"
+        JSONB rule_params
+        INT quantity
+        VARCHAR status "ACTIVE, PAUSED, ARCHIVED"
+        VARCHAR position "FLAT, LONG"
+        TIMESTAMP created_on
+        TIMESTAMP updated_on
+        INT version
+    }
+
+    STRATEGY_SIGNALS {
+        BIGINT id PK
+        BIGINT strategy_id FK
+        VARCHAR side "BUY, SELL"
+        NUMERIC price
+        TIMESTAMP bar_time
+        VARCHAR source "LIVE, REPLAY"
+        VARCHAR replay_id
+        UUID order_id "no FK: the order lives in the trading API's tables"
+        VARCHAR outcome "PLACED, FAILED"
+        VARCHAR detail
+        TIMESTAMP created_on
     }
 ```
 

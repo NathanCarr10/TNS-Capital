@@ -245,3 +245,19 @@ def test_operations_sections_with_no_rejections_or_dead_letters(monkeypatch):
     assert not app.exception
     assert "No orders have been rejected." in [info.value for info in app.info]
     assert {metric.label: metric.value for metric in app.metric}["Dead letters awaiting review"] == "0"
+
+
+def test_shows_strategy_orders_next_to_the_traders_own(monkeypatch):
+    live = TRADES.assign(strategy_name=["MA 20/50", None])
+    app = run_app(monkeypatch, {**FRAMES, "live": live})
+
+    assert not app.exception
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Orders placed by strategies"] == "1"
+    assert metrics["Strategies that traded"] == "1"
+
+
+def test_says_when_no_strategy_has_traded(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    assert any("No strategy has placed an order yet" in info.value for info in app.info)

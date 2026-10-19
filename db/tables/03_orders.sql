@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS orders (
     status           VARCHAR(20)         NOT NULL CHECK (status IN ('NEW', 'FILLED', 'REJECTED', 'CANCELLED')) DEFAULT 'NEW',
     idempotency_key  VARCHAR(100)        NOT NULL UNIQUE,
     status_reason    VARCHAR(255),
+    -- TRUE while the order holds cash (BUY) or shares (SELL) on its account
+    reserved         BOOLEAN             NOT NULL DEFAULT FALSE,
     created_on       TIMESTAMP           NOT NULL DEFAULT NOW()
 );
 

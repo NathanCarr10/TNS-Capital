@@ -127,7 +127,8 @@ class OrderServiceExceptionDifferentiationTest {
                 transactionManager,
                 brokerClient,
                 executionRepository,
-                priceProvider);
+                priceProvider,
+                new ReservationService(accountRepository, positionRepository, orderRepository));
     }
 
     @DisplayName("processOrderEvent - Not-Found Exceptions")
@@ -147,7 +148,7 @@ class OrderServiceExceptionDifferentiationTest {
             doNothing().when(validator).validate(any()); // Validation passes
 
             // Mock: Account not found
-            when(accountRepository.findById(accountId))
+            when(accountRepository.findWithLockById(accountId))
                     .thenReturn(Optional.empty());
 
             // Act & Assert
@@ -182,7 +183,7 @@ class OrderServiceExceptionDifferentiationTest {
             doNothing().when(validator).validate(any());
 
             // Mock: Account exists
-            when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.findWithLockById(accountId)).thenReturn(Optional.of(testAccount));
 
             // Mock: Instrument not found (defensive check)
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.empty());
@@ -224,7 +225,7 @@ class OrderServiceExceptionDifferentiationTest {
             doNothing().when(validator).validate(any());
 
             // Mock: Account and Instrument exist
-            when(accountRepository.findById(accountId)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.findWithLockById(accountId)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol(symbol)).thenReturn(Optional.of(testInstrument));
 
             // The account holds 100.00, but the order costs 100 x 150.00
@@ -261,7 +262,7 @@ class OrderServiceExceptionDifferentiationTest {
             doNothing().when(validator).validate(any());
 
             // Mock: Account was deleted between REST validation and async processing
-            when(accountRepository.findById(accountId)).thenReturn(Optional.empty());
+            when(accountRepository.findWithLockById(accountId)).thenReturn(Optional.empty());
 
             // Act & Assert
             NonRetryableOrderException exception = assertThrows(
@@ -305,7 +306,7 @@ class OrderServiceExceptionDifferentiationTest {
             assertEquals(OrderStatus.FILLED, result.getStatus());
 
             // Verify no additional processing occurred
-            verify(accountRepository, never()).findById(anyLong());
+            verify(accountRepository, never()).findWithLockById(anyLong());
             verify(instrumentRepository, never()).findBySymbol(any());
         }
     }

@@ -51,6 +51,11 @@ public class Order {
     @Column(name = "status_reason", length = STATUS_REASON_MAX_LENGTH)
     private String statusReason;
 
+    // True while the order holds cash (BUY) or shares (SELL) on its account: from
+    // the Trade Executor's check until it is filled, cancelled or rejected
+    @Column(nullable = false)
+    private boolean reserved;
+
     public static final int STATUS_REASON_MAX_LENGTH = 255;
 
     protected Order() {
@@ -90,6 +95,7 @@ public class Order {
         this.idempotencyKey = other.idempotencyKey;
         this.createdOn = other.createdOn;
         this.statusReason = other.statusReason;
+        this.reserved = other.reserved;
     }
 
     private void validateConstructorArgs(Long accountId, String symbol, OrderSide side, Integer quantity,
@@ -153,6 +159,22 @@ public class Order {
 
     public Instant getCreatedOn() {
         return createdOn;
+    }
+
+    /**
+     * @return the cash a BUY order reserves: quantity x limit price. The broker
+     *         never fills worse than the limit, so this covers the fill.
+     */
+    public BigDecimal getValue() {
+        return price.multiply(BigDecimal.valueOf(quantity));
+    }
+
+    public boolean isReserved() {
+        return reserved;
+    }
+
+    public void setReserved(boolean reserved) {
+        this.reserved = reserved;
     }
 
     public String getStatusReason() {
@@ -235,6 +257,7 @@ public class Order {
                 ", idempotencyKey='" + idempotencyKey + '\'' +
                 ", createdOn=" + createdOn +
                 ", statusReason='" + statusReason + '\'' +
+                ", reserved=" + reserved +
                 '}';
     }
 }

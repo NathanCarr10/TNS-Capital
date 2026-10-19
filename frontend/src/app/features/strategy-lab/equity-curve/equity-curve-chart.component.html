@@ -1,0 +1,42 @@
+<div class="legend">
+  <span class="key strategy">Strategy</span>
+  <span class="key hold">Buy and hold</span>
+  @if (active(); as current) {
+    <span class="readout num">
+      {{ current.point.date | date:'MMM d, y' }} &middot;
+      {{ current.point.strategy | currency:'USD':'symbol':'1.0-0' }} vs {{ current.point.buyAndHold | currency:'USD':'symbol':'1.0-0' }}
+    </span>
+  }
+</div>
+<div class="chart-frame" [style.height.px]="height">
+  @if (layout(); as chart) {
+    <svg
+      class="chart"
+      [attr.width]="width()"
+      [attr.height]="height"
+      role="img"
+      [attr.aria-label]="summary()"
+      (pointermove)="point($event)"
+      (pointerleave)="leave()"
+    >
+      @for (tick of chart.valueTicks; track tick.value) {
+        <line class="grid" [attr.x1]="chart.plotLeft" [attr.x2]="chart.plotRight" [attr.y1]="tick.y" [attr.y2]="tick.y" />
+        <text class="axis-label" [attr.x]="chart.plotLeft - 8" [attr.y]="tick.y" text-anchor="end" dominant-baseline="middle">
+          {{ formatValue(tick.value) }}
+        </text>
+      }
+      @for (tick of chart.timeTicks; track tick.point.date) {
+        <text class="axis-label" [attr.x]="tick.x" [attr.y]="height - 6" text-anchor="middle">
+          {{ tick.point.date | date:'MMM y' }}
+        </text>
+      }
+      <path class="line hold" [attr.d]="chart.buyAndHoldLine" />
+      <path class="line strategy" [attr.d]="chart.strategyLine" />
+      @if (active(); as current) {
+        <line class="crosshair" [attr.x1]="current.x" [attr.x2]="current.x" [attr.y1]="chart.plotTop" [attr.y2]="chart.plotBottom" />
+        <circle class="marker strategy" [attr.cx]="current.x" [attr.cy]="current.strategyY" r="4" />
+        <circle class="marker hold" [attr.cx]="current.x" [attr.cy]="current.buyAndHoldY" r="4" />
+      }
+    </svg>
+  }
+</div>

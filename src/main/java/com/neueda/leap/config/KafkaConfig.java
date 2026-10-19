@@ -11,6 +11,7 @@ import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.services.DeadLetterService;
+import com.neueda.leap.services.ReservationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -48,6 +49,7 @@ public class KafkaConfig {
     private final TradeEventPublisher tradeEventPublisher;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ReservationService reservations;
 
     @Value("${trading.kafka.topics.orders:orders}")
     private String ordersTopic;
@@ -79,6 +81,12 @@ public class KafkaConfig {
      * Trade events that fail publishing are routed here.
      */
     public static final String TRADE_EVENTS_DLQ_TOPIC = "trade-events.dlq";
+
+    /**
+     * Price updates from the pricing feed (spec §10.3), keyed by symbol.
+     * Consumed by the strategy service.
+     */
+    public static final String MARKET_DATA_TOPIC = "market-data";
 
     /**
      * Creates the main orders topic.
@@ -137,6 +145,22 @@ public class KafkaConfig {
         return TopicBuilder.name(TRADE_EVENTS_DLQ_TOPIC)
                 .partitions(1)
                 .replicas(1)
+                .build();
+    }
+
+    /**
+     * Creates the market-data topic: live prices and replayed bars, keyed by
+     * symbol so each symbol's prices stay in order. Prices are only useful
+     * while fresh, so they are kept for a day.
+     *
+     * @return NewTopic bean for the market-data topic
+     */
+    @Bean
+    public NewTopic marketDataTopic() {
+        return TopicBuilder.name(MARKET_DATA_TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .config("retention.ms", String.valueOf(24L * 60 * 60 * 1000))
                 .build();
     }
 
@@ -303,7 +327,8 @@ public class KafkaConfig {
     }
 
     /**
-     * Stores a NEW order as REJECTED and publishes its REJECTED event. An order
+     * Stores a NEW order as REJECTED, releasing the cash or shares it reserved,
+     * and publishes its REJECTED event. An order
      * already REJECTED (its event was published during processing) only gets
      * the failure reason if it has none; FILLED and CANCELLED orders keep
      * their status.
@@ -311,13 +336,10 @@ public class KafkaConfig {
     private void rejectIfStillNew(Order order, String failureReason) {
         OrderStatus status = order.getStatus();
         switch (status) {
-            case NEW -> {
-                order.setStatus(OrderStatus.REJECTED);
-                order.setStatusReason(failureReason);
-                orderRepository.save(order);
+            case NEW -> reservations.rejectIfNew(order.getId(), failureReason).ifPresent(rejected -> {
                 log.info("Updated order status to REJECTED in recovery handler (was NEW): orderId={}", order.getId());
-                tradeEventPublisher.publish(order, status, "EXHAUSTED_RETRIES");
-            }
+                tradeEventPublisher.publish(rejected, status, "EXHAUSTED_RETRIES");
+            });
             case REJECTED -> {
                 if (order.getStatusReason() == null) {
                     order.setStatusReason(failureReason);

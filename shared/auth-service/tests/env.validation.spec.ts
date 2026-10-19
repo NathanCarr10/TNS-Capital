@@ -27,6 +27,18 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ JWT_SECRET: SECRET, ADMIN_PASSWORD: password })).toThrow(message);
   });
 
+  it('accepts no STRATEGY_CLIENT_SECRET, which leaves the strategy service without a login', () => {
+    expect(() => validateEnv({ JWT_SECRET: SECRET, STRATEGY_CLIENT_SECRET: '' })).not.toThrow();
+    expect(() => validateEnv({ JWT_SECRET: SECRET, STRATEGY_CLIENT_SECRET: 'b'.repeat(32) })).not.toThrow();
+  });
+
+  it.each([
+    ['too short', 'short-secret', 'at least 32 characters'],
+    ['a placeholder', 'change-me-to-a-random-value-of-at-least-32-bytes', 'placeholder'],
+  ])('rejects a STRATEGY_CLIENT_SECRET that is %s', (_case, secret, message) => {
+    expect(() => validateEnv({ JWT_SECRET: SECRET, STRATEGY_CLIENT_SECRET: secret })).toThrow(message);
+  });
+
   it.each([
     ['too short', 'short-pass', 'SUPPORT_PASSWORD must be at least 12 characters'],
     ['a placeholder', 'change-me-support-password', 'SUPPORT_PASSWORD is a published placeholder'],

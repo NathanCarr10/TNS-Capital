@@ -1,6 +1,7 @@
 package com.neueda.leap.marketdata;
 
 import com.neueda.leap.time.Clock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -19,18 +20,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * that has not been updated for market-data.alpaca.max-price-age (no trades
  * on the stream, or the symbol is not streamed) is refreshed from the REST
  * API when it is next asked for.
+ *
+ * Every price it takes is announced as a PriceUpdatedEvent, which
+ * MarketDataPublisher puts on the market-data topic.
  */
 @Service
 public class LivePriceService implements PriceProvider {
     private final AlpacaRestClient restClient;
     private final AlpacaProperties properties;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
     private final Map<String, CachedPrice> prices = new ConcurrentHashMap<>();
 
-    public LivePriceService(AlpacaRestClient restClient, AlpacaProperties properties, Clock clock) {
+    public LivePriceService(AlpacaRestClient restClient, AlpacaProperties properties, Clock clock,
+            ApplicationEventPublisher events) {
         this.restClient = Objects.requireNonNull(restClient);
         this.properties = Objects.requireNonNull(properties);
         this.clock = Objects.requireNonNull(clock);
+        this.events = Objects.requireNonNull(events);
     }
 
     /**
@@ -39,8 +46,11 @@ public class LivePriceService implements PriceProvider {
      */
     public void update(PriceQuote quote) {
         CachedPrice received = new CachedPrice(quote, clock.now());
-        prices.merge(quote.symbol(), received,
+        CachedPrice kept = prices.merge(quote.symbol(), received,
                 (held, fresh) -> fresh.quote().tradedAt().isBefore(held.quote().tradedAt()) ? held : fresh);
+        if (kept == received) {
+            events.publishEvent(new PriceUpdatedEvent(quote));
+        }
     }
 
     /**

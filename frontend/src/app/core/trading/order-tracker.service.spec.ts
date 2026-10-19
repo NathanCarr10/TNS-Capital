@@ -62,7 +62,8 @@ describe('OrderTrackerService', () => {
     flush();
   }));
 
-  it('toasts a rejection with its mapped reason', fakeAsync(() => {
+  it('toasts a rejection with its mapped reason and reloads the account, whose reservation was released', fakeAsync(() => {
+    spyOn(store, 'refresh');
     tradingService.getOrder.and.returnValue(
       of(order({ side: 'SELL', status: 'REJECTED', statusReason: 'Insufficient holdings for AAPL' }))
     );
@@ -71,6 +72,7 @@ describe('OrderTrackerService', () => {
     tick();
 
     expect(toasts()).toEqual([{ kind: 'error', message: 'SELL AAPL rejected: Insufficient holdings (ORD-409).' }]);
+    expect(store.refresh).toHaveBeenCalledTimes(1);
     flush();
   }));
 
@@ -89,7 +91,8 @@ describe('OrderTrackerService', () => {
     flush();
   }));
 
-  it('stops quietly when the trader cancels the order', fakeAsync(() => {
+  it('stops quietly when the trader cancels the order, reloading the released cash', fakeAsync(() => {
+    spyOn(store, 'refresh');
     tradingService.getOrder.and.returnValue(of(order({ status: 'CANCELLED' })));
     let outcome: OrderOutcome | undefined;
 
@@ -98,6 +101,7 @@ describe('OrderTrackerService', () => {
 
     expect(outcome?.status).toBe('CANCELLED');
     expect(toasts()).toEqual([]);
+    expect(store.refresh).toHaveBeenCalledTimes(1);
   }));
 
   it('says the order is still processing when it does not settle in time', fakeAsync(() => {
@@ -108,7 +112,7 @@ describe('OrderTrackerService', () => {
 
     expect(tradingService.getOrder).toHaveBeenCalledTimes(OrderTrackerService.POLL_MAX_ATTEMPTS);
     expect(toasts()).toEqual([
-      { kind: 'info', message: 'Order ord-9 was accepted but is still processing. Check the order history.' },
+      { kind: 'info', message: 'The order is still processing. Check the order history for its status.' },
     ]);
     flush();
   }));
@@ -119,7 +123,7 @@ describe('OrderTrackerService', () => {
     tracker.track('ord-1').subscribe();
     tick();
 
-    expect(toasts()).toEqual([{ kind: 'info', message: 'Failed to retrieve the final status of order ord-1.' }]);
+    expect(toasts()).toEqual([{ kind: 'info', message: 'Failed to retrieve the final status of the order.' }]);
     flush();
   }));
 

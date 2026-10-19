@@ -9,7 +9,8 @@ functions work on either. Only the live source has each order's rejection
 reason (status_reason) and first execution time (filled_on); they are empty
 in the batch source. Each trade carries the username of the account's
 owner (users.account_id), or "(no login)" for accounts no user owns, such as
-the seeded ones.
+the seeded ones, and strategy_name: the Strategy Lab strategy that placed
+it, or None for an order the trader placed themselves.
 """
 
 import os
@@ -33,7 +34,9 @@ BATCH_TRADES_SQL = """
     SELECT f.order_id::text AS order_id, f.account_number, a.holder_name,
            COALESCE(u.username, '(no login)') AS username, f.symbol,
            i.asset_class, f.side, f.quantity, f.price, f.notional, f.status, f.created_on,
-           NULL::text AS status_reason, NULL::timestamp AS filled_on
+           NULL::text AS status_reason, NULL::timestamp AS filled_on,
+           (SELECT s.name FROM strategy_signals g JOIN strategies s ON s.id = g.strategy_id
+            WHERE g.order_id = f.order_id LIMIT 1) AS strategy_name
     FROM analytics.fact_trades f
     JOIN analytics.dim_account a ON a.account_number = f.account_number
     JOIN analytics.dim_instrument i ON i.symbol = f.symbol
@@ -46,7 +49,9 @@ LIVE_TRADES_SQL = """
            COALESCE(u.username, '(no login)') AS username, o.symbol,
            i.asset_class, o.side, o.quantity, o.price, o.quantity * o.price AS notional,
            o.status, o.created_on, o.status_reason,
-           (SELECT MIN(e.executed_on) FROM executions e WHERE e.order_id = o.id) AS filled_on
+           (SELECT MIN(e.executed_on) FROM executions e WHERE e.order_id = o.id) AS filled_on,
+           (SELECT s.name FROM strategy_signals g JOIN strategies s ON s.id = g.strategy_id
+            WHERE g.order_id = o.id LIMIT 1) AS strategy_name
     FROM orders o
     JOIN accounts a ON a.id = o.account_id
     JOIN instruments i ON i.symbol = o.symbol

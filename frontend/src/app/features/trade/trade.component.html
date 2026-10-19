@@ -146,6 +146,12 @@
               <dt>Quantity</dt>
               <dd>{{ position.quantity | number }}</dd>
             </div>
+            @if (position.reservedQuantity > 0) {
+              <div>
+                <dt title="Shares held for open sell orders until they fill or are cancelled">In open orders</dt>
+                <dd>{{ position.reservedQuantity | number }}</dd>
+              </div>
+            }
             <div>
               <dt>Avg price</dt>
               <dd>{{ position.averageCost | currency:currency():'symbol':'1.2-2' }}</dd>
