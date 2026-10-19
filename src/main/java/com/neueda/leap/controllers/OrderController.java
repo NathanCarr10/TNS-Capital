@@ -78,12 +78,12 @@ public class OrderController {
                 .body(PlaceOrderResponse.accepted(order.getId(), order.getPrice()));
     }
 
-    @Operation(summary = "List orders", description = "Admins get every order; other users get the orders on their own account.")
+    @Operation(summary = "List orders", description = "Support gets every order; other users get the orders on their own account.")
     @GetMapping
     public ResponseEntity<List<OrderResponse>> getAllOrders() {
-        // Admins see every order (monitoring of system order flow); other users
-        // see only the orders on their own account
-        List<Order> orders = accessGuard.isAdmin()
+        // Support sees every order, to help traders; other users see only the
+        // orders on their own account
+        List<Order> orders = accessGuard.isSupport()
                 ? orderService.findAllOrders()
                 : accessGuard.currentAccountId().map(orderService::getOrdersByAccountId).orElse(List.of());
         return ResponseEntity.ok(orders.stream().map(this::mapToResponse).toList());
