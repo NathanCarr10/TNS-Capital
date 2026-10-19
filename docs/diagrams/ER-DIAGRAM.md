@@ -22,6 +22,7 @@ erDiagram
         VARCHAR(32) account_number UK "business identifier, e.g. ACC-1001"
         VARCHAR(255) holder_name
         NUMERIC(18-2) cash_balance "CHECK >= 0"
+        NUMERIC(18-2) reserved_cash "held for accepted BUY orders, <= cash_balance"
         VARCHAR(20) status "ACTIVE | SUSPENDED | CLOSED"
         INT version "optimistic lock"
         TIMESTAMP opened_on "set once, when the account is opened"
@@ -46,6 +47,7 @@ erDiagram
         VARCHAR(20) status "NEW | FILLED | REJECTED | CANCELLED"
         VARCHAR(100) idempotency_key UK
         VARCHAR(255) status_reason "reason text (seed data)"
+        BOOLEAN reserved "holds cash or shares on its account"
         TIMESTAMP created_on
     }
 
@@ -53,6 +55,7 @@ erDiagram
         BIGINT account_id PK, FK
         VARCHAR(20) symbol PK, FK
         INT quantity "CHECK >= 0"
+        INT reserved_quantity "held for accepted SELL orders, <= quantity"
         NUMERIC(18-2) average_cost "CHECK >= 0"
     }
 

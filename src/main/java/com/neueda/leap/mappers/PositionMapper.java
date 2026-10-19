@@ -15,7 +15,7 @@ public interface PositionMapper {
      * @param symbol the instrument symbol
      * @return the Position if found, null otherwise
      */
-    @Select("SELECT account_id, symbol, quantity, average_cost " +
+    @Select("SELECT account_id, symbol, quantity, reserved_quantity, average_cost " +
             "FROM positions WHERE account_id = #{accountId} AND symbol = #{symbol}")
     Position findPosition(Long accountId, String symbol);
 

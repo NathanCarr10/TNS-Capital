@@ -73,10 +73,18 @@ Without a live price (no Alpaca keys, as in local development and CI) orders fil
 their limit as before. Resting limit orders that wait for the market to reach them would need
 the price stream to drive fills; they are left for a later extension.
 
-Settlement re-checks funds and holdings at the fill price, because another order may have
-used them while the broker worked this one; funds are not reserved when the order is
-accepted. A fill for an order that was cancelled meanwhile is ignored. A real broker would
-also need to be told about the cancellation; the simulator has no cancel endpoint.
+**Cash and shares are held when an order is accepted.** When the Trade Executor accepts an
+order, it moves the order's cost at its limit (BUY) or its shares (SELL) into
+`accounts.reserved_cash` or `positions.reserved_quantity`; `orders.reserved` records that the
+order holds them. Another order or a withdrawal can only use what is left (`cash_balance -
+reserved_cash`), so two orders can no longer both pass the check and one then fail at
+settlement. The hold is released when the order is filled (settlement then moves the cash and
+shares at the fill price, which is never worse than the limit), cancelled or rejected; a DLQ
+replay of a rejected order takes it again. Reserving, releasing and settling lock the account
+row, so concurrent orders for one account take turns, and `accounts.version` still guards
+deposits and withdrawals. A fill for an order that was cancelled meanwhile is ignored. A real
+broker would also need to be told about the cancellation; the simulator has no cancel
+endpoint.
 
 ## 5. Live prices from Alpaca
 

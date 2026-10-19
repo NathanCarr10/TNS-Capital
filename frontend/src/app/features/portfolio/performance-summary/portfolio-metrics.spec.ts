@@ -8,6 +8,8 @@ describe('calculatePortfolioMetrics', () => {
     accountId: 11,
     symbol,
     quantity,
+    reservedQuantity: 0,
+    availableQuantity: quantity,
     averageCost,
     marketValue: null,
   });

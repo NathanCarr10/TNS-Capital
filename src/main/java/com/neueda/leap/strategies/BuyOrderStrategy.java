@@ -20,8 +20,8 @@ public class BuyOrderStrategy implements OrderExecutionStrategy {
     public void execute(Account account, PlaceOrderRequest request, String symbol) {
         BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
 
-        // Phase 1: Validate before mutation
-        if (account.getCashBalance().compareTo(cost) < 0) {
+        // Phase 1: Validate before mutation; cash reserved for other orders is not available
+        if (account.getAvailableCash().compareTo(cost) < 0) {
             throw new InsufficientFundsException("Insufficient funds for buy order");
         }
 

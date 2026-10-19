@@ -85,6 +85,20 @@
   margin: 0.15rem 0 0;
   font-size: 0.88rem;
   color: var(--negative);
+  visibility: hidden;
+}
+
+.field-error {
+  min-height: 1.25rem;
+}
+
+.server-error {
+  min-height: 1.25rem;
+}
+
+.field-error.visible,
+.server-error.visible {
+  visibility: visible;
 }
 
 .auth-link {

@@ -68,7 +68,14 @@
     <div class="cash">
       <span class="muted">Cash balance</span>
       <strong class="num">{{ details.cashBalance | currency:'USD':'symbol':'1.2-2' }}</strong>
-      <span class="available">Available to trade</span>
+      @if (details.reservedCash > 0) {
+        <span class="available">{{ details.availableCash | currency:'USD':'symbol':'1.2-2' }} available to trade</span>
+        <span class="reserved" title="Held for open buy orders until they fill or are cancelled">
+          {{ details.reservedCash | currency:'USD':'symbol':'1.2-2' }} in open orders
+        </span>
+      } @else {
+        <span class="available">Available to trade</span>
+      }
       @if (!isSupport) {
         <button class="btn btn-primary deposit-toggle" type="button" (click)="toggleDeposit()">
           {{ depositOpen() ? 'Cancel' : 'Deposit cash' }}

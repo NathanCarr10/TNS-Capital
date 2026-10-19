@@ -85,18 +85,20 @@ flowchart LR
    (keyed by account ID, so orders for one account are processed in sequence) and returns
    **`202 Accepted`** with an `orderId`.
 2. **Trade Executor.** `OrderMessageListener` consumes the event and `OrderService` runs the
-   order through `OrderValidator` and checks the account can afford it at its limit price
-   (cash for a BUY, holdings for a SELL). Nothing moves yet. It then sends the order to the
+   order through `OrderValidator` and reserves what it needs at its limit price (cash for a
+   BUY, shares for a SELL; `ReservationService`), so no other order or withdrawal can use
+   them. Nothing is spent yet. It then sends the order to the
    **Broker Simulator** over HTTP (`BrokerSimulatorClient`). The order stays `NEW`.
 3. The broker works the order for 0.5 to 2 seconds and publishes the fill to the
    `executions` topic, at or better than the limit price.
 4. **Settlement.** `ExecutionListener` consumes the fill. In one transaction `OrderService`
-   re-checks the rules at the fill price (another order may have used the cash meanwhile),
-   updates the cash balance and position through the execution strategy
+   releases the reservation and updates the cash balance and position at the fill price
+   through the execution strategy
    (`BuyOrderStrategy` / `SellOrderStrategy`), records the fill in `executions` and marks the
    order `FILLED`. A trade event is published to `trade-events`.
 5. Until the fill is settled the order is `NEW` and can be cancelled with
-   `DELETE /api/v1/orders/{orderId}`; a fill that arrives later is ignored.
+   `DELETE /api/v1/orders/{orderId}`, which releases its reservation; a fill that arrives
+   later is ignored.
 6. A failed order (insufficient funds or holdings, inactive account, broker unreachable,
    etc.) is saved as `REJECTED` with a reason and captured in the dead-letter queue
    (`dlq_messages` table). Admins can inspect and replay these messages through
@@ -275,7 +277,8 @@ SUPPORT_TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -d "{\"username\":\"support\",\"password\":\"$SUPPORT_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $SUPPORT_TOKEN"
-# -> {"balance":5000.00}
+# -> {"balance":5000.00,"reservedCash":0.00,"availableCash":5000.00}
+#    reservedCash is held for open orders; only availableCash can be traded or withdrawn
 ```
 
 ### Stopping and resetting

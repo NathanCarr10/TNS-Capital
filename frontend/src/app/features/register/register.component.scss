@@ -79,11 +79,16 @@
   }
 }
 
-.field-error,
-.server-error {
+.field-error {
   margin: 0.15rem 0 0;
   font-size: 0.88rem;
   color: var(--negative);
+  visibility: hidden;
+  min-height: 1.25rem;
+}
+
+.field-error.visible {
+  visibility: visible;
 }
 
 .auth-link {

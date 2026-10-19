@@ -12,7 +12,7 @@ describe('PortfolioValueChartComponent', () => {
   let fixture: ComponentFixture<PortfolioValueChartComponent>;
   let marketData: jasmine.SpyObj<MarketDataService>;
 
-  const positions: PositionResponse[] = [{ accountId: 11, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null }];
+  const positions: PositionResponse[] = [{ accountId: 11, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 100, marketValue: null }];
   const bar = (day: number, close: number): PriceBar => ({
     time: `2026-10-0${day}T04:00:00Z`,
     open: close,

@@ -31,8 +31,8 @@ describe('AccountStore', () => {
   it("loads the trader's account, open positions and instruments", () => {
     tradingService.getAccountPositions.and.returnValue(
       of([
-        { accountId: 11, symbol: 'AAPL', quantity: 3, averageCost: 100, marketValue: null },
-        { accountId: 11, symbol: 'MSFT', quantity: 0, averageCost: 200, marketValue: null },
+        { accountId: 11, symbol: 'AAPL', quantity: 3, reservedQuantity: 0, availableQuantity: 3, averageCost: 100, marketValue: null },
+        { accountId: 11, symbol: 'MSFT', quantity: 0, reservedQuantity: 0, availableQuantity: 0, averageCost: 200, marketValue: null },
       ])
     );
 
