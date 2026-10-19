@@ -13,6 +13,7 @@ import streamlit as st  # noqa: E402
 
 import auth  # noqa: E402
 import data  # noqa: E402
+import monitoring  # noqa: E402
 
 SECRET = "test-secret-of-at-least-32-bytes-long!!"
 
@@ -245,3 +246,64 @@ def test_operations_sections_with_no_rejections_or_dead_letters(monkeypatch):
     assert not app.exception
     assert "No orders have been rejected." in [info.value for info in app.info]
     assert {metric.label: metric.value for metric in app.metric}["Dead letters awaiting review"] == "0"
+
+
+ALERTS = pd.DataFrame([{"name": "RefreshTokenReuse", "state": "firing", "severity": "critical", "owasp": "A09-1",
+                        "since": pd.Timestamp("2026-10-19 10:00"), "summary": "Reused", "action": "Check the logs"}])
+
+
+def fake_stack(monkeypatch, alerts=ALERTS):
+    monkeypatch.setattr(monitoring, "configured", lambda: True)
+    monkeypatch.setattr(monitoring, "alerts", lambda: alerts)
+    monkeypatch.setattr(monitoring, "value", lambda query, default=None: 3.0)
+    monkeypatch.setattr(monitoring, "instant", lambda query: pd.DataFrame(
+        [{"state": "STREAMING", "value": 1.0}] if "stream" in query else [{"job": "api", "value": 1.0}]))
+    monkeypatch.setattr(monitoring, "series", lambda query, minutes, label: pd.DataFrame(
+        {"time": [pd.Timestamp("2026-10-19 10:00")], label: ["x"], "value": [1.0]}))
+    monkeypatch.setattr(monitoring, "logs", lambda minutes, services, levels, text: pd.DataFrame(
+        [{"time": pd.Timestamp("2026-10-19 10:00"), "service": "auth-service", "level": "warn",
+          "message": f"matched {text!r}"}]))
+
+
+def test_monitoring_says_how_to_start_the_stack_when_it_is_not_running(monkeypatch):
+    monkeypatch.setattr(monitoring, "configured", lambda: False)
+    app = run_app(monkeypatch, FRAMES)
+    app.sidebar.get("button_group")[0].set_value("Monitoring").run()
+
+    assert not app.exception
+    assert "--profile observability" in app.info[0].value
+
+
+def test_monitoring_shows_alerts_metrics_and_logs(monkeypatch):
+    fake_stack(monkeypatch)
+    app = run_app(monkeypatch, FRAMES)
+
+    assert "1 alert(s) firing" in app.sidebar.error[0].value  # on the trading view too
+    app.sidebar.get("button_group")[0].set_value("Monitoring").run()
+
+    assert not app.exception
+    assert app.title[0].value == "Monitoring"
+    assert app.dataframe[0].value["name"].tolist() == ["RefreshTokenReuse"]
+    labels = {metric.label: metric.value for metric in app.metric}
+    assert labels["api"] == "✅ Up"
+    assert labels["Alpaca price stream"] == "Streaming"
+    assert labels["Failed logins"] == "3"
+    assert labels["Slowest 5% fill in over"] == "3.0 s"
+    assert not any(metric.label == "Orders" for metric in app.metric)  # no trading data loaded
+
+    app.selectbox(key="log_preset").select("Failed logins (A09-2)").run()
+    assert app.dataframe[-1].value["message"].tolist() == ["matched 'Login failed'"]
+
+
+def test_monitoring_reports_a_stack_that_does_not_answer(monkeypatch):
+    fake_stack(monkeypatch)
+
+    def down():
+        raise monitoring.Unavailable("http://vmalert:8880 did not answer. Is the observability profile running?")
+
+    monkeypatch.setattr(monitoring, "alerts", down)
+    app = run_app(monkeypatch, FRAMES)
+    app.sidebar.get("button_group")[0].set_value("Monitoring").run()
+
+    assert not app.exception
+    assert "did not answer" in app.error[0].value

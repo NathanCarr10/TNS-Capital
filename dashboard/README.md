@@ -22,6 +22,8 @@ or support user who signs in is turned away, and no data is loaded until an admi
 Support staff work in the Angular trading app instead (decision 10 in
 [docs/DECISIONS.md](../docs/DECISIONS.md)).
 
+The sidebar switches between the trading insights below and the [Monitoring](#monitoring) view.
+
 Admins who sign in through the Angular trading app are sent here. The admin signs in here
 separately, as Streamlit cannot read the Angular app's token; see decision 12.
 
@@ -69,6 +71,27 @@ schema has no rejection reasons or execution times:
   (`dlq_messages`) is summarised by failure type. It is read-only here: retrying and
   dismissing messages stays with the DLQ admin API.
 
+## Monitoring
+
+The **Monitoring** view (sidebar) shows the monitoring stack: alerts, metrics and every
+service's logs ([observability/README.md](../observability/README.md)). It needs the stack
+running (`docker compose --profile observability up -d`); otherwise it says how to start it.
+While alerts are firing, the sidebar says so on every view.
+
+| Section | Shows | Source |
+|---|---|---|
+| Alerts | Firing and pending alerts, most severe first: what happened, what to do, OWASP finding | vmalert |
+| Services | Whether the API, auth service and broker can be scraped; the Alpaca price stream's state | `up`, `marketdata_stream_state` |
+| Order pipeline | Orders accepted; 95th percentile time to fill; dead letters awaiting review; largest consumer lag. Charts: orders accepted by side, finished by outcome, median and 95th percentile fill time, consumer lag by group, dead letters | `trading_*`, `kafka_consumer_group_lag` |
+| Security events | Failed logins, reused refresh tokens, API 401/403 and 5xx over the period. Charts: logins by outcome, refused or failed API requests by status | `auth_*`, `http_server_requests_seconds_count` |
+| Resources | Heap in use by service | `jvm_memory_used_bytes`, `nodejs_heap_used_bytes` |
+| Logs | Search by text, service and level, newest first; saved searches for failed logins, refresh token reuse, access denied and errors | VictoriaLogs |
+
+The period (1 hour to 7 days) applies to every number and chart. Answers are cached for 15 s,
+the scrape interval. The log search text is sent as a quoted phrase, so it cannot change the
+query. `monitoring.py` holds the queries and turns the answers into DataFrames;
+`monitoring_page.py` draws the view.
+
 ## Files
 
 | File | What it does |
@@ -77,6 +100,8 @@ schema has no rejection reasons or execution times:
 | [data.py](data.py) | Loads the live and batch data from PostgreSQL into DataFrames |
 | [insights.py](insights.py) | Pure pandas functions, one per insight; no database or UI code |
 | [app.py](app.py) | The Streamlit page: headline numbers, insight sentences and Plotly charts |
+| [monitoring.py](monitoring.py) | Queries the monitoring stack: PromQL, alerts, LogsQL |
+| [monitoring_page.py](monitoring_page.py) | The Monitoring view |
 | [tests/](tests/) | pytest unit tests for every insight function |
 
 ## Running it
@@ -101,6 +126,7 @@ streamlit run app.py         # reads DB_USER and DB_PASSWORD from the repo's .en
 | `DB_USER`, `DB_PASSWORD` | from `.env` |
 | `DASHBOARD_AUTH_URL` | `http://localhost:4000` (compose: `http://auth-service:4000`) |
 | `JWT_SECRET` | from `.env`; must be the auth service's secret |
+| `MONITORING_METRICS_URL`, `MONITORING_ALERTS_URL`, `MONITORING_LOGS_URL` | unset, so Monitoring is off (compose: the `observability` services) |
 
 The auth service has to be running to sign in: `docker compose up -d auth-service`.
 
@@ -118,7 +144,10 @@ python -m pytest
 - `tests/test_auth.py`: token checks with real signed JWTs (expired, wrong signature,
   issuer, type or algorithm, no roles) and the sign-in call with a fake HTTP client
 - `tests/test_app.py`: the Streamlit page rendered headlessly (`AppTest`) with fake data:
-  sign-in, traders turned away, expired and forged sessions, sign-out, and the per-user view
+  sign-in, traders turned away, expired and forged sessions, sign-out, the per-user view, and
+  the Monitoring view with the stack running, down and not configured
+- `tests/test_monitoring.py`: the monitoring stack's answers parsed into DataFrames, and the
+  LogsQL the log search sends, with a fake HTTP client
 - `tests/integration/test_data_postgres.py`: `data.py` against a real database. Skipped
   unless `DASHBOARD_IT=1`; it drops and recreates tables, so only point it at a throwaway
   database (see the file for a one-line setup)

@@ -5,6 +5,9 @@ the auth service and only a token with the ADMIN role opens the page. Support
 staff (SUPPORT role) work in the Angular trading app instead; the two roles are
 kept apart (docs/DECISIONS.md, "Roles").
 
+The sidebar switches between the trading insights and the Monitoring view
+(monitoring_page.py): alerts, metrics and logs from the monitoring stack.
+
 Run with:  streamlit run app.py
 """
 
@@ -15,6 +18,7 @@ import streamlit as st
 import auth
 import data
 import insights
+import monitoring_page
 
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
@@ -88,6 +92,12 @@ admin = require_admin()
 with st.sidebar:
     st.write(f"Signed in as **{admin['sub']}**")
     st.button("Sign out", on_click=sign_out)
+    view = st.segmented_control("View", ["Trading", "Monitoring"], default="Trading", key="view")
+    monitoring_page.alert_badge()
+
+if view == "Monitoring":
+    monitoring_page.render()
+    st.stop()
 
 try:
     frames = load()
