@@ -784,7 +784,7 @@
             }
           },
           "400": {
-            "description": "ORD-400 Insufficient funds",
+            "description": "ORD-400 Insufficient available funds (cash reserved for open orders cannot be withdrawn)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2676,11 +2676,13 @@
       "AccountResponse": {
         "required": [
           "accountNumber",
+          "availableCash",
           "cashBalance",
           "holderName",
           "id",
           "lastUpdated",
           "openedOn",
+          "reservedCash",
           "status"
         ],
         "type": "object",
@@ -2696,6 +2698,12 @@
             "type": "string"
           },
           "cashBalance": {
+            "type": "number"
+          },
+          "reservedCash": {
+            "type": "number"
+          },
+          "availableCash": {
             "type": "number"
           },
           "status": {
@@ -2950,9 +2958,11 @@
       "PositionResponse": {
         "required": [
           "accountId",
+          "availableQuantity",
           "averageCost",
           "marketValue",
           "quantity",
+          "reservedQuantity",
           "symbol"
         ],
         "type": "object",
@@ -2965,6 +2975,14 @@
             "type": "string"
           },
           "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reservedQuantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "availableQuantity": {
             "type": "integer",
             "format": "int32"
           },
@@ -3134,9 +3152,20 @@
         }
       },
       "BalanceResponse": {
+        "required": [
+          "availableCash",
+          "balance",
+          "reservedCash"
+        ],
         "type": "object",
         "properties": {
           "balance": {
+            "type": "number"
+          },
+          "reservedCash": {
+            "type": "number"
+          },
+          "availableCash": {
             "type": "number"
           }
         }
