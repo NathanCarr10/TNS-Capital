@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -40,6 +41,10 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Cash and shares are held for an order from the moment the Trade Executor
@@ -83,6 +88,9 @@ class OrderReservationIT extends AbstractIntegrationTest {
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private MockMvc mockMvc;
+
     private Long accountId;
 
     @BeforeEach
@@ -101,7 +109,7 @@ class OrderReservationIT extends AbstractIntegrationTest {
         await().atMost(10, TimeUnit.SECONDS).until(() -> broker.heldCount() == 1);
         UUID second = submit(OrderSide.BUY, 6, "100.00").getId();
 
-        await().atMost(10, TimeUnit.SECONDS).until(() -> status(second) == OrderStatus.REJECTED);
+        await().atMost(10, TimeUnit.SECONDS).until(() -> orderStatus(second) == OrderStatus.REJECTED);
         assertThat(orderRepository.findById(second).orElseThrow().getStatusReason())
                 .isEqualTo("Insufficient funds for buy order");
         assertThat(account().getCashBalance()).isEqualByComparingTo("1000.00");
@@ -110,7 +118,7 @@ class OrderReservationIT extends AbstractIntegrationTest {
 
         broker.releaseFills();
 
-        await().atMost(10, TimeUnit.SECONDS).until(() -> status(first) == OrderStatus.FILLED);
+        await().atMost(10, TimeUnit.SECONDS).until(() -> orderStatus(first) == OrderStatus.FILLED);
         assertThat(account().getCashBalance()).isEqualByComparingTo("400.00");
         assertThat(account().getReservedCash()).isEqualByComparingTo("0.00");
     }
@@ -125,16 +133,42 @@ class OrderReservationIT extends AbstractIntegrationTest {
         await().atMost(10, TimeUnit.SECONDS).until(() -> broker.heldCount() == 1);
         UUID second = submit(OrderSide.SELL, 6, "100.00").getId();
 
-        await().atMost(10, TimeUnit.SECONDS).until(() -> status(second) == OrderStatus.REJECTED);
+        await().atMost(10, TimeUnit.SECONDS).until(() -> orderStatus(second) == OrderStatus.REJECTED);
         assertThat(position().getQuantity()).isEqualTo(10);
         assertThat(position().getReservedQuantity()).isEqualTo(6);
 
         broker.releaseFills();
 
-        await().atMost(10, TimeUnit.SECONDS).until(() -> status(first) == OrderStatus.FILLED);
+        await().atMost(10, TimeUnit.SECONDS).until(() -> orderStatus(first) == OrderStatus.FILLED);
         assertThat(position().getQuantity()).isEqualTo(4);
         assertThat(position().getReservedQuantity()).isZero();
         assertThat(account().getCashBalance()).isEqualByComparingTo("1600.00");
+    }
+
+    @Test
+    @DisplayName("The API shows what open orders reserved and what is left to trade")
+    void apiShowsReservations() throws Exception {
+        positionRepository.save(new Position(accountId, "RSV", 10, new BigDecimal("50.00")));
+        broker.holdFills();
+        submit(OrderSide.BUY, 3, "100.00");
+        submit(OrderSide.SELL, 4, "100.00");
+        await().atMost(10, TimeUnit.SECONDS).until(() -> broker.heldCount() == 2);
+
+        mockMvc.perform(get("/api/v1/accounts/{accountId}", accountId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cashBalance", is(1000.0)))
+                .andExpect(jsonPath("$.reservedCash", is(300.0)))
+                .andExpect(jsonPath("$.availableCash", is(700.0)));
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/balance", accountId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.balance", is(1000.0)))
+                .andExpect(jsonPath("$.reservedCash", is(300.0)))
+                .andExpect(jsonPath("$.availableCash", is(700.0)));
+        mockMvc.perform(get("/api/v1/accounts/{accountId}/positions", accountId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].quantity", is(10)))
+                .andExpect(jsonPath("$[0].reservedQuantity", is(4)))
+                .andExpect(jsonPath("$[0].availableQuantity", is(6)));
     }
 
     @Test
@@ -169,7 +203,7 @@ class OrderReservationIT extends AbstractIntegrationTest {
         broker.releaseFills();
         // The fill for the cancelled order moves nothing
         await().during(2, TimeUnit.SECONDS).atMost(4, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertThat(status(orderId)).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(orderStatus(orderId)).isEqualTo(OrderStatus.CANCELLED);
             assertThat(account().getCashBalance()).isEqualByComparingTo("1000.00");
             assertThat(account().getReservedCash()).isEqualByComparingTo("0.00");
         });
@@ -181,7 +215,7 @@ class OrderReservationIT extends AbstractIntegrationTest {
         broker.goDown();
         UUID orderId = submit(OrderSide.BUY, 6, "100.00").getId();
 
-        await().atMost(10, TimeUnit.SECONDS).until(() -> status(orderId) == OrderStatus.REJECTED
+        await().atMost(10, TimeUnit.SECONDS).until(() -> orderStatus(orderId) == OrderStatus.REJECTED
                 && !dlqRepository.findAll().isEmpty());
         assertThat(account().getReservedCash()).isEqualByComparingTo("0.00");
         assertThat(orderRepository.findById(orderId).orElseThrow().isReserved()).isFalse();
@@ -192,11 +226,11 @@ class OrderReservationIT extends AbstractIntegrationTest {
         DeadLetterMessage dlqMessage = dlqRepository.findAll().get(0);
         assertThat(deadLetterService.replayMessage(dlqMessage.getId(), orderService)).isTrue();
 
-        assertThat(status(orderId)).isEqualTo(OrderStatus.NEW);
+        assertThat(orderStatus(orderId)).isEqualTo(OrderStatus.NEW);
         assertThat(account().getReservedCash()).isEqualByComparingTo("600.00");
 
         broker.releaseFills();
-        await().atMost(10, TimeUnit.SECONDS).until(() -> status(orderId) == OrderStatus.FILLED);
+        await().atMost(10, TimeUnit.SECONDS).until(() -> orderStatus(orderId) == OrderStatus.FILLED);
         assertThat(account().getCashBalance()).isEqualByComparingTo("400.00");
         assertThat(account().getReservedCash()).isEqualByComparingTo("0.00");
     }
@@ -250,7 +284,7 @@ class OrderReservationIT extends AbstractIntegrationTest {
                 new BigDecimal(price), UUID.randomUUID().toString()));
     }
 
-    private OrderStatus status(UUID orderId) {
+    private OrderStatus orderStatus(UUID orderId) {
         return orderRepository.findById(orderId).orElseThrow().getStatus();
     }
 
