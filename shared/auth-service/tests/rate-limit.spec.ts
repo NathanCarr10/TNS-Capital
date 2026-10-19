@@ -64,17 +64,17 @@ describe('Rate limiting', () => {
     for (let i = 0; i < LIMIT; i++) {
       await request(app.getHttpServer()).post('/auth/login').set('X-Forwarded-For', '203.0.113.1').send(WRONG_LOGIN);
     }
-    await request(app.getHttpServer())
+    const limited = await request(app.getHttpServer())
       .post('/auth/login')
       .set('X-Forwarded-For', '203.0.113.1')
-      .send(WRONG_LOGIN)
-      .expect(429);
-
-    await request(app.getHttpServer())
+      .send(WRONG_LOGIN);
+    const otherClient = await request(app.getHttpServer())
       .post('/auth/login')
       .set('X-Forwarded-For', '203.0.113.2')
-      .send(WRONG_LOGIN)
-      .expect(401);
+      .send(WRONG_LOGIN);
+
+    expect(limited.status).toBe(429);
+    expect(otherClient.status).toBe(401);
   });
 
   it('does not limit the health check', async () => {
@@ -118,5 +118,9 @@ describe('AUTH_TRUST_PROXY', () => {
 
   it.each(['', '-1', '1.5', 'loopback,,uniquelocal'])('refuses %p', (value) => {
     expect(() => validateEnv({ JWT_SECRET: secret, AUTH_TRUST_PROXY: value })).toThrow('AUTH_TRUST_PROXY');
+  });
+
+  it('refuses a value that is not text', () => {
+    expect(() => validateEnv({ JWT_SECRET: secret, AUTH_TRUST_PROXY: { hops: 1 } })).toThrow('AUTH_TRUST_PROXY');
   });
 });
