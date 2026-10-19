@@ -6,12 +6,6 @@
 # running out of memory got Jenkins and SonarQube killed. Each test run is short and light,
 # so the JVMs get small heaps and the serial collector, and stop at C1 (no C2 compiler threads).
 services:
-  zookeeper:
-    ports: !reset []
-    mem_limit: 192m
-    environment:
-      # The image's default 512 MB heap; ZooKeeper only tracks one broker here
-      KAFKA_HEAP_OPTS: -Xms64m -Xmx64m
   kafka:
     ports: !reset []
     mem_limit: 640m
