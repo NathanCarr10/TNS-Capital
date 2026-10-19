@@ -75,6 +75,13 @@ market-data:
     # A pooled price not updated for this long is refreshed over REST before use
     max-price-age: 60s
 
+newsletter:
+  # Fridays at 17:00 New York time, after the US market closes. NEWSLETTER_CRON=- switches it off
+  cron: ${NEWSLETTER_CRON:0 0 17 * * FRI}
+  zone: America/New_York
+  movers-per-side: 5
+  headlines-per-mover: 3
+
 dlq:
   auto-resolve:
     # PENDING DLQ messages are marked RESOLVED once older than after-ms. Off: a failed order
