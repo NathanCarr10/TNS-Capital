@@ -24,7 +24,8 @@ GRANT USAGE ON SCHEMA public TO tns_api, tns_auth, tns_etl, tns_reader;
 -- Trading API: reads and writes the trading tables; reads only the login name
 -- and account link of a user, never the password hash
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON accounts, instruments, orders, positions, executions, order_history, dlq_messages, trade_event_log
+    ON accounts, instruments, orders, positions, executions, order_history, dlq_messages, trade_event_log,
+       support_conversations, support_messages, support_notifications
     TO tns_api;
 GRANT SELECT (username, account_id) ON users TO tns_api;
 

@@ -10,6 +10,7 @@ import { OrderTrackerService } from '../../core/trading/order-tracker.service';
 import { IconComponent, IconName } from '../icon/icon.component';
 import { nyseStatus } from '../market-status/market-hours';
 import { SymbolSearchComponent } from '../symbol-search/symbol-search.component';
+import { SupportWidgetComponent } from '../support-widget/support-widget.component';
 
 interface NavItem {
   label: string;
@@ -20,7 +21,7 @@ interface NavItem {
 /** The signed-in area: navigation on the left, search and account on top, the page in between. */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconComponent, SymbolSearchComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconComponent, SymbolSearchComponent, SupportWidgetComponent],
   providers: [AccountStore, OrderTrackerService],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
@@ -39,6 +40,7 @@ export class ShellComponent {
     { label: 'Trade', link: '/trade', icon: 'trade' },
     { label: 'Order History', link: '/orders', icon: 'history' },
     ...(this.isSupport ? [] : [{ label: 'Settings', link: '/settings', icon: 'settings' as const }]),
+    ...(this.isSupport ? [{ label: 'Support Inbox', link: '/support', icon: 'help' as const }] : []),
   ];
 
   private readonly now = signal(new Date());
@@ -71,4 +73,5 @@ export class ShellComponent {
       void this.router.navigate(['/login']);
     });
   }
+
 }

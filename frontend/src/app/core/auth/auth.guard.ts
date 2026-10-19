@@ -37,3 +37,9 @@ export const notAdminGuard: CanActivateFn = () => {
   }
   return true;
 };
+
+/** The support inbox is only available to staff with the SUPPORT role. */
+export const supportGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  return authService.isSupport() ? true : inject(Router).createUrlTree(['/portfolio']);
+};

@@ -2,6 +2,7 @@
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { of } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
@@ -33,6 +34,7 @@ describe('ShellComponent', () => {
       imports: [ShellComponent],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
         { provide: AuthService, useValue: authServiceSpy },
         { provide: TradingService, useValue: tradingService },
       ],
@@ -84,6 +86,16 @@ describe('ShellComponent', () => {
 
     expect(element.querySelector('.user-name')?.textContent).toContain('trader1');
     expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
+  });
+
+  it('shows Support Inbox for support staff and opens the widget', () => {
+    isSupport = true;
+
+    const element = create();
+    (element.querySelector('.support-nav') as HTMLButtonElement).click();
+
+    expect(element.querySelector('.support-nav')?.textContent).toContain('Support Inbox');
+    expect(element.querySelector('.support-panel')).toBeTruthy();
   });
 
   it('shows whether the NYSE is open', () => {

@@ -16,6 +16,8 @@ const PATHS = {
   success: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6',
   error: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v4M12 16h.01',
   close: 'M18 6L6 18M6 6l12 12',
+  help: 'M9.1 9a3 3 0 1 1 5.8 1c0 2-2.9 2.2-2.9 4M12 18h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0-0-18z',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
 } as const;
 
 export type IconName = keyof typeof PATHS;
