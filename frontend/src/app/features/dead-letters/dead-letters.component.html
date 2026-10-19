@@ -1,0 +1,133 @@
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Support</p>
+    <h1>Dead letters</h1>
+    <p class="muted">
+      Orders that failed processing. Replay one to send it to the broker again, or dismiss it to close the
+      ticket; a dismissed order stays rejected.
+    </p>
+  </div>
+  <button type="button" class="btn" [disabled]="loading()" (click)="load()">Refresh</button>
+</header>
+
+<section class="card">
+  <div class="card-header">
+    <fieldset class="segmented" aria-label="Filter by status">
+      @for (option of filters; track option.value) {
+        <button
+          type="button"
+          [class.selected]="filter() === option.value"
+          [attr.aria-pressed]="filter() === option.value"
+          (click)="filter.set(option.value)"
+        >
+          {{ option.label }} <span class="num">{{ counts()[option.value] }}</span>
+        </button>
+      }
+    </fieldset>
+  </div>
+
+  @if (actionMessage()) {
+    <p class="note success" role="status">{{ actionMessage() }}</p>
+  }
+  @if (actionError()) {
+    <p class="note error" role="alert">{{ actionError() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="note">Loading dead letters...</p>
+  } @else if (loadError()) {
+    <p class="note error">{{ loadError() }}</p>
+  } @else if (visibleRows().length === 0) {
+    <p class="note">{{ filter() === 'PENDING' ? 'No tickets waiting for review.' : 'No dead letters with this status.' }}</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table dlq-table">
+        <thead>
+          <tr>
+            <th>Received</th>
+            <th>Order</th>
+            <th>Failure</th>
+            <th class="numeric">Retries</th>
+            <th>Status</th>
+            <th><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of visibleRows(); track row.id) {
+            <tr>
+              <td class="num">{{ row.createdOn | date:'MMM d, y, HH:mm:ss' }}</td>
+              <td class="num" [title]="row.originalOrderId ?? ''">{{ shortId(row.originalOrderId) }}</td>
+              <td class="failure">
+                <span class="failure-type">{{ row.failureType }}</span>
+                @if (row.failureReason) {
+                  <span class="failure-reason">{{ row.failureReason }}</span>
+                }
+                @if (row.adminNotes) {
+                  <span class="failure-notes">Notes: {{ row.adminNotes }}</span>
+                }
+              </td>
+              <td class="numeric">{{ row.retryCount ?? 0 }}</td>
+              <td>
+                <span
+                  class="badge status-badge"
+                  [class.status-filled]="row.status === 'RESOLVED'"
+                  [class.status-rejected]="row.status === 'PENDING'"
+                  [class.status-cancelled]="row.status === 'IGNORED'"
+                >
+                  {{ statusLabel(row.status) }}
+                </span>
+              </td>
+              <td class="actions">
+                @if (row.status === 'PENDING' && dismissingId() !== row.id) {
+                  <button
+                    type="button"
+                    class="btn btn-small"
+                    [disabled]="busyId() !== null"
+                    [attr.aria-label]="'Replay order ' + shortId(row.originalOrderId)"
+                    (click)="replay(row)"
+                  >
+                    {{ busyId() === row.id ? 'Replaying...' : 'Replay' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-small"
+                    [disabled]="busyId() !== null"
+                    [attr.aria-label]="'Dismiss order ' + shortId(row.originalOrderId)"
+                    (click)="openDismiss(row)"
+                  >
+                    Dismiss
+                  </button>
+                }
+              </td>
+            </tr>
+            @if (dismissingId() === row.id) {
+              <tr class="dismiss-row">
+                <td colspan="6">
+                  <form class="dismiss-form" (submit)="$event.preventDefault(); dismiss(row)">
+                    <div class="field">
+                      <label [for]="'dismiss-notes-' + row.id">Notes (optional)</label>
+                      <input
+                        class="input"
+                        [id]="'dismiss-notes-' + row.id"
+                        maxlength="500"
+                        placeholder="Why is this ticket being closed?"
+                        [value]="notes()"
+                        (input)="notes.set($any($event.target).value)"
+                      />
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-small" [disabled]="busyId() !== null">
+                      {{ busyId() === row.id ? 'Dismissing...' : 'Dismiss ticket' }}
+                    </button>
+                    <button type="button" class="btn btn-small" [disabled]="busyId() !== null" (click)="cancelDismiss()">
+                      Cancel
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
