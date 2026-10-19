@@ -4,7 +4,8 @@ The dashboard shows every user's trades, so only admins may open it. A user
 signs in through the auth service (POST /auth/login) and the dashboard then
 verifies the access token itself, the same checks the auth service's guard
 makes: HS256 signature with the shared JWT_SECRET, issuer, typ "access" and
-expiry. The token's roles claim must include ADMIN.
+expiry. The token's roles claim must include ADMIN; SUPPORT is not enough, as
+support staff work in the trading app, not here.
 """
 
 import os
@@ -19,6 +20,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 AUTH_URL = os.getenv("DASHBOARD_AUTH_URL", "http://localhost:4000")
 ISSUER = "urn:tns-capital:auth-service"
 ADMIN_ROLE = "ADMIN"
+SUPPORT_ROLE = "SUPPORT"
 TIMEOUT_SECONDS = 10
 
 
@@ -65,3 +67,7 @@ def verify(token):
 
 def is_admin(claims):
     return ADMIN_ROLE in claims.get("roles", [])
+
+
+def is_support(claims):
+    return SUPPORT_ROLE in claims.get("roles", [])
