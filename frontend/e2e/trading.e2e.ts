@@ -17,7 +17,8 @@ test.describe('Trading', () => {
     await expect(account).toContainText('$10,000.00');
 
     const ticket = await submitOrder(page, { side: 'BUY', symbol: 'AAPL', quantity: 2, price: 100 });
-    await expect(ticket.locator('.note.success')).toContainText('Tracking order');
+    // The ticket no longer shows a note (#147): its button says it is tracking the order
+    await expect(ticket.locator('button.submit')).toContainText('Tracking order');
 
     // Tracking carries on in the app, so the fill is announced on whichever page the trader is on
     await page.getByRole('link', { name: 'Order History' }).click();
@@ -73,7 +74,8 @@ test.describe('Trading', () => {
     await depositViaUi(page, 1_000);
 
     const ticket = await submitOrder(page, { side: 'BUY', symbol: 'AAPL', quantity: 1, price: 100 });
-    await expect(ticket.locator('.note.success')).toContainText('Tracking order');
+    // The ticket no longer shows a note (#147): its button says it is tracking the order
+    await expect(ticket.locator('button.submit')).toContainText('Tracking order');
 
     // Stays in the app, so the order is still being tracked when it is cancelled
     await page.getByRole('link', { name: 'Order History' }).click();
