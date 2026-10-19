@@ -250,3 +250,32 @@ def test_dlq_summary_counts_pending_and_retryable_per_failure_type():
 def test_dlq_summary_when_nothing_failed():
     empty = insights.dlq_summary(pd.DataFrame(columns=["id", "failure_type", "status", "is_retryable"]))
     assert empty.empty
+
+
+def test_strategy_vs_trader_puts_strategy_orders_next_to_the_traders_own(trades):
+    trades["strategy_name"] = [None, "MA 20/50", None, "MA 20/50", None, None]
+
+    split = insights.strategy_vs_trader(trades).set_index("placed_by")
+
+    assert (split.loc["Strategy", "orders"], split.loc["Strategy", "filled"]) == (2, 1)
+    assert split.loc["Strategy", "fill_rate"] == pytest.approx(0.5)
+    assert split.loc["Strategy", "traded_value"] == 100
+    assert (split.loc["Trader", "orders"], split.loc["Trader", "traded_value"]) == (4, 70)
+
+
+def test_strategy_trades_summarises_each_strategy(trades):
+    trades["strategy_name"] = ["Fast", "Fast", "Bands", None, None, None]
+
+    summary = insights.strategy_trades(trades)
+
+    assert summary["strategy_name"].tolist() == ["Fast", "Bands"]  # busiest first
+    fast = summary.iloc[0]
+    assert (fast.username, fast.orders, fast.filled, fast.buy_value) == ("ann", 2, 2, 150)
+    assert summary.iloc[1].sell_value == 20
+
+
+def test_without_strategy_orders_everything_is_the_traders(trades):
+    assert insights.placed_by(trades).eq("Trader").all()
+    assert insights.strategy_trades(trades).empty
+    assert insights.strategy_vs_trader(trades)["placed_by"].tolist() == ["Trader"]
+    assert insights.strategy_vs_trader(trades.iloc[0:0]).empty

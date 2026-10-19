@@ -232,6 +232,30 @@ with right:
                      column_config={"failure_type": "Failure type", "messages": "Messages",
                                     "pending": "Awaiting review", "retryable": "Retryable"})
 
+# Strategy Lab: orders the strategies placed, next to everyone's own
+st.subheader("Automated strategies")
+split = insights.strategy_vs_trader(trades)
+by_strategy = insights.strategy_trades(trades)
+if split.empty or "Strategy" not in set(split["placed_by"]):
+    st.info("No strategy has placed an order yet. Traders switch strategies on in Strategy Lab.")
+else:
+    share = split.set_index("placed_by")["orders"]
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Orders placed by strategies", f"{int(share.get('Strategy', 0)):,}")
+    col2.metric("Share of all orders", percent(share.get("Strategy", 0) / share.sum()))
+    col3.metric("Strategies that traded", f"{by_strategy['strategy_name'].nunique():,}")
+    st.dataframe(split, width="stretch", hide_index=True,
+                 column_config={"placed_by": "Placed by", "orders": "Orders", "filled": "Filled",
+                                "fill_rate": st.column_config.NumberColumn("Fill rate", format="percent"),
+                                "traded_value": st.column_config.NumberColumn("Filled value ($)", format="dollar")})
+    st.dataframe(by_strategy, width="stretch", hide_index=True,
+                 column_config={"strategy_name": "Strategy", "username": "Owner", "symbol": "Instrument",
+                                "orders": "Orders", "filled": "Filled",
+                                "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
+                                "sell_value": st.column_config.NumberColumn("Sold ($)", format="dollar"),
+                                "last_order": st.column_config.DatetimeColumn("Last order",
+                                                                              format="D MMM YYYY, HH:mm")})
+
 # What each user has traded
 st.subheader("Trading by user")
 by_user = insights.trades_by_user(trades)
