@@ -35,6 +35,7 @@ import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.services.DeadLetterService;
+import com.neueda.leap.services.ReservationService;
 import com.neueda.leap.time.FixedClock;
 
 /**
@@ -50,6 +51,7 @@ class KafkaRecoveryTest {
     @SuppressWarnings("unchecked")
     private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ReservationService reservations = mock(ReservationService.class);
 
     private KafkaConfig config;
     private Order order;
@@ -58,7 +60,8 @@ class KafkaRecoveryTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        config = new KafkaConfig(orderRepository, deadLetterService, tradeEventPublisher, objectMapper, kafkaTemplate);
+        config = new KafkaConfig(orderRepository, deadLetterService, tradeEventPublisher, objectMapper, kafkaTemplate,
+                reservations);
 
         order = new Order(7L, "AAPL", OrderSide.BUY, 10, new BigDecimal("150.00"), "key-1",
                 new FixedClock(Instant.parse("2026-10-16T10:00:00Z")));
@@ -72,15 +75,29 @@ class KafkaRecoveryTest {
     }
 
     @Test
-    @DisplayName("A NEW order is stored REJECTED, its event published and the message captured in the DLQ")
+    @DisplayName("A NEW order is stored REJECTED, releasing its reservation, its event published and the message captured in the DLQ")
     void rejectsNewOrder() {
+        Order rejected = new Order(order, new FixedClock(Instant.parse("2026-10-16T10:00:00Z")));
+        rejected.setStatus(OrderStatus.REJECTED);
+        when(reservations.rejectIfNew(order.getId(), "timeout")).thenReturn(Optional.of(rejected));
+
         config.handleRecovery(failedRecord, failure);
 
-        assertEquals(OrderStatus.REJECTED, order.getStatus());
-        verify(orderRepository).save(order);
-        verify(tradeEventPublisher).publish(order, OrderStatus.NEW, "EXHAUSTED_RETRIES");
+        verify(reservations).rejectIfNew(order.getId(), "timeout");
+        verify(tradeEventPublisher).publish(rejected, OrderStatus.NEW, "EXHAUSTED_RETRIES");
         verify(deadLetterService).captureFailedMessage(any(), eq(failure), anyInt(), anyBoolean());
         verify(kafkaTemplate).send(eq(KafkaConfig.ORDERS_DLQ_TOPIC), eq("7"), anyString());
+    }
+
+    @Test
+    @DisplayName("A NEW order rejected meanwhile by someone else gets no second REJECTED event")
+    void skipsOrderRejectedMeanwhile() {
+        when(reservations.rejectIfNew(order.getId(), "timeout")).thenReturn(Optional.empty());
+
+        config.handleRecovery(failedRecord, failure);
+
+        verifyNoInteractions(tradeEventPublisher);
+        verify(deadLetterService).captureFailedMessage(any(), eq(failure), anyInt(), anyBoolean());
     }
 
     @ParameterizedTest(name = "{0}")
