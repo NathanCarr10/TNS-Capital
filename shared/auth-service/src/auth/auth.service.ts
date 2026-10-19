@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { ApiException } from '../common/api.exception';
+import { metrics } from '../common/metrics';
 import { hashPassword, verifyPassword } from '../users/password-hasher';
 import { RefreshTokensService } from '../users/refresh-tokens.service';
 import {
@@ -79,9 +80,11 @@ export class AuthService {
     // password or tokens; the username is quoted so a crafted one cannot forge log lines.
     if (!user) {
       this.logger.warn(`Login failed: username=${JSON.stringify(username)} ip=${clientIp}`);
+      metrics.loginFailed();
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
     this.logger.log(`Login succeeded: username=${JSON.stringify(user.username)} id=${user.id} ip=${clientIp}`);
+    metrics.loginSucceeded();
 
     const refreshToken = this.tokens.generateRefreshToken();
     await this.refreshTokens.create(user.id, refreshToken.hash, randomUUID(), REFRESH_TOKEN_TTL_SECONDS);
@@ -105,6 +108,7 @@ export class AuthService {
     );
     if (result.status === 'reused') {
       this.logger.warn(`Refresh token reuse detected for user id=${result.userId}; session revoked`);
+      metrics.refreshTokenReused();
     }
     if (result.status !== 'rotated') {
       throw invalidRefreshToken();

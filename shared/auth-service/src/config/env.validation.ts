@@ -36,6 +36,10 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   if (rateLimit !== undefined && !(Number.isInteger(Number(rateLimit)) && Number(rateLimit) > 0)) {
     throw new Error('AUTH_RATE_LIMIT must be a positive whole number.');
   }
+  const metricsPort = config.METRICS_PORT;
+  if (metricsPort !== undefined && metricsPort !== '' && !(Number.isInteger(Number(metricsPort)) && Number(metricsPort) > 0)) {
+    throw new Error('METRICS_PORT must be a port number.');
+  }
   const trustProxy = config.AUTH_TRUST_PROXY;
   if (trustProxy !== undefined) {
     if (typeof trustProxy !== 'string') {
