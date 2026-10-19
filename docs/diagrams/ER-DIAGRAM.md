@@ -12,6 +12,10 @@ erDiagram
     ORDERS ||--o| EXECUTIONS : "filled by"
     ACCOUNTS |o--o| USERS : "owned by"
     USERS ||--o{ REFRESH_TOKENS : "signed in with"
+    ACCOUNTS ||--o{ STRATEGIES : "runs"
+    INSTRUMENTS ||--o{ STRATEGIES : "traded by"
+    STRATEGIES ||--o{ STRATEGY_SIGNALS : "fired"
+    STRATEGY_SIGNALS |o--o| ORDERS : "placed"
 
     ACCOUNTS {
         BIGINT id PK "generated identity"
@@ -122,6 +126,35 @@ erDiagram
         TIMESTAMP expires_at
         TIMESTAMP used_at "NULL until spent"
         TIMESTAMP created_at
+    }
+
+    STRATEGIES {
+        BIGINT id PK
+        BIGINT account_id FK
+        VARCHAR name
+        VARCHAR symbol FK
+        VARCHAR rule_type "MA_CROSSOVER, BOLLINGER"
+        JSONB rule_params
+        INT quantity
+        VARCHAR status "ACTIVE, PAUSED, ARCHIVED"
+        VARCHAR position "FLAT, LONG"
+        TIMESTAMP created_on
+        TIMESTAMP updated_on
+        INT version
+    }
+
+    STRATEGY_SIGNALS {
+        BIGINT id PK
+        BIGINT strategy_id FK
+        VARCHAR side "BUY, SELL"
+        NUMERIC price
+        TIMESTAMP bar_time
+        VARCHAR source "LIVE, REPLAY"
+        VARCHAR replay_id
+        UUID order_id "no FK: the order lives in the trading API's tables"
+        VARCHAR outcome "PLACED, FAILED"
+        VARCHAR detail
+        TIMESTAMP created_on
     }
 ```
 
