@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../src/users/password-hasher';
 import { RefreshTokensService } from '../src/users/refresh-tokens.service';
-import { accountNumberFor, AdminNameTakenError, UsernameTakenError, UsersService } from '../src/users/users.service';
+import { accountNumberFor, StaffNameTakenError, UsernameTakenError, UsersService } from '../src/users/users.service';
 
 const describeWithDb = process.env.DB_HOST ? describe : describe.skip;
 
@@ -129,14 +129,14 @@ describeWithDb('UsersService.findByUsername', () => {
 
 });
 
-describeWithDb('UsersService.saveAdmin', () => {
-  it('creates an ADMIN with no trading account, then sets a new password on it', async () => {
-    const username = uniqueName('admintest');
+describeWithDb('UsersService.saveStaff', () => {
+  it.each(['ADMIN', 'SUPPORT'] as const)('creates a %s with no trading account, then sets a new password on it', async (role) => {
+    const username = uniqueName(`${role.toLowerCase()}test`);
 
-    await service.saveAdmin(username, passwordHash);
-    expect(await service.findByUsername(username)).toMatchObject({ username, roles: ['ADMIN'], accountId: null, passwordHash });
+    await service.saveStaff(username, passwordHash, role);
+    expect(await service.findByUsername(username)).toMatchObject({ username, roles: [role], accountId: null, passwordHash });
 
-    await service.saveAdmin(username, 'new-hash');
+    await service.saveStaff(username, 'new-hash', role);
     expect((await service.findByUsername(username))?.passwordHash).toBe('new-hash');
   });
 
@@ -144,8 +144,16 @@ describeWithDb('UsersService.saveAdmin', () => {
     const username = uniqueName('notadmin');
     await service.create(username, passwordHash);
 
-    await expect(service.saveAdmin(username, 'new-hash')).rejects.toThrow(AdminNameTakenError);
+    await expect(service.saveStaff(username, 'new-hash', 'ADMIN')).rejects.toThrow(StaffNameTakenError);
     expect(await service.findByUsername(username)).toMatchObject({ roles: ['USER'], passwordHash });
+  });
+
+  it('never turns the support account into the admin one', async () => {
+    const username = uniqueName('supportonly');
+    await service.saveStaff(username, passwordHash, 'SUPPORT');
+
+    await expect(service.saveStaff(username, 'new-hash', 'ADMIN')).rejects.toThrow('already the SUPPORT account');
+    expect(await service.findByUsername(username)).toMatchObject({ roles: ['SUPPORT'], passwordHash });
   });
 });
 

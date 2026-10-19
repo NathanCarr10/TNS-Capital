@@ -10,14 +10,14 @@ import { TradingService } from './trading.service';
 
 describe('AccountStore', () => {
   let tradingService: jasmine.SpyObj<TradingService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
 
   const createStore = (): AccountStore => {
     TestBed.configureTestingModule({
       providers: [
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     return TestBed.inject(AccountStore);
@@ -25,7 +25,7 @@ describe('AccountStore', () => {
 
   beforeEach(() => {
     tradingService = tradingServiceStub();
-    isAdmin = false;
+    isSupport = false;
   });
 
   it("loads the trader's account, open positions and instruments", () => {
@@ -78,12 +78,12 @@ describe('AccountStore', () => {
     expect(tradingService.getAccountPositions).toHaveBeenCalledTimes(2);
   });
 
-  describe('for an admin', () => {
+  describe('for support', () => {
     const other = { ...ACCOUNT, id: 12, accountNumber: 'ACC-U000012', holderName: 'Trader Two' };
 
     beforeEach(() => {
-      isAdmin = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+      isSupport = true;
+      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
     });
 
     it('lists every account by number and shows the first one', () => {
@@ -91,7 +91,7 @@ describe('AccountStore', () => {
 
       const store = createStore();
 
-      expect(store.adminAccounts().map((account) => account.id)).toEqual([11, 12]);
+      expect(store.supportAccounts().map((account) => account.id)).toEqual([11, 12]);
       expect(store.account()?.id).toBe(ACCOUNT.id);
       expect(tradingService.getAccountPositions).toHaveBeenCalledWith(ACCOUNT.id);
     });

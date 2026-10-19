@@ -41,7 +41,7 @@ export class AuthController {
    *
    * Access token claims: exactly sub, roles, typ, jti, iss, iat, exp
    * - sub: username; the trading API looks up the user's account by it
-   * - roles: ["USER"] or ["ADMIN"], from users.role
+   * - roles: ["USER"], ["SUPPORT"] or ["ADMIN"], from users.role
    * - typ: "access"
    * - jti: a random UUID
    * - iss: urn:tns-capital:auth-service

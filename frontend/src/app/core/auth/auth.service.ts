@@ -114,10 +114,19 @@ export class AuthService {
     return claims.exp > nowInSeconds;
   }
 
-  /** True when the stored access token carries the ADMIN role. */
+  /** True when the stored access token carries the ADMIN role: the analytics dashboard's users. */
   isAdmin(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  /** True when the stored access token carries the SUPPORT role: staff who look after traders' accounts here. */
+  isSupport(): boolean {
+    return this.hasRole('SUPPORT');
+  }
+
+  private hasRole(role: AccessTokenClaims.RolesEnum): boolean {
     const token = this.tokenStorage.accessToken;
-    return token ? (this.decodeClaims(token).roles ?? []).includes('ADMIN') : false;
+    return token ? (this.decodeClaims(token).roles ?? []).includes(role) : false;
   }
 
   private clearSession(): void {
