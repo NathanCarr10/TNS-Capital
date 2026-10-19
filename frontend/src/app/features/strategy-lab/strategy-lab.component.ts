@@ -4,7 +4,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { startWith } from 'rxjs/operators';
 
-import { BacktestRequest, BacktestResult, CreateStrategyRequest, StrategyResponse } from '../../api/strategy';
+import { BacktestRequest, BacktestResult, CreateStrategyRequest, PerformanceResponse, StrategyResponse } from '../../api/strategy';
 import { ToastService } from '../../core/notifications/toast.service';
 import { RuleType, StrategyLabService } from '../../core/strategy/strategy-lab.service';
 import { AccountStore } from '../../core/trading/account.store';
@@ -88,9 +88,22 @@ export class StrategyLabComponent {
   readonly selectedId = signal<number | null>(null);
   readonly selected = computed(() => this.strategies().find((strategy) => strategy.id === this.selectedId()) ?? null);
   readonly busyId = signal<number | null>(null);
+  /** The strategies' trading against the trader's own; admins have no account */
+  readonly performance = signal<PerformanceResponse | null>(null);
 
   constructor() {
     this.loadStrategies();
+    this.loadPerformance();
+  }
+
+  loadPerformance(): void {
+    if (this.isAdmin) {
+      return;
+    }
+    this.strategyLab.performance().subscribe({
+      next: (performance) => this.performance.set(performance),
+      error: () => this.performance.set(null),
+    });
   }
 
   loadStrategies(): void {

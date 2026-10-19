@@ -6,6 +6,7 @@ import {
   BacktestRequest,
   BacktestResult,
   CreateStrategyRequest,
+  PerformanceResponse,
   SignalResponse,
   StatusChangeRequest,
   StrategiesService,
@@ -49,6 +50,11 @@ export class StrategyLabService {
   /** Signals of the caller's strategies since the given time, newest first. */
   activity(since: Date): Observable<SignalResponse[]> {
     return this.strategiesApi.listStrategyActivity(since.toISOString());
+  }
+
+  /** The caller's strategy trading compared with their own */
+  performance(): Observable<PerformanceResponse> {
+    return this.strategiesApi.getStrategyPerformance();
   }
 
   backtest(request: BacktestRequest): Observable<BacktestResult> {

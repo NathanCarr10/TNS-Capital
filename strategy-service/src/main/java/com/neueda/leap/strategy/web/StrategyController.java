@@ -1,6 +1,7 @@
 package com.neueda.leap.strategy.web;
 
 import com.neueda.leap.strategy.backtest.BacktestResult;
+import com.neueda.leap.strategy.performance.PerformanceResponse;
 import com.neueda.leap.strategy.service.CallerResolver;
 import com.neueda.leap.strategy.service.StrategyService;
 import com.neueda.leap.strategy.web.dto.BacktestRequest;
@@ -73,11 +74,11 @@ public class StrategyController {
         return service.get(callers.resolve(caller), id);
     }
 
-    @Operation(summary = "Switch a strategy on or off", description = "ACTIVE: it trades on each 1-minute bar of its symbol. PAUSED: it stops. Only one strategy per account can be on at a time (strategy.max-active-per-account).")
+    @Operation(summary = "Switch a strategy on or off", description = "ACTIVE: it trades on each 1-minute bar of its symbol. PAUSED: it stops. Up to strategy.max-active-per-account (default 3) strategies per account can be on at a time.")
     @ApiResponse(responseCode = "200", description = "OK")
     @ApiResponse(responseCode = "403", description = "AUTH-403 Not on the caller's account (admins cannot change strategies)")
     @ApiResponse(responseCode = "404", description = "STR-404 Strategy not found")
-    @ApiResponse(responseCode = "409", description = "STR-409 Another strategy is on, or the strategy is deleted")
+    @ApiResponse(responseCode = "409", description = "STR-409 The account already has its maximum of strategies on, or the strategy is deleted")
     @ApiResponse(responseCode = "422", description = "VAL-422 Invalid input")
     @PutMapping("/{id}/status")
     public StrategyResponse changeStrategyStatus(@PathVariable Long id,
@@ -111,6 +112,15 @@ public class StrategyController {
     public List<SignalResponse> listStrategyActivity(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant since, Authentication caller) {
         return service.activity(callers.resolve(caller), since);
+    }
+
+    @Operation(summary = "Strategy trading compared with the trader's own", description = "From the account's filled orders: those its strategies placed, and the rest. Each side at average cost: trades, bought, sold, realized P&L and the cost of shares still held. Traders get their own account; admins pass accountId.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Not the caller's account, or an admin without accountId")
+    @GetMapping("/performance")
+    public PerformanceResponse getStrategyPerformance(@RequestParam(required = false) Long accountId,
+            Authentication caller) {
+        return service.performance(callers.resolve(caller), accountId);
     }
 
     @Operation(summary = "Backtest a rule", description = "Runs the rule over the symbol's daily closes (analytics.fact_daily_prices, default the last five years): long only, all its cash in whole shares on BUY, all sold on SELL, at the day's close, no fees. Compared with buying on the first day and holding.")

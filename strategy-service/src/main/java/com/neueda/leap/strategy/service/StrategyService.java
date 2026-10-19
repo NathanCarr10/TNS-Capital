@@ -17,6 +17,9 @@ import com.neueda.leap.strategy.errors.PriceHistoryNotFoundException;
 import com.neueda.leap.strategy.errors.StrategyNotFoundException;
 import com.neueda.leap.strategy.errors.StrategyStateException;
 import com.neueda.leap.strategy.marketdata.BarSeriesStore;
+import com.neueda.leap.strategy.performance.PerformanceCalculator;
+import com.neueda.leap.strategy.performance.PerformanceResponse;
+import com.neueda.leap.strategy.domain.SignalOutcome;
 import com.neueda.leap.strategy.prices.DailyPriceRepository;
 import com.neueda.leap.strategy.rules.RuleFactory;
 import com.neueda.leap.strategy.rules.TradingRule;
@@ -64,6 +67,7 @@ public class StrategyService {
     private final BarSeriesStore bars;
     private final StrategyProperties properties;
     private final Clock clock;
+    private final PerformanceCalculator performance = new PerformanceCalculator();
 
     public StrategyService(StrategyRepository strategies, StrategySignalRepository signals, PlatformLookup platform,
             DailyPriceRepository prices, Backtester backtester, BarSeriesStore bars, StrategyProperties properties,
@@ -171,6 +175,25 @@ public class StrategyService {
         Map<Long, Strategy> byId = mine.stream().collect(Collectors.toMap(Strategy::getId, Function.identity()));
         return withOrderStatus(
                 signals.findTop100ByStrategyIdInAndCreatedOnAfterOrderByCreatedOnDesc(byId.keySet(), since), byId);
+    }
+
+    /**
+     * The account's strategy trading against the trader's own, from its filled
+     * orders. Traders get their own account; admins name one.
+     */
+    public PerformanceResponse performance(Caller caller, Long requestedAccountId) {
+        Long accountId = caller.admin()
+                ? Optional.ofNullable(requestedAccountId)
+                        .orElseThrow(() -> new NotOwnerException("Admins choose an account with accountId"))
+                : caller.accountId().orElseThrow(() -> new NotOwnerException("Only a trader with an account has performance"));
+        if (!caller.admin() && requestedAccountId != null && !requestedAccountId.equals(accountId)) {
+            throw new NotOwnerException("Account " + requestedAccountId + " is not yours");
+        }
+        List<Long> strategyIds = strategies.findByAccountId(accountId).stream().map(Strategy::getId).toList();
+        java.util.Set<UUID> strategyOrders = signals.findByStrategyIdInAndOutcome(strategyIds, SignalOutcome.PLACED)
+                .stream().map(StrategySignal::getOrderId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return performance.compare(accountId, platform.filledOrders(accountId), strategyOrders);
     }
 
     /**

@@ -137,6 +137,8 @@ class StrategyServiceIT {
         registry.add("strategy.client-secret", () -> "client-secret");
         // The stand-in API stores no orders, so they never settle: do not wait long for them
         registry.add("strategy.order-settlement.timeout", () -> "300ms");
+        // The MVP's limit, so the test can reach it with two strategies
+        registry.add("strategy.max-active-per-account", () -> "1");
     }
 
     @AfterAll
@@ -392,6 +394,12 @@ class StrategyServiceIT {
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/v1/strategies").header("Authorization", trader))
                 .andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(get("/api/v1/strategies/performance").header("Authorization", trader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountId").value(traderAccount))
+                .andExpect(jsonPath("$.strategies.trades").value(0));
+        mockMvc.perform(get("/api/v1/strategies/performance").header("Authorization", token("admin", "ADMIN")))
+                .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/strategies/{id}", 999).header("Authorization", trader))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("STR-404"));

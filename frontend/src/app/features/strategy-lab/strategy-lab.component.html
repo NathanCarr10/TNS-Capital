@@ -209,6 +209,47 @@
   }
 </section>
 
+@if (performance(); as books) {
+  <section class="card" aria-labelledby="performance-title">
+    <div class="card-header">
+      <div>
+        <p class="eyebrow">Filled orders</p>
+        <h2 id="performance-title" class="card-title">Strategies against your own trading</h2>
+      </div>
+      <button type="button" class="btn btn-small" (click)="loadPerformance()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="numeric">Trades</th>
+            <th class="numeric">Bought</th>
+            <th class="numeric">Sold</th>
+            <th class="numeric">Realized P&amp;L</th>
+            <th class="numeric">Still held, at cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of [{ label: 'Strategies', book: books.strategies }, { label: 'You', book: books.manual }]; track row.label) {
+            <tr>
+              <th scope="row">{{ row.label }}</th>
+              <td class="numeric num">{{ row.book?.trades ?? 0 }}</td>
+              <td class="numeric num">{{ row.book?.bought | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td class="numeric num">{{ row.book?.sold | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td class="numeric num" [class.pnl-up]="(row.book?.realizedPnl ?? 0) > 0" [class.pnl-down]="(row.book?.realizedPnl ?? 0) < 0">
+                {{ row.book?.realizedPnl | currency:'USD':'symbol':'1.2-2' }}
+              </td>
+              <td class="numeric num">{{ row.book?.openCost | currency:'USD':'symbol':'1.2-2' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="footnote muted">Each side at average cost: profit is realized when shares are sold.</p>
+  </section>
+}
+
 <div class="lab-grid">
   @if (selected(); as strategy) {
     <app-strategy-detail [strategy]="strategy" (changed)="replace($event)" />

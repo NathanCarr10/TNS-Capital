@@ -81,7 +81,15 @@ describe('StrategyLabComponent', () => {
       'currentReplay',
       'startReplay',
       'stopReplay',
+      'performance',
     ]);
+    strategyLab.performance.and.returnValue(
+      of({
+        accountId: 11,
+        strategies: { trades: 4, bought: 2000, sold: 2100, realizedPnl: 100, openCost: 0 },
+        manual: { trades: 1, bought: 500, sold: 0, realizedPnl: 0, openCost: 500 },
+      })
+    );
     strategyLab.list.and.returnValue(of([STRATEGY]));
     strategyLab.get.and.returnValue(of(STRATEGY));
     strategyLab.signals.and.returnValue(of([]));
@@ -204,10 +212,20 @@ describe('StrategyLabComponent', () => {
     expect(button(element, 'Save strategy')).toBeUndefined();
     expect(button(element, 'Switch on')).toBeUndefined();
     expect(element.textContent).toContain('All accounts');
+    expect(strategyLab.performance).not.toHaveBeenCalled();
     fixture.componentInstance.toggle(STRATEGY);
     fixture.componentInstance.save();
     expect(strategyLab.setStatus).not.toHaveBeenCalled();
     expect(strategyLab.create).not.toHaveBeenCalled();
+  });
+
+  it("compares the strategies' trading with the trader's own", () => {
+    const element = create();
+
+    const rows = Array.from(element.querySelectorAll('[aria-labelledby=performance-title] tbody tr')).map((r) => r.textContent);
+    expect(rows[0]).toContain('Strategies');
+    expect(rows[0]).toContain('$100.00');
+    expect(rows[1]).toContain('$500.00');
   });
 
   it('says when strategies cannot be loaded', () => {

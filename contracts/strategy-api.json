@@ -29,7 +29,7 @@
           "strategies"
         ],
         "summary": "Switch a strategy on or off",
-        "description": "ACTIVE: it trades on each 1-minute bar of its symbol. PAUSED: it stops. Only one strategy per account can be on at a time (strategy.max-active-per-account).",
+        "description": "ACTIVE: it trades on each 1-minute bar of its symbol. PAUSED: it stops. Up to strategy.max-active-per-account (default 3) strategies per account can be on at a time.",
         "operationId": "changeStrategyStatus",
         "parameters": [
           {
@@ -94,7 +94,7 @@
             }
           },
           "409": {
-            "description": "STR-409 Another strategy is on, or the strategy is deleted",
+            "description": "STR-409 The account already has its maximum of strategies on, or the strategy is deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -556,6 +556,69 @@
         }
       }
     },
+    "/api/v1/strategies/performance": {
+      "get": {
+        "tags": [
+          "strategies"
+        ],
+        "summary": "Strategy trading compared with the trader's own",
+        "description": "From the account's filled orders: those its strategies placed, and the rest. Each side at average cost: trades, bought, sold, realized P&L and the cost of shares still held. Traders get their own account; admins pass accountId.",
+        "operationId": "getStrategyPerformance",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AUTH-403 Not the caller's account, or an admin without accountId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/strategies/activity": {
       "get": {
         "tags": [
@@ -989,6 +1052,42 @@
           "createdOn": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "BookPerformance": {
+        "type": "object",
+        "properties": {
+          "trades": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bought": {
+            "type": "number"
+          },
+          "sold": {
+            "type": "number"
+          },
+          "realizedPnl": {
+            "type": "number"
+          },
+          "openCost": {
+            "type": "number"
+          }
+        }
+      },
+      "PerformanceResponse": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "strategies": {
+            "$ref": "#/components/schemas/BookPerformance"
+          },
+          "manual": {
+            "$ref": "#/components/schemas/BookPerformance"
           }
         }
       },

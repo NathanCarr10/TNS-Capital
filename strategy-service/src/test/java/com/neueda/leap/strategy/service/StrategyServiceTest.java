@@ -229,4 +229,24 @@ class StrategyServiceTest {
         assertThrows(PriceHistoryNotFoundException.class, () -> service.backtest(request));
         assertThrows(PriceHistoryNotFoundException.class, () -> service.backtest(backwards));
     }
+
+    @Test
+    @DisplayName("Compares the strategies' filled orders with the trader's own, for their account or one an admin names")
+    void comparesPerformance() {
+        UUID strategyOrder = UUID.randomUUID();
+        StrategySignal placed = new StrategySignal(1L, "BUY", BigDecimal.TEN, NOW, SignalSource.LIVE, null);
+        placed.placed(strategyOrder);
+        when(strategies.findByAccountId(7L)).thenReturn(List.of(owned));
+        when(signals.findByStrategyIdInAndOutcome(List.of(1L), com.neueda.leap.strategy.domain.SignalOutcome.PLACED))
+                .thenReturn(List.of(placed));
+        when(platform.filledOrders(7L)).thenReturn(List.of(
+                new PlatformLookup.FilledOrder(strategyOrder, "SPY", "BUY", 2, BigDecimal.TEN, NOW),
+                new PlatformLookup.FilledOrder(UUID.randomUUID(), "SPY", "BUY", 1, BigDecimal.ONE, NOW)));
+
+        assertEquals(1, service.performance(TRADER, null).strategies().trades());
+        assertEquals(1, service.performance(ADMIN, 7L).manual().trades());
+        assertThrows(NotOwnerException.class, () -> service.performance(ADMIN, null));
+        assertThrows(NotOwnerException.class, () -> service.performance(TRADER, 8L));
+        assertThrows(NotOwnerException.class, () -> service.performance(new Caller("new", false, Optional.empty()), null));
+    }
 }

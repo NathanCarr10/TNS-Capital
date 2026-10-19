@@ -172,7 +172,7 @@ services:
       TRADING_API_URL: http://app:3000
       AUTH_URL: http://auth-service:4000
       STRATEGY_CLIENT_SECRET: ${STRATEGY_CLIENT_SECRET:-}
-      STRATEGY_MAX_ACTIVE_PER_ACCOUNT: ${STRATEGY_MAX_ACTIVE_PER_ACCOUNT:-1}
+      STRATEGY_MAX_ACTIVE_PER_ACCOUNT: ${STRATEGY_MAX_ACTIVE_PER_ACCOUNT:-3}
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
     # Localhost only: browsers reach it through the frontend's /api/v1/strategies proxy
