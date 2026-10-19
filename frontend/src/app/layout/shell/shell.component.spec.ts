@@ -49,13 +49,14 @@ describe('ShellComponent', () => {
   const navLinks = (element: HTMLElement): (string | null | undefined)[][] =>
     Array.from(element.querySelectorAll('nav a')).map((link) => [link.textContent?.trim(), link.getAttribute('href')]);
 
-  it('links to Portfolio, Trade, Order History and Settings', () => {
+  it('links to Portfolio, Trade, Order History, Newsletter and Settings', () => {
     const element = create();
 
     expect(navLinks(element)).toEqual([
       ['Portfolio', '/portfolio'],
       ['Trade', '/trade'],
       ['Order History', '/orders'],
+      ['Newsletter', '/newsletter'],
       ['Settings', '/settings'],
     ]);
   });

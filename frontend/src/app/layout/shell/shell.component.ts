@@ -38,6 +38,7 @@ export class ShellComponent {
     { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
     { label: 'Trade', link: '/trade', icon: 'trade' },
     { label: 'Order History', link: '/orders', icon: 'history' },
+    { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
     ...(this.isAdmin ? [] : [{ label: 'Settings', link: '/settings', icon: 'settings' as const }]),
   ];
 
