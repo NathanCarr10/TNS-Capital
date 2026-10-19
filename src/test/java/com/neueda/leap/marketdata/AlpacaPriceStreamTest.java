@@ -103,5 +103,20 @@ class AlpacaPriceStreamTest {
 
         verify(prices, never()).update(any());
         assertTrue(sent.isEmpty());
+        assertEquals(0, stream.tradesReceived());
+    }
+
+    @Test
+    @DisplayName("Reports its state and the trades received, for the metrics")
+    void reportsStateForMetrics() {
+        assertEquals(AlpacaPriceStream.State.OFF, stream.state());
+
+        stream.handleMessage("[{\"T\":\"subscription\",\"trades\":[\"AAPL\"]}]", sent::add);
+        stream.handleMessage("[{\"T\":\"t\",\"S\":\"AAPL\",\"p\":227.31,\"t\":\"2026-10-12T14:30:01Z\"}]", sent::add);
+        assertEquals(AlpacaPriceStream.State.STREAMING, stream.state());
+        assertEquals(1, stream.tradesReceived());
+
+        stream.handleMessage("[{\"T\":\"error\",\"code\":402,\"msg\":\"auth failed\"}]", sent::add);
+        assertEquals(AlpacaPriceStream.State.FAILED, stream.state());
     }
 }
