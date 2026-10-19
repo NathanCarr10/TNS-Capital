@@ -1,11 +1,16 @@
 # Monitoring stack
 
 Metrics, alerts and logs for every service, shown to admins in the analytics dashboard's
-**Monitoring** view (`/analytics/`, sidebar → Monitoring). It is off by default:
+**Monitoring** view (`/analytics/`, sidebar → Monitoring). The services are in the Compose profile
+`observability`. `.env.example` turns it on (`COMPOSE_PROFILES=observability`), so a plain
+`docker compose up -d` starts them with the rest of the stack and `docker compose down` stops them.
+Remove that line from `.env` to leave them out, and start them on request with:
 
 ```bash
 docker compose --profile observability up -d
 ```
+
+The end-to-end tests use their own env file without it, so the CI stack stays as small as before.
 
 It is built to fit next to the rest of the stack on a small machine: about 90 MB measured,
 at most 400 MB by its memory limits. Grafana, Prometheus, Loki and a tracing backend would
@@ -13,7 +18,7 @@ need 0.8–1.5 GB (decision 16 in [docs/DECISIONS.md](../docs/DECISIONS.md)).
 
 | Service | Image | Memory (limit) | Does |
 |---|---|---|---|
-| `victoriametrics` | `victoriametrics/victoria-metrics:v1.153.0` | ~40 MB (160 MB) | Scrapes the three services every 15 s, keeps 15 days, answers PromQL |
+| `victoriametrics` | `victoriametrics/victoria-metrics:v1.153.0` | ~40 MB (160 MB) | Scrapes the three services every 10 s, keeps 15 days, answers PromQL; samples show 5 s after the scrape |
 | `vmalert` | `victoriametrics/vmalert:v1.153.0` | ~20 MB (64 MB) | Evaluates [vmalert/alerts.yml](vmalert/alerts.yml) every 30 s |
 | `victorialogs` | `victoriametrics/victoria-logs:v1.53.0` | ~20 MB (128 MB) | Stores every container's logs for 7 days (at most 2 GiB), answers LogsQL |
 | `fluent-bit` | `fluent/fluent-bit:5.1.3` | ~10 MB (48 MB) | Ships the containers' log lines to VictoriaLogs |

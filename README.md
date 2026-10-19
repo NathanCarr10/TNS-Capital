@@ -145,6 +145,7 @@ TNS-Capital/
 ├── dashboard/                       Streamlit analytics dashboard (has its own README)
 ├── bruno/                           Bruno API collection for manual testing
 ├── contracts/                       OpenAPI contracts for the auth and trading APIs
+├── observability/                   Monitoring stack config: scrape targets, alert rules, log shipping
 ├── ci/                              Test scripts Jenkins runs (Python suites, e2e stack)
 ├── docs/                            Business logic, security guide, SonarQube, diagrams
 ├── docker-compose.yml               Full local stack
@@ -396,7 +397,13 @@ Elastic Common Schema), so tools such as Elasticsearch or CloudWatch can filter 
 logger or message. Read them with `docker compose logs app`, or pretty-print with
 `docker compose logs --no-log-prefix app | jq`. Set `LOG_FORMAT=logstash` (or `gelf`) in
 `.env` for another format. Running the API with `mvn spring-boot:run` keeps the usual
-plain-text lines.
+plain-text lines. The auth service logs JSON lines in Docker too (`AUTH_LOG_FORMAT`, default `json`).
+
+### Monitoring (optional)
+
+A small monitoring stack (~90 MB) of metrics, alerts and every service's logs starts with the
+rest of the stack, through `COMPOSE_PROFILES=observability` in `.env` (from `.env.example`). Admins see it in the analytics dashboard's
+**Monitoring** view. See [observability/README.md](observability/README.md).
 
 ### Bruno collection
 
@@ -541,6 +548,7 @@ for the quality gate.
 | [contracts/trading-api.json](contracts/trading-api.json) | OpenAPI contract for the trading API, kept in step with the code by `ApiContractIT` (docs/DECISIONS.md #9) |
 | [etl/README.md](etl/README.md) | ETL pipeline, settings and the analytics schema |
 | [dashboard/README.md](dashboard/README.md) | Dashboard insights, data sources and how to run it |
+| [observability/README.md](observability/README.md) | Monitoring stack: metrics, alert rules, log collection |
 
 ---
 
