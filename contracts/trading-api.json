@@ -703,7 +703,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Replay a dead-letter message",
-        "description": "Admins only. Sends the order through the Trade Executor again.",
+        "description": "Admins and support. Sends the order through the Trade Executor again.",
         "operationId": "replayMessage",
         "parameters": [
           {
@@ -738,7 +738,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2509,7 +2509,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Dead-letter queue statistics",
-        "description": "Admins only.",
+        "description": "Admins and support.",
         "operationId": "getDLQStatistics",
         "responses": {
           "200": {
@@ -2533,7 +2533,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2554,7 +2554,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "List dead-letter messages",
-        "description": "Admins only. Filter by status and failure type.",
+        "description": "Admins and support. Filter by status and failure type.",
         "operationId": "getDLQMessages",
         "parameters": [
           {
@@ -2602,7 +2602,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2640,7 +2640,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Get a dead-letter message",
-        "description": "Admins only.",
+        "description": "Admins and support.",
         "operationId": "getDLQMessage",
         "parameters": [
           {
@@ -2675,7 +2675,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2714,7 +2714,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Dismiss a dead-letter message",
-        "description": "Admins only. The order stays REJECTED.",
+        "description": "Admins and support. The order stays REJECTED.",
         "operationId": "dismissMessage",
         "parameters": [
           {
@@ -2750,7 +2750,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {

@@ -84,7 +84,7 @@ schema has no rejection reasons or execution times:
   stuck, since the executor normally settles an order within seconds; that usually means
   the Kafka consumer or the broker simulator is down. The dead-letter queue
   (`dlq_messages`) is summarised by failure type. It is read-only here: retrying and
-  dismissing messages stays with the DLQ admin API.
+  dismissing messages happens on the trading app's Dead Letters page (support) or the DLQ API.
 
 ## Monitoring
 
