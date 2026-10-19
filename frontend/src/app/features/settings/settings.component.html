@@ -86,3 +86,61 @@
     }
   </section>
 }
+
+<section class="card preferences-card" aria-labelledby="accessibility-title">
+  <div class="card-header">
+    <div>
+      <p class="eyebrow">Accessibility</p>
+      <h2 id="accessibility-title" class="card-title">Display preferences</h2>
+    </div>
+  </div>
+
+  @let preferences = accessibility.preferences();
+  <div class="preference-list">
+    <label class="preference-row">
+      <span>
+        <strong>Reduce motion</strong>
+        <small>Minimise animations and transitions.</small>
+      </span>
+      <input
+        type="checkbox"
+        [checked]="preferences.reducedMotion"
+        (change)="accessibility.setReducedMotion($any($event.target).checked)"
+      />
+    </label>
+
+    <label class="preference-row">
+      <span>
+        <strong>High contrast</strong>
+        <small>Increase contrast between text, controls and surfaces.</small>
+      </span>
+      <input
+        type="checkbox"
+        [checked]="preferences.highContrast"
+        (change)="accessibility.setHighContrast($any($event.target).checked)"
+      />
+    </label>
+
+    <fieldset class="preference-row choice-row">
+      <legend>
+        <strong>Text size</strong>
+        <small>Use larger text throughout the application.</small>
+      </legend>
+      <span class="segmented" aria-label="Text size">
+        <button type="button" [attr.aria-pressed]="preferences.textSize === 'normal'" (click)="accessibility.setTextSize('normal')">Normal</button>
+        <button type="button" [attr.aria-pressed]="preferences.textSize === 'large'" (click)="accessibility.setTextSize('large')">Large</button>
+      </span>
+    </fieldset>
+
+    <fieldset class="preference-row choice-row">
+      <legend>
+        <strong>Table density</strong>
+        <small>Choose the amount of space between table rows.</small>
+      </legend>
+      <span class="segmented" aria-label="Table density">
+        <button type="button" [attr.aria-pressed]="preferences.tableDensity === 'comfortable'" (click)="accessibility.setTableDensity('comfortable')">Comfortable</button>
+        <button type="button" [attr.aria-pressed]="preferences.tableDensity === 'compact'" (click)="accessibility.setTableDensity('compact')">Compact</button>
+      </span>
+    </fieldset>
+  </div>
+</section>
