@@ -53,6 +53,11 @@ jwt:
 - **ADMIN**: the DLQ and the actuator's metrics, info and health details, plus the analytics
   dashboard. No access to traders' accounts: an admin is not support
   ([decision 10](DECISIONS.md#10-roles)).
+- **STRATEGY**: a service role, never a user's. Only the strategy service's token has it, issued by
+  `POST /auth/token` from `STRATEGY_CLIENT_SECRET`. It may place an order, read an order and read
+  prices, and only for an account whose owner has an ACTIVE strategy; every other endpoint answers
+  `403 AUTH-403` (`SecurityConfig`, `AccountAccessGuard.checkTradingAccess`;
+  [decision 16](DECISIONS.md#16-sprint-10-extension-strategy-lab-automated-strategy-execution)).
 - Enforced by [AccountAccessGuard.java](../src/main/java/com/neueda/leap/security/AccountAccessGuard.java).
 
 ---
