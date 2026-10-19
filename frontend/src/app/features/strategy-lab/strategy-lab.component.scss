@@ -1,0 +1,111 @@
+:host {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.page-header {
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  p.muted {
+    margin: 0.4rem 0 0;
+  }
+}
+
+.lab-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 1.5rem;
+  align-items: start;
+
+  @media (max-width: 960px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rule-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.range {
+  font-size: 0.8rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+
+  div {
+    border-top: 1px solid var(--border);
+    padding-top: 0.4rem;
+  }
+
+  dt {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0.15rem 0 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+}
+
+.footnote {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+}
+
+.symbol {
+  font-weight: 700;
+}
+
+tr.selected td {
+  background: var(--primary-soft);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.note.error {
+  color: var(--negative);
+}

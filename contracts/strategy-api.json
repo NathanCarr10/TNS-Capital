@@ -761,7 +761,7 @@
         "type": "object",
         "properties": {
           "name": {
-            "pattern": "^[\\p{L}\\p{N} .,'/()_-]{1,80}$",
+            "pattern": "^[\\p{L}\\p{M}\\p{N} .,'/_-]{1,80}$",
             "type": "string"
           },
           "symbol": {

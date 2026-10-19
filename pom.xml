@@ -26,10 +26,13 @@
              tests first to write the coverage reports below (ci/python-tests.sh, the Frontend
              Tests and Auth Service Tests stages). The Angular specs sit next to the code they
              test, so test.inclusions tells the two apart; src/app/api is generated. -->
-        <sonar.sources>src/main/java,etl,dashboard,frontend/src/app,shared/auth-service/src</sonar.sources>
-        <sonar.tests>src/test/java,etl/tests,dashboard/tests,frontend/src/app,frontend/e2e,shared/auth-service/tests</sonar.tests>
+        <sonar.sources>src/main/java,strategy-service/src/main/java,etl,dashboard,frontend/src/app,shared/auth-service/src</sonar.sources>
+        <sonar.tests>src/test/java,strategy-service/src/test/java,etl/tests,dashboard/tests,frontend/src/app,frontend/e2e,shared/auth-service/tests</sonar.tests>
         <sonar.exclusions>etl/tests/**,dashboard/tests/**,frontend/src/app/**/*.spec.ts,frontend/src/app/api/**,frontend/src/app/core/trading/testing/**</sonar.exclusions>
-        <sonar.test.inclusions>src/test/java/**,etl/tests/**,dashboard/tests/**,frontend/src/app/**/*.spec.ts,frontend/src/app/core/trading/testing/**,frontend/e2e/**,shared/auth-service/tests/**</sonar.test.inclusions>
+        <sonar.test.inclusions>src/test/java/**,strategy-service/src/test/java/**,etl/tests/**,dashboard/tests/**,frontend/src/app/**/*.spec.ts,frontend/src/app/core/trading/testing/**,frontend/e2e/**,shared/auth-service/tests/**</sonar.test.inclusions>
+        <sonar.java.binaries>target/classes,strategy-service/target/classes</sonar.java.binaries>
+        <sonar.java.test.binaries>target/test-classes,strategy-service/target/test-classes</sonar.java.test.binaries>
+        <sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml,strategy-service/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
         <sonar.python.version>3.12</sonar.python.version>
         <sonar.python.coverage.reportPaths>etl/coverage.xml,dashboard/coverage.xml</sonar.python.coverage.reportPaths>
         <!-- Web:S6819 ("prefer a native element to this ARIA role") is switched off for three

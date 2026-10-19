@@ -31,6 +31,20 @@
           "enumPropertyNaming": "original"
         },
         "globalProperty": { "apiDocs": false, "modelDocs": false }
+      },
+      "strategy": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../contracts/strategy-api.json",
+        "output": "src/app/api/strategy",
+        "additionalProperties": {
+          "ngVersion": "19.2.0",
+          "providedIn": "root",
+          "supportsES6": true,
+          "stringEnums": false,
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        },
+        "globalProperty": { "apiDocs": false, "modelDocs": false }
       }
     }
   }

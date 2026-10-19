@@ -12,7 +12,7 @@ import java.util.Map;
 /**
  * Body of POST /api/v1/strategies. The strategy starts PAUSED.
  *
- * @param name     what the trader calls it; letters, numbers, spaces and . , ' / ( ) _ - only,
+ * @param name     what the trader calls it; letters, numbers, spaces and . , ' / _ - only,
  *                 so it is safe to show anywhere (OWASP A03)
  * @param symbol   the instrument it trades
  * @param ruleType MA_CROSSOVER or BOLLINGER
@@ -21,8 +21,8 @@ import java.util.Map;
  */
 public record CreateStrategyRequest(
         @NotNull(message = "Name is required")
-        @Pattern(regexp = "^[\\p{L}\\p{N} .,'/()_-]{1,80}$",
-                message = "Name must be 1-80 letters, numbers, spaces or . , ' / ( ) _ -")
+        @Pattern(regexp = "^[\\p{L}\\p{M}\\p{N} .,'/_-]{1,80}$",
+                message = "Name must be 1-80 letters, numbers, spaces or . , ' / _ -")
         String name,
 
         @NotNull(message = "Symbol is required")

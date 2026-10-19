@@ -50,6 +50,7 @@ services:
       DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-${DB_PASSWORD}}
       DB_ETL_PASSWORD: ${DB_ETL_PASSWORD:-${DB_PASSWORD}}
       DB_READER_PASSWORD: ${DB_READER_PASSWORD:-${DB_PASSWORD}}
+      DB_STRATEGY_PASSWORD: ${DB_STRATEGY_PASSWORD:-${DB_PASSWORD}}
     ports:
       - "127.0.0.1:5432:5432"
     command:
@@ -86,6 +87,8 @@ services:
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
       # Proxies whose X-Forwarded-For gives the client IP: nginx on the Docker network
       AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-loopback, uniquelocal}
+      # The strategy service's client secret (POST /auth/token); without it, it cannot trade
+      STRATEGY_CLIENT_SECRET: ${STRATEGY_CLIENT_SECRET:-}
     # Localhost only: browsers reach it through the frontend's /auth/ proxy
     ports:
       - "127.0.0.1:4000:4000"
@@ -155,6 +158,40 @@ services:
       retries: 10
       start_period: 40s
 
+  strategy-service:
+    build: ./strategy-service
+    mem_limit: 384m
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
+      # Least-privilege role: its own tables, read-only lookups elsewhere (db/roles/roles.sql)
+      SPRING_DATASOURCE_USERNAME: tns_strategy
+      SPRING_DATASOURCE_PASSWORD: ${DB_STRATEGY_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Strategies place their orders through the trading API, with a token from the auth service
+      TRADING_API_URL: http://app:3000
+      AUTH_URL: http://auth-service:4000
+      STRATEGY_CLIENT_SECRET: ${STRATEGY_CLIENT_SECRET:-}
+      STRATEGY_MAX_ACTIVE_PER_ACCOUNT: ${STRATEGY_MAX_ACTIVE_PER_ACCOUNT:-1}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    # Localhost only: browsers reach it through the frontend's /api/v1/strategies proxy
+    ports:
+      - "127.0.0.1:8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8087/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   frontend:
     build:
       context: ./frontend
@@ -169,8 +206,11 @@ services:
         condition: service_started
       auth-service:
         condition: service_healthy
-      # nginx forwards /analytics/ to it, and won't start if it can't resolve the name
+      # nginx forwards /analytics/ and /api/v1/strategies to these, and won't start if it
+      # can't resolve their names
       dashboard:
+        condition: service_started
+      strategy-service:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1"]

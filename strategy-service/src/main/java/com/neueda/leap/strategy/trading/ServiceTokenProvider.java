@@ -1,6 +1,8 @@
 package com.neueda.leap.strategy.trading;
 
 import com.neueda.leap.strategy.config.StrategyProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -17,6 +19,7 @@ import java.util.Objects;
  */
 @Component
 public class ServiceTokenProvider {
+    private static final Logger log = LoggerFactory.getLogger(ServiceTokenProvider.class);
     private static final Duration RENEW_BEFORE_EXPIRY = Duration.ofMinutes(1);
 
     private final RestClient restClient;
@@ -29,6 +32,10 @@ public class ServiceTokenProvider {
         this.restClient = builder.baseUrl(properties.authUrl()).build();
         this.properties = Objects.requireNonNull(properties);
         this.clock = Objects.requireNonNull(clock);
+        if (properties.clientSecret() == null || properties.clientSecret().isBlank()) {
+            log.warn("STRATEGY_CLIENT_SECRET is not set: the auth service will refuse the strategy service's "
+                    + "login, so strategies cannot place orders");
+        }
     }
 
     /**
