@@ -1,0 +1,87 @@
+:host {
+  display: block;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.key::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.key.strategy::before {
+  background: var(--accent);
+}
+
+.key.hold::before {
+  background: var(--text-muted);
+}
+
+.readout {
+  margin-left: auto;
+  color: var(--text);
+}
+
+.chart {
+  display: block;
+  font-family: inherit;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.grid {
+  stroke: var(--grid);
+  stroke-dasharray: 4 4;
+}
+
+.axis-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+
+  &.strategy {
+    stroke: var(--accent);
+    stroke-width: 2.5;
+  }
+
+  &.hold {
+    stroke: var(--text-muted);
+    stroke-dasharray: 5 4;
+  }
+}
+
+.crosshair {
+  stroke: var(--border-strong);
+}
+
+.marker {
+  stroke: var(--surface);
+  stroke-width: 2;
+
+  &.strategy {
+    fill: var(--accent);
+  }
+
+  &.hold {
+    fill: var(--text-muted);
+  }
+}

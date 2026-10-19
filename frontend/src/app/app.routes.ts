@@ -23,6 +23,7 @@ export const routes: Routes = [
 			{ path: 'trade', loadComponent: loadTrade, title: 'Trade · TNS Capital' },
 			{ path: 'trade/:symbol', loadComponent: loadTrade, title: 'Trade · TNS Capital' },
 			{ path: 'orders', loadComponent: () => import('./features/orders/order-history.component').then((m) => m.OrderHistoryComponent), title: 'Order History · TNS Capital' },
+			{ path: 'strategies', loadComponent: () => import('./features/strategy-lab/strategy-lab.component').then((m) => m.StrategyLabComponent), title: 'Strategy Lab · TNS Capital' },
 			{ path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent), title: 'Settings · TNS Capital' },
 			// Old links
 			{ path: 'dashboard', redirectTo: 'portfolio' },

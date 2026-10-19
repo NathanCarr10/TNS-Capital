@@ -1,0 +1,45 @@
+<section class="card" aria-labelledby="replay-title">
+  <div class="card-header">
+    <div>
+      <p class="eyebrow">Demo</p>
+      <h2 id="replay-title" class="card-title">Replay a trading day</h2>
+    </div>
+  </div>
+  <p class="muted intro">
+    Streams a past day's 1-minute {{ symbol() }} bars at high speed, so strategies on {{ symbol() }} trade now.
+    Their orders are priced at the live market price.
+  </p>
+
+  @if (replay(); as current) {
+    <div class="status" aria-live="polite">
+      <span class="muted">
+        {{ current.running ? 'Replaying' : 'Last replay:' }} {{ current.symbol }} on {{ current.date | date:'MMM d, y' }}
+        &middot; {{ current.barsPublished }} of {{ current.totalBars }} bars
+      </span>
+      <progress class="meter" max="100" [value]="progress()" aria-label="Replay progress"></progress>
+    </div>
+  }
+
+  <form class="replay-form" [formGroup]="form" (ngSubmit)="start()" novalidate>
+    <div class="field">
+      <label for="replay-date">Day</label>
+      <input id="replay-date" class="input" type="date" formControlName="date" [max]="maxDate" />
+    </div>
+    <div class="field">
+      <label for="replay-speed">Speed</label>
+      <select id="replay-speed" class="input" formControlName="barsPerSecond">
+        @for (speed of speeds; track speed) {
+          <option [value]="speed">{{ speed }} bars a second</option>
+        }
+      </select>
+    </div>
+    @if (running()) {
+      <button type="button" class="btn" (click)="stop()" [disabled]="busy()">Stop replay</button>
+    } @else {
+      <button type="submit" class="btn btn-primary" [disabled]="busy() || form.invalid">Replay {{ symbol() }}</button>
+    }
+  </form>
+  @if (error()) {
+    <p class="field-error" role="alert">{{ error() }}</p>
+  }
+</section>

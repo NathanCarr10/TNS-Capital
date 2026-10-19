@@ -95,8 +95,8 @@ fallback. Positions are valued at that price, and an order without a price is pr
 when accepted. Without Alpaca keys (local development, CI) there are no live prices: orders
 must include a price and `marketValue` is `null`.
 
-Prices are not yet republished on the `market-data` Kafka topic listed in §10.3; that would
-let other services (e.g. price alerts) consume them.
+The API republishes the prices it takes on the `market-data` Kafka topic listed in §10.3 (at
+most one per symbol per second), which the strategy service consumes (decision 16).
 
 ## 6. PostgreSQL `analytics` schema instead of Snowflake
 
@@ -157,6 +157,12 @@ startup, `admin` from `ADMIN_PASSWORD` and `support` from `SUPPORT_PASSWORD`, re
 password for both, and never changes an existing user's role. A user holds one role
 (`users.role`).
 
+`STRATEGY` is a service role, never a user's: only the strategy service's client-credentials
+token has it (decision 16). It may place and read orders and read prices, and only for an
+account whose owner has an ACTIVE strategy; every other endpoint refuses it. In Strategy Lab,
+support sees every trader's strategies read-only, like their accounts; admins see strategy orders
+in the analytics dashboard only.
+
 ## 11. Accepted vulnerabilities
 
 `.trivyignore` accepts CVE-2026-47884 (XSLT views) and CVE-2026-47890 (Server-Sent Events) in
@@ -211,3 +217,45 @@ fixes (docs/OWASP_REVIEW.md A06-3), so the auth service builds, tests (Jenkins) 
 `node:22-alpine`, the current LTS. NestJS 11, Argon2 and the test suite run unchanged on it. The
 runtime image also drops the npm CLI, which only the build needs; it carried every HIGH finding
 in Trivy's scan of the image (A06-4).
+
+## 16. Sprint 10 extension: Strategy Lab (automated strategy execution)
+
+The team chose **automated strategy execution** (§13.2): rules-based strategies that watch the
+real-time price stream and act through the Trade REST API. The proposal is in the team's Strategy
+Lab write-up; what was built, and why:
+
+- **Its own microservice.** `strategy-service/` (Spring Boot, port 8087) owns the `strategies` and
+  `strategy_signals` tables and logs in to Postgres as `tns_strategy`, which can read the price
+  history, who owns which account and the outcome of orders, but cannot change orders, accounts or
+  positions. nginx routes `/api/v1/strategies` to it.
+- **Rules are strategy classes.** `TradingRule` with `MovingAverageCrossoverRule` and
+  `BollingerBandRule`; the backtester and the live engine run any rule the same way. A rule signals
+  only on the bar where its condition starts (a cross), so a strategy trades once per move.
+- **Backtest on daily prices, trade live on 1-minute bars.** Five years of daily closes come from the
+  ETL's `analytics.fact_daily_prices`. A daily crossover fires a few times a year, so live trading uses
+  1-minute bars built from the `market-data` stream; the rule's settings mean bars in both cases.
+- **The service places orders through the trading API, as a trader would** (`POST /api/v1/orders`),
+  so every check still applies. It cannot use a trader's token (they expire after 15 minutes and the
+  trader may be logged out), and writing to the `orders` topic would skip every check (OWASP A01-5).
+  Instead the auth service issues it its own 15-minute token by client credentials
+  (`POST /auth/token`, `STRATEGY_CLIENT_SECRET`), with the service role `STRATEGY` (decision 10). The
+  API accepts that role only for placing and reading orders on an account with an ACTIVE strategy.
+- **Market orders only.** The strategy sends no price, so the API prices the order at the live market.
+  Without market data keys (CI, local) the API answers PRC-503 and the service resends the order at the
+  signal's price. Resting limit orders stay out of scope.
+- **Long only, one position per strategy.** A strategy buys its quantity when FLAT and sells it when
+  LONG, so it never sells the trader's own shares. It waits for each order to settle before the next bar
+  (up to 15 s): acting earlier sold shares whose purchase had not filled yet, which the API rejected.
+  Its position moves only on a fill.
+- **Replay for the demo.** Markets are closed for most of a UK day, so `POST /api/v1/market-data/replays`
+  publishes a past day's regular-session 1-minute bars on `market-data` at up to 50 a second, marked
+  `REPLAY` and kept apart from live bars. Any signed-in user may start one; only one runs at a time, as
+  every strategy on the symbol sees it. Orders are still priced at the live market price.
+- **Limits.** Up to 3 strategies per account can be on (`STRATEGY_MAX_ACTIVE_PER_ACCOUNT`; the MVP had
+  1). Support staff see every strategy and backtest but change none, as they only view traders'
+  accounts (decision 10); admins, who work in the analytics dashboard, see no strategies in the app.
+  Deleting a strategy archives it, so its signals stay on record.
+- **Reporting.** Traders get a toast whenever a strategy trades, and a comparison of their strategies'
+  realized P&L with their own (average cost). The admin analytics dashboard shows strategy orders next
+  to everyone else's.
+

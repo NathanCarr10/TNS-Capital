@@ -1,0 +1,258 @@
+<header class="page-header">
+  <div>
+    <p class="eyebrow">Strategy Lab</p>
+    <h1>Automated strategies</h1>
+    <p class="muted">Test a trading rule on five years of daily prices, then switch it on to trade live on 1-minute bars.</p>
+  </div>
+</header>
+
+<div class="lab-grid">
+  <section class="card" aria-labelledby="rule-title">
+    <div class="card-header">
+      <div>
+        <p class="eyebrow">Rule</p>
+        <h2 id="rule-title" class="card-title">Build a strategy</h2>
+      </div>
+    </div>
+
+    <form class="rule-form" [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <div class="field">
+        <label for="strategy-symbol">Instrument</label>
+        <select id="strategy-symbol" class="input" formControlName="symbol">
+          @for (instrument of instruments(); track instrument.symbol) {
+            <option [value]="instrument.symbol">{{ instrument.symbol }} &middot; {{ instrument.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="strategy-rule">Rule</label>
+        <select id="strategy-rule" class="input" formControlName="ruleType">
+          @for (option of rules; track option.type) {
+            <option [value]="option.type">{{ option.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="field-row">
+        @for (param of rule().params; track param.key) {
+          <div class="field">
+            <label [for]="'param-' + param.key">{{ param.label }}</label>
+            <input
+              [id]="'param-' + param.key"
+              class="input num"
+              type="number"
+              [formControlName]="param.key"
+              [min]="param.min"
+              [max]="param.max"
+              [step]="param.step"
+            />
+          </div>
+        }
+      </div>
+      <p class="hint muted">
+        @if (rule().type === 'MA_CROSSOVER') {
+          Buys when the short average crosses above the long one, sells when it crosses back below.
+        } @else {
+          Buys when the price drops below the lower band, sells when it rises above the upper band.
+        }
+      </p>
+
+      @if (!isSupport) {
+        <div class="field-row">
+          <div class="field">
+            <label for="strategy-name">Name</label>
+            <input id="strategy-name" class="input" type="text" formControlName="name" maxlength="80" />
+          </div>
+          <div class="field">
+            <label for="strategy-quantity">Shares per order</label>
+            <input id="strategy-quantity" class="input num" type="number" formControlName="quantity" min="1" max="10000" step="1" />
+          </div>
+        </div>
+        @if (form.controls.name.touched && form.controls.name.invalid) {
+          <p class="field-error">Name: 1-80 letters, numbers, spaces or . , ' / _ -</p>
+        }
+        @if (form.controls.quantity.touched && form.controls.quantity.invalid) {
+          <p class="field-error">Shares per order must be a whole number from 1 to 10,000.</p>
+        }
+      }
+      @if (formError()) {
+        <p class="field-error" role="alert">{{ formError() }}</p>
+      }
+
+      <div class="actions">
+        <button type="button" class="btn" (click)="runBacktest()" [disabled]="backtesting()">
+          {{ backtesting() ? 'Running...' : 'Run backtest' }}
+        </button>
+        @if (!isSupport) {
+          <button type="submit" class="btn btn-primary" [disabled]="saving()">{{ saving() ? 'Saving...' : 'Save strategy' }}</button>
+        }
+      </div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="backtest-title" aria-live="polite">
+    <div class="card-header">
+      <div>
+        <p class="eyebrow">Backtest</p>
+        <h2 id="backtest-title" class="card-title">{{ backtest()?.symbol ?? formSymbol() }} &middot; {{ backtest()?.rule ?? rule().label }}</h2>
+      </div>
+      @if (backtest(); as result) {
+        <span class="muted range">{{ result.from | date:'MMM y' }} – {{ result.to | date:'MMM y' }}</span>
+      }
+    </div>
+
+    @if (backtestError()) {
+      <p class="note error">{{ backtestError() }}</p>
+    } @else if (backtest()) {
+      @let result = backtest()!;
+      <dl class="stats">
+        <div>
+          <dt>Strategy return</dt>
+          <dd class="num" [class.pnl-up]="result.totalReturnPct! >= 0" [class.pnl-down]="result.totalReturnPct! < 0">
+            {{ result.totalReturnPct! >= 0 ? '+' : '' }}{{ result.totalReturnPct | number:'1.2-2' }}%
+          </dd>
+        </div>
+        <div>
+          <dt>Buy and hold</dt>
+          <dd class="num">{{ result.buyAndHoldReturnPct! >= 0 ? '+' : '' }}{{ result.buyAndHoldReturnPct | number:'1.2-2' }}%</dd>
+        </div>
+        <div>
+          <dt>Max drawdown</dt>
+          <dd class="num">−{{ result.maxDrawdownPct | number:'1.2-2' }}%</dd>
+        </div>
+        <div>
+          <dt>Trades</dt>
+          <dd class="num">{{ result.trades?.length ?? 0 }}</dd>
+        </div>
+        <div>
+          <dt>Winning round trips</dt>
+          <dd class="num">
+            @if (winRate(result) != null) {
+              {{ result.winningRoundTrips }} of {{ result.roundTrips }}
+            } @else {
+              —
+            }
+          </dd>
+        </div>
+      </dl>
+      <app-equity-curve-chart [curve]="result.equityCurve ?? []" />
+      <p class="footnote muted">
+        {{ result.initialCash | currency:'USD':'symbol':'1.0-0' }} invested at each day's close, all in on a buy, all out on a sell, no fees.
+      </p>
+    } @else {
+      <p class="note">Pick a rule and run a backtest to see how it would have traded.</p>
+    }
+  </section>
+</div>
+
+<section class="card" aria-labelledby="strategies-title">
+  <div class="card-header">
+    <div>
+      <p class="eyebrow">{{ isSupport ? 'All accounts' : 'Your account' }}</p>
+      <h2 id="strategies-title" class="card-title">Strategies</h2>
+    </div>
+  </div>
+
+  @if (strategiesLoading()) {
+    <p class="note">Loading strategies...</p>
+  } @else if (strategiesError()) {
+    <p class="note error">{{ strategiesError() }}</p>
+  } @else if (strategies().length === 0) {
+    <p class="note">{{ isSupport ? 'No trader has a strategy yet.' : 'No strategies yet. Build one above and save it.' }}</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Symbol</th>
+            <th>Rule</th>
+            <th class="numeric">Shares</th>
+            <th>Holding</th>
+            <th>Status</th>
+            @if (!isSupport) {
+              <th><span class="visually-hidden">Actions</span></th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (strategy of strategies(); track strategy.id) {
+            <tr [class.selected]="strategy.id === selectedId()">
+              <td>
+                <button type="button" class="link" (click)="selectedId.set(strategy.id!)" [attr.aria-pressed]="strategy.id === selectedId()">
+                  {{ strategy.name }}
+                </button>
+              </td>
+              <td class="symbol">{{ strategy.symbol }}</td>
+              <td>{{ strategy.rule }}</td>
+              <td class="numeric num">{{ strategy.quantity }}</td>
+              <td>{{ strategy.position === 'LONG' ? 'Shares' : 'Cash' }}</td>
+              <td>
+                <span class="badge" [class.badge-positive]="strategy.status === 'ACTIVE'">{{ strategy.status === 'ACTIVE' ? 'On' : 'Off' }}</span>
+              </td>
+              @if (!isSupport) {
+                <td class="row-actions">
+                  <button type="button" class="btn btn-small" [class.btn-primary]="strategy.status !== 'ACTIVE'" [disabled]="busyId() != null" (click)="toggle(strategy)">
+                    {{ strategy.status === 'ACTIVE' ? 'Switch off' : 'Switch on' }}
+                  </button>
+                  <button type="button" class="btn btn-small" [disabled]="busyId() != null" (click)="remove(strategy)" [attr.aria-label]="'Delete ' + strategy.name">
+                    Delete
+                  </button>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
+
+@if (performance(); as books) {
+  <section class="card" aria-labelledby="performance-title">
+    <div class="card-header">
+      <div>
+        <p class="eyebrow">Filled orders</p>
+        <h2 id="performance-title" class="card-title">Strategies against your own trading</h2>
+      </div>
+      <button type="button" class="btn btn-small" (click)="loadPerformance()">Refresh</button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="numeric">Trades</th>
+            <th class="numeric">Bought</th>
+            <th class="numeric">Sold</th>
+            <th class="numeric">Realized P&amp;L</th>
+            <th class="numeric">Still held, at cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of [{ label: 'Strategies', book: books.strategies }, { label: 'You', book: books.manual }]; track row.label) {
+            <tr>
+              <th scope="row">{{ row.label }}</th>
+              <td class="numeric num">{{ row.book?.trades ?? 0 }}</td>
+              <td class="numeric num">{{ row.book?.bought | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td class="numeric num">{{ row.book?.sold | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td class="numeric num" [class.pnl-up]="(row.book?.realizedPnl ?? 0) > 0" [class.pnl-down]="(row.book?.realizedPnl ?? 0) < 0">
+                {{ row.book?.realizedPnl | currency:'USD':'symbol':'1.2-2' }}
+              </td>
+              <td class="numeric num">{{ row.book?.openCost | currency:'USD':'symbol':'1.2-2' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="footnote muted">Each side at average cost: profit is realized when shares are sold.</p>
+  </section>
+}
+
+<div class="lab-grid">
+  @if (selected(); as strategy) {
+    <app-strategy-detail [strategy]="strategy" (changed)="replace($event)" />
+  }
+  <app-replay-panel [symbol]="selected()?.symbol ?? formSymbol()" />
+</div>

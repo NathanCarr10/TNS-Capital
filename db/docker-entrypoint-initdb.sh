@@ -29,6 +29,7 @@ if [ -f "$SQL_ROOT/roles/roles.sql" ]; then
         -v auth_password="${DB_AUTH_PASSWORD:-$POSTGRES_PASSWORD}" \
         -v etl_password="${DB_ETL_PASSWORD:-$POSTGRES_PASSWORD}" \
         -v reader_password="${DB_READER_PASSWORD:-$POSTGRES_PASSWORD}" \
+        -v strategy_password="${DB_STRATEGY_PASSWORD:-$POSTGRES_PASSWORD}" \
         -f "$SQL_ROOT/roles/roles.sql"
 fi
 

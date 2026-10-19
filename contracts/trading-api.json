@@ -357,7 +357,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 The account is not the caller's; ACC-403 the account is not ACTIVE",
+            "description": "AUTH-403 The account is not the caller's (for the strategy service: the account has no ACTIVE strategy); ACC-403 the account is not ACTIVE",
             "content": {
               "application/json": {
                 "schema": {
@@ -408,6 +408,98 @@
           },
           "503": {
             "description": "PRC-503 No price given and no live price; SYS-503 the order could not be queued (it is stored as REJECTED)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market-data/replays": {
+      "post": {
+        "tags": [
+          "market-replay-controller"
+        ],
+        "summary": "Replay a past trading day",
+        "description": "Publishes the day's regular-session 1-minute bars of the symbol on the market-data topic as REPLAY prices, barsPerSecond at a time (default 10), so active strategies on it trade. Orders are still priced at the live market price. One replay at a time.",
+        "operationId": "startReplay",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartReplayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Replay started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "INS-404 Instrument not found or not tradable; MKT-404 no bars that day (weekend or market holiday)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MKT-409 Another replay is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VAL-422 Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "MKT-503 No market data keys are configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -2070,6 +2162,106 @@
         }
       }
     },
+    "/api/v1/market-data/replays/current": {
+      "get": {
+        "tags": [
+          "market-replay-controller"
+        ],
+        "summary": "The running or last replay",
+        "operationId": "currentReplay",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No replay was started since the API started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "market-replay-controller"
+        ],
+        "summary": "Stop the running replay",
+        "operationId": "stopReplay",
+        "responses": {
+          "200": {
+            "description": "Stopped; the bars published so far stay on the topic",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MKT-404 No replay is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/dlq/statistics": {
       "get": {
         "tags": [
@@ -2786,6 +2978,66 @@
             "nullable": true
           },
           "message": {
+            "type": "string"
+          }
+        }
+      },
+      "StartReplayRequest": {
+        "required": [
+          "date",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "pattern": "^[A-Z]{1,10}$",
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "barsPerSecond": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReplayStatus": {
+        "type": "object",
+        "properties": {
+          "replayId": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "barsPublished": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalBars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "barsPerSecond": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedBy": {
             "type": "string"
           }
         }

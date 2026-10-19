@@ -1,0 +1,77 @@
+server:
+  port: ${SERVER_PORT:8087}
+
+spring:
+  application:
+    name: strategy-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tns_capital}
+    # Least-privilege role (db/roles/roles.sql): its own tables, read-only lookups elsewhere
+    username: ${SPRING_DATASOURCE_USERNAME:tns_strategy}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 4
+  jpa:
+    hibernate:
+      # The db/ image owns the schema; Hibernate only checks the entities match it
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          # The TIMESTAMP columns hold UTC
+          time_zone: UTC
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: strategy-service
+      # Prices are only useful while fresh: a new consumer group starts at the latest
+      auto-offset-reset: latest
+      # The engine waits for each order it places to settle (up to strategy.order-settlement.timeout),
+      # so a poll is kept small to stay well within max.poll.interval.ms (5 minutes)
+      max-poll-records: 10
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  # Calls to the auth service and trading API must not hang the price stream
+  http:
+    client:
+      connect-timeout: 3s
+      read-timeout: 5s
+
+strategy:
+  market-data-topic: market-data
+  # How many strategies one account may have switched on at once
+  max-active-per-account: ${STRATEGY_MAX_ACTIVE_PER_ACCOUNT:3}
+  stale-after: 2m
+  # The slowest rule needs 201 bars (a 200-bar average and the bar before)
+  max-bars: 250
+  trading-api-url: ${TRADING_API_URL:http://localhost:3000}
+  auth-url: ${AUTH_URL:http://localhost:4000}
+  client-id: strategy-service
+  client-secret: ${STRATEGY_CLIENT_SECRET:}
+  order-settlement:
+    # How long the engine waits for an order to be filled or rejected before the next bar
+    timeout: 15s
+    poll-interval: 200ms
+
+jwt:
+  # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
+  shared-secret: ${JWT_SECRET}
+  issuer: urn:tns-capital:auth-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    # As the trading API: the Angular client generator's OpenAPI 3.1 support is beta
+    version: openapi_3_0
+  # Every response is JSON; without this springdoc documents */*
+  default-produces-media-type: application/json
