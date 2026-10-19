@@ -2,6 +2,7 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 
+import { AnalyticsDashboardService } from '../analytics/analytics-dashboard.service';
 import { AuthService } from './auth.service';
 
 export const authGuard: CanActivateFn = (_route, state) => {
@@ -23,4 +24,16 @@ export const authGuard: CanActivateFn = (_route, state) => {
     );
   }
   return toLogin;
+};
+
+/**
+ * Admins work in the analytics dashboard, not this app: traders' accounts are support's
+ * (docs/DECISIONS.md, "Roles"). An admin who signs in here is sent there instead.
+ */
+export const notAdminGuard: CanActivateFn = () => {
+  if (inject(AuthService).isAdmin()) {
+    inject(AnalyticsDashboardService).open();
+    return false;
+  }
+  return true;
 };

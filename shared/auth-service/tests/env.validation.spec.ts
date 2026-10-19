@@ -26,4 +26,20 @@ describe('validateEnv', () => {
   ])('rejects an ADMIN_PASSWORD that is %s', (_case, password, message) => {
     expect(() => validateEnv({ JWT_SECRET: SECRET, ADMIN_PASSWORD: password })).toThrow(message);
   });
+
+  it.each([
+    ['too short', 'short-pass', 'SUPPORT_PASSWORD must be at least 12 characters'],
+    ['a placeholder', 'change-me-support-password', 'SUPPORT_PASSWORD is a published placeholder'],
+  ])('rejects a SUPPORT_PASSWORD that is %s', (_case, password, message) => {
+    expect(() => validateEnv({ JWT_SECRET: SECRET, SUPPORT_PASSWORD: password })).toThrow(message);
+  });
+
+  it('accepts different admin and support passwords, but not the same one for both', () => {
+    expect(() =>
+      validateEnv({ JWT_SECRET: SECRET, ADMIN_PASSWORD: 'a-strong-admin-password', SUPPORT_PASSWORD: 'a-strong-support-password' }),
+    ).not.toThrow();
+    expect(() =>
+      validateEnv({ JWT_SECRET: SECRET, ADMIN_PASSWORD: 'a-strong-shared-password', SUPPORT_PASSWORD: 'a-strong-shared-password' }),
+    ).toThrow('SUPPORT_PASSWORD must differ from ADMIN_PASSWORD');
+  });
 });

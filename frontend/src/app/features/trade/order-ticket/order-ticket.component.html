@@ -3,7 +3,7 @@
     <p class="eyebrow">Overview</p>
     <h2 class="card-title">Order ticket</h2>
   </div>
-  <span class="badge">{{ isAdmin ? 'Read-only' : 'Live' }}</span>
+  <span class="badge">{{ isSupport ? 'Read-only' : 'Live' }}</span>
 </div>
 
 <form class="ticket-body" [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
@@ -76,7 +76,7 @@
       }
     </div>
   </dl>
-  @if (shortfall() && !isAdmin) {
+  @if (shortfall() && !isSupport) {
     <p class="hint warning">{{ shortfall() }}</p>
   }
 
@@ -95,8 +95,8 @@
     }
   </button>
 
-  @if (isAdmin) {
-    <p class="note">Admin view: read-only. Orders can only be placed by the account's owner.</p>
+  @if (isSupport) {
+    <p class="note">Support view: read-only. Orders can only be placed by the account's owner.</p>
   } @else if (instrument() && !tradable()) {
     <p class="note">{{ symbol() }} is not tradable.</p>
   }

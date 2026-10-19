@@ -54,7 +54,7 @@
             <th class="numeric">Price</th>
             <th class="numeric">Total</th>
             <th>Status</th>
-            @if (!isAdmin) {
+            @if (!isSupport) {
               <th><span class="visually-hidden">Actions</span></th>
             }
           </tr>
@@ -80,7 +80,7 @@
                   {{ row.status === 'NEW' ? 'Open' : row.status }}
                 </span>
               </td>
-              @if (!isAdmin) {
+              @if (!isSupport) {
                 <td>
                   @if (row.status === 'NEW') {
                     <button

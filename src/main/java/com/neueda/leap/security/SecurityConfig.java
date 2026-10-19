@@ -30,10 +30,12 @@ import java.time.ZoneOffset;
  * Security Best Practices Implemented:
  * - JWT authentication with HMAC-SHA256 on every endpoint except the API docs
  *   and the health check
- * - Admin-only operations need the ADMIN role through @PreAuthorize: opening
- *   accounts, suspending or reactivating them, changing instruments and every
- *   dead-letter queue endpoint. Everything else is limited to the caller's own
- *   account by AccountAccessGuard (docs/DECISIONS.md, "Roles")
+ * - Staff operations need a role through @PreAuthorize, and the two staff
+ *   roles are kept apart (docs/DECISIONS.md, "Roles"):
+ *   - SUPPORT: opening accounts, suspending or reactivating them and changing
+ *     instruments; AccountAccessGuard lets support see every account
+ *   - ADMIN: every dead-letter queue endpoint and the actuator (operations)
+ *   Everything else is limited to the caller's own account by AccountAccessGuard
  * - /actuator/health is public so containers and load balancers can probe it;
  *   only admins see its details. Metrics and info need the ADMIN role
  * - Missing or invalid tokens get an AUTH-401 error body

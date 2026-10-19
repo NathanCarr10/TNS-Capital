@@ -10,13 +10,9 @@ label {
   color: var(--text-muted);
 }
 
-// Overrides the global .input width so Analytics stays on the same row
+// Overrides the global .input width so the bar stays compact in the page header
 select {
   width: 16rem;
   min-width: 0;
   flex: 0 1 auto;
-}
-
-button {
-  flex-shrink: 0;
 }

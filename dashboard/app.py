@@ -1,12 +1,12 @@
 """TNS Capital trading dashboard (Streamlit).
 
 It shows every user's trades, so it is for admins only: users sign in through
-the auth service and only a token with the ADMIN role opens the page.
+the auth service and only a token with the ADMIN role opens the page. Support
+staff (SUPPORT role) work in the Angular trading app instead; the two roles are
+kept apart (docs/DECISIONS.md, "Roles").
 
 Run with:  streamlit run app.py
 """
-
-import os
 
 import pandas as pd
 import plotly.express as px
@@ -19,9 +19,6 @@ import insights
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
-# The Angular trading app; admins can view any account there, read-only. Relative, since
-# admins reach this page through the Angular app's origin (/analytics/)
-TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "/portfolio")
 ASSET_CLASS_LABEL = "Asset class"
 
 
@@ -64,6 +61,8 @@ def require_admin():
             if auth.is_admin(claims):
                 return claims
             st.error(f"Signed in as {claims['sub']}, but this dashboard is for admins only.")
+            if auth.is_support(claims):
+                st.info("Support staff look after traders' accounts in the trading app, not here.")
             st.button("Sign out", on_click=sign_out)
             st.stop()
 
@@ -88,8 +87,6 @@ def require_admin():
 admin = require_admin()
 with st.sidebar:
     st.write(f"Signed in as **{admin['sub']}**")
-    st.link_button("Trading dashboard", TRADING_DASHBOARD_URL,
-                   help="View any trader's account, read-only, in the trading app")
     st.button("Sign out", on_click=sign_out)
 
 try:

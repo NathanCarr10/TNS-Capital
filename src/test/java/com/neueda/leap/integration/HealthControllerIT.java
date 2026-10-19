@@ -76,6 +76,17 @@ class HealthControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @WithMockUser(username = "support", roles = "SUPPORT")
+    @DisplayName("Should refuse metrics and health details to support: observability is for admins")
+    @SuppressWarnings("null")
+    void testMetricsAreNotForSupport() throws Exception {
+        mockMvc.perform(get("/actuator/metrics")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components").doesNotExist());
+    }
+
+    @Test
     @WithAnonymousUser
     @DisplayName("Should refuse metrics without a token")
     void testMetricsNeedAToken() throws Exception {

@@ -195,7 +195,8 @@ Edit `.env` and set:
 | `DB_USER` | PostgreSQL user. The default `tns-capital-db-user` is fine. |
 | `DB_PASSWORD` | Any password for the local database. |
 | `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API and dashboard to verify them. At least 32 bytes; generate one with `openssl rand -hex 32`. All three refuse to start (or to sign anyone in) with the `change-me` placeholder. |
-| `ADMIN_PASSWORD` | Password of the `admin` account, which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
+| `ADMIN_PASSWORD` | Password of the `admin` account (role `ADMIN`: the analytics dashboard and operations), which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
+| `SUPPORT_PASSWORD` | Password of the `support` account (role `SUPPORT`: the trading app's account viewer, suspending and reactivating accounts), created the same way. At least 12 characters, and not the `ADMIN_PASSWORD`. |
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
 `DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `8086`) and
@@ -257,8 +258,12 @@ curl -s http://localhost:3000/actuator/health
 curl -s http://localhost:3000/actuator/health -H "Authorization: Bearer $TOKEN"
 # -> {"status":"UP","components":{"db":{"status":"UP", ...}, ...}}
 
-# Read a seeded account's balance
-curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $TOKEN"
+# Traders' accounts are support's, not the admin's: log in as support to read one
+SUPPORT_TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"support\",\"password\":\"$SUPPORT_PASSWORD\"}" \
+  | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
+curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $SUPPORT_TOKEN"
 # -> {"balance":5000.00}
 ```
 
@@ -277,7 +282,8 @@ locks the services out until you reset.
 
 The seed data is six weeks of sample trading on ten accounts (ACC-1001 to ACC-1010), dated back
 from the day the database is created, for the analytics. No logins are seeded: register a trader
-(it gets a new account to deposit into), and log in as `admin` with `ADMIN_PASSWORD`.
+(it gets a new account to deposit into), log in as `support` with `SUPPORT_PASSWORD` to look after
+accounts in the trading app, or as `admin` with `ADMIN_PASSWORD` for the analytics dashboard.
 
 ### ETL pipeline (optional)
 
@@ -319,7 +325,8 @@ and logout.
 
 | User | Password | Role | Access |
 |---|---|---|---|
-| `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | Every account, opening accounts, adding and changing instruments, the DLQ |
+| `support` | `SUPPORT_PASSWORD` from `.env` | `SUPPORT` | The trading app's account viewer: every account read-only, suspending and reactivating them, opening accounts, adding and changing instruments |
+| `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | The analytics dashboard, the DLQ and the actuator's metrics; no traders' accounts (see [decision 10](docs/DECISIONS.md#10-roles)) |
 | A user you register | your own | `USER` | Only the account opened at registration |
 
 The seeded users `alice` and `bob` have placeholder password hashes and cannot log in.
@@ -367,10 +374,10 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 
 | Resource | Endpoints |
 |---|---|
-| Accounts | `GET /accounts` · `POST /accounts` (ADMIN) · `GET/PATCH/DELETE /accounts/{id}` · `PUT /accounts/{id}/status` (ADMIN: suspend or reactivate) · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
+| Accounts | `GET /accounts` · `POST /accounts` (SUPPORT) · `GET/PATCH/DELETE /accounts/{id}` · `PUT /accounts/{id}/status` (SUPPORT: suspend or reactivate) · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
 | Orders | `POST /orders` · `GET /orders` · `GET /orders/{orderId}` · `DELETE /orders/{orderId}` (cancel) · `GET /orders/{orderId}/events` (status history) · `GET /orders/history/{orderId}` · `GET /orders/{accountId}/history` |
 | Positions | `GET /positions/{accountId}` · `GET /positions/{accountId}/{symbol}` |
-| Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (ADMIN) · `PUT /instruments/{symbol}` (ADMIN) |
+| Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (SUPPORT) · `PUT /instruments/{symbol}` (SUPPORT) |
 | Dead-letter queue (ADMIN) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:
@@ -500,8 +507,8 @@ for the quality gate.
 
 | Problem | Fix |
 |---|---|
-| `required variable DB_PASSWORD is missing`, `set JWT_SECRET in .env` or `set ADMIN_PASSWORD in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
-| Auth service or API exits on startup | `JWT_SECRET` must be at least 32 bytes and not the `change-me` placeholder; `ADMIN_PASSWORD` at least 12 characters. Check `docker compose logs auth-service`. |
+| `required variable DB_PASSWORD is missing`, `set JWT_SECRET in .env`, `set ADMIN_PASSWORD in .env` or `set SUPPORT_PASSWORD in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
+| Auth service or API exits on startup | `JWT_SECRET` must be at least 32 bytes and not the `change-me` placeholder; `ADMIN_PASSWORD` and `SUPPORT_PASSWORD` at least 12 characters and different. Check `docker compose logs auth-service`. |
 | `admin` / `adminPassword` no longer logs in | Nothing is seeded any more: log in as `admin` with the `ADMIN_PASSWORD` from `.env` (the auth service sets it at startup). |
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |

@@ -15,14 +15,14 @@ describe('SettingsComponent', () => {
   let fixture: ComponentFixture<SettingsComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
 
-  const create = (isAdmin = false): HTMLElement => {
+  const create = (isSupport = false): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [SettingsComponent],
       providers: [
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(SettingsComponent);
@@ -136,12 +136,12 @@ describe('SettingsComponent', () => {
     expect(tradingService.updateAccount).not.toHaveBeenCalled();
   });
 
-  it('tells admins they have no account of their own', () => {
+  it('tells support staff they have no account of their own', () => {
     tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
 
     const element = create(true);
 
-    expect(element.querySelector('.note')?.textContent).toContain('Admins have no trading account');
+    expect(element.querySelector('.note')?.textContent).toContain('Support staff have no trading account');
     expect(element.querySelector('.details')).toBeNull();
   });
 });

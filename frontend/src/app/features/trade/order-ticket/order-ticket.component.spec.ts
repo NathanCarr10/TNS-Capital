@@ -17,7 +17,7 @@ describe('OrderTicketComponent', () => {
   let fixture: ComponentFixture<OrderTicketComponent>;
   let component: OrderTicketComponent;
   let tradingService: jasmine.SpyObj<TradingService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
 
   const create = (livePrice: number | null = 150, instrument = INSTRUMENTS[0]): void => {
     TestBed.configureTestingModule({
@@ -26,7 +26,7 @@ describe('OrderTicketComponent', () => {
         AccountStore,
         OrderTrackerService,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(OrderTicketComponent);
@@ -55,7 +55,7 @@ describe('OrderTicketComponent', () => {
 
   beforeEach(() => {
     tradingService = tradingServiceStub();
-    isAdmin = false;
+    isSupport = false;
   });
 
   it('fills the limit price with the live quote', () => {
@@ -311,9 +311,9 @@ describe('OrderTicketComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('OLD is not tradable');
   });
 
-  it('is read-only for an admin', () => {
-    isAdmin = true;
-    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+  it('is read-only for support', () => {
+    isSupport = true;
+    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
     tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
     create();
 
@@ -321,7 +321,7 @@ describe('OrderTicketComponent', () => {
 
     expect(tradingService.placeOrder).not.toHaveBeenCalled();
     expect(submitButton().disabled).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('Admin view: read-only');
+    expect(fixture.nativeElement.textContent).toContain('Support view: read-only');
   });
 });
 

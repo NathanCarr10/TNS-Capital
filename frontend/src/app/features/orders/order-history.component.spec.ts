@@ -14,14 +14,14 @@ describe('OrderHistoryComponent', () => {
   let fixture: ComponentFixture<OrderHistoryComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
 
-  const create = (isAdmin = false): HTMLElement => {
+  const create = (isSupport = false): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [OrderHistoryComponent],
       providers: [
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(OrderHistoryComponent);
@@ -190,7 +190,7 @@ describe('OrderHistoryComponent', () => {
       expect(statusOf('AAPL')).toBe('FILLED');
     });
 
-    it('gives admins, who view accounts read-only, no Cancel button', () => {
+    it('gives support, who view accounts read-only, no Cancel button', () => {
       tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
       create(true);
 

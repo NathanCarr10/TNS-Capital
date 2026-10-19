@@ -45,12 +45,12 @@ public class AccountController {
         }
 
         /**
-         * Admins get every account; other users get a list holding only their own.
+         * Support gets every account; other users get a list holding only their own.
          */
-        @Operation(summary = "List accounts", description = "Admins get every account; other users get a list holding only their own.")
+        @Operation(summary = "List accounts", description = "Support gets every account; other users get a list holding only their own.")
         @GetMapping
         public ResponseEntity<List<AccountResponse>> getAllAccounts() {
-                List<Account> accounts = accessGuard.isAdmin()
+                List<Account> accounts = accessGuard.isSupport()
                                 ? accountService.getAllAccounts()
                                 : accessGuard.currentAccountId()
                                                 .flatMap(accountService::findAccountById)
@@ -64,14 +64,14 @@ public class AccountController {
 
         /**
          * Users get their account when they register with the auth service, so
-         * opening further accounts is an admin task.
+         * opening further accounts is a support task.
          */
-        @Operation(summary = "Open an account", description = "Admins only: users get their account when they register.")
+        @Operation(summary = "Open an account", description = "Support only: users get their account when they register.")
         @ApiResponse(responseCode = "201", description = "Account opened")
-        @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+        @ApiResponse(responseCode = "403", description = "AUTH-403 Support only")
         @ApiResponse(responseCode = "409", description = "ACC-409 The account number is taken")
         @PostMapping
-        @PreAuthorize("hasRole('ADMIN')")
+        @PreAuthorize("hasRole('SUPPORT')")
         public ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
                 Account savedAccount = accountService.createAccount(request.accountNumber(), request.holderName(),
                                 request.cashBalance());
@@ -91,15 +91,15 @@ public class AccountController {
         }
 
         /**
-         * Suspends or reactivates an account; an admin task.
+         * Suspends or reactivates an account; a support task.
          */
-        @Operation(summary = "Suspend or reactivate an account", description = "Admins only. Closing goes through DELETE.")
+        @Operation(summary = "Suspend or reactivate an account", description = "Support only. Closing goes through DELETE.")
         @ApiResponse(responseCode = "200", description = "OK")
-        @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+        @ApiResponse(responseCode = "403", description = "AUTH-403 Support only")
         @ApiResponse(responseCode = "404", description = "ACC-404 Account not found")
         @ApiResponse(responseCode = "422", description = "VAL-422 Invalid input, or a status other than ACTIVE or SUSPENDED")
         @PutMapping("/{accountId}/status")
-        @PreAuthorize("hasRole('ADMIN')")
+        @PreAuthorize("hasRole('SUPPORT')")
         public ResponseEntity<AccountResponse> updateAccountStatus(@PathVariable @NotNull Long accountId,
                         @Valid @RequestBody UpdateAccountStatusRequest request) {
                 return ResponseEntity.ok(mapToResponse(accountService.updateStatus(accountId, request.status())));

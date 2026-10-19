@@ -95,7 +95,7 @@
           "instrument-controller"
         ],
         "summary": "Change an instrument",
-        "description": "Admins only, e.g. to stop trading it (tradable false).",
+        "description": "Support only, e.g. to stop trading it (tradable false).",
         "operationId": "updateInstrument",
         "parameters": [
           {
@@ -139,7 +139,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -187,7 +187,7 @@
           "account-controller"
         ],
         "summary": "Suspend or reactivate an account",
-        "description": "Admins only. Closing goes through DELETE.",
+        "description": "Support only. Closing goes through DELETE.",
         "operationId": "updateAccountStatus",
         "parameters": [
           {
@@ -232,7 +232,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -280,7 +280,7 @@
           "order-controller"
         ],
         "summary": "List orders",
-        "description": "Admins get every order; other users get the orders on their own account.",
+        "description": "Support gets every order; other users get the orders on their own account.",
         "operationId": "getAllOrders",
         "responses": {
           "200": {
@@ -467,7 +467,7 @@
           "instrument-controller"
         ],
         "summary": "Add an instrument",
-        "description": "Admins only.",
+        "description": "Support only.",
         "operationId": "createInstrument",
         "requestBody": {
           "content": {
@@ -501,7 +501,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -625,7 +625,7 @@
           "account-controller"
         ],
         "summary": "List accounts",
-        "description": "Admins get every account; other users get a list holding only their own.",
+        "description": "Support gets every account; other users get a list holding only their own.",
         "operationId": "getAllAccounts",
         "responses": {
           "200": {
@@ -668,7 +668,7 @@
           "account-controller"
         ],
         "summary": "Open an account",
-        "description": "Admins only: users get their account when they register.",
+        "description": "Support only: users get their account when they register.",
         "operationId": "createAccount",
         "requestBody": {
           "content": {
@@ -702,7 +702,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {

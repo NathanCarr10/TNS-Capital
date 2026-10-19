@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tests HTTP endpoints for account management with a real database
  */
 @DisplayName("Account Controller Integration Tests")
-@WithMockUser(username = "testuser", roles = "ADMIN")
+@WithMockUser(username = "testuser", roles = "SUPPORT")
 class AccountControllerIT extends AbstractIntegrationTest {
 
     @Autowired

@@ -74,8 +74,10 @@ services:
     mem_limit: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      # The admin account is created from this at startup; nothing is seeded (OWASP A07-4)
+      # The staff accounts are created from these at startup; nothing is seeded (OWASP A07-4).
+      # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env (at least 12 characters)}
+      SUPPORT_PASSWORD: ${SUPPORT_PASSWORD:?set SUPPORT_PASSWORD in .env (at least 12 characters, not the ADMIN_PASSWORD)}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: tns_capital

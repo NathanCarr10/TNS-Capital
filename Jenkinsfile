@@ -180,8 +180,8 @@ pipeline {
         stage('E2E Tests') {
             steps {
                 // The Playwright journeys (frontend/e2e) in a real browser against the whole
-                // stack: register, log in, place a BUY that fills, the route guard, and an admin
-                // reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
+                // stack: register, log in, place a BUY that fills, the route guard, support
+                // suspending an account, and an admin reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
                 // project with no host ports, runs the suite in PLAYWRIGHT_IMAGE on its network,
                 // then removes it, so it can't clash with a stack already running on this host.
                 sh 'ci/e2e-tests.sh'
