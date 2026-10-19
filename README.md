@@ -266,7 +266,8 @@ SUPPORT_TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -d "{\"username\":\"support\",\"password\":\"$SUPPORT_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $SUPPORT_TOKEN"
-# -> {"balance":5000.00}
+# -> {"balance":5000.00,"reservedCash":0.00,"availableCash":5000.00}
+#    reservedCash is held for open orders; only availableCash can be traded or withdrawn
 ```
 
 ### Stopping and resetting
