@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.strategy.domain.StrategySignal;
+import com.neueda.leap.strategy.domain.Position;
+import com.neueda.leap.strategy.domain.StrategyRepository;
 import com.neueda.leap.strategy.domain.StrategySignalRepository;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -133,6 +135,8 @@ class StrategyServiceIT {
         registry.add("strategy.trading-api-url", () -> platformUrl);
         registry.add("strategy.auth-url", () -> platformUrl);
         registry.add("strategy.client-secret", () -> "client-secret");
+        // The stand-in API stores no orders, so they never settle: do not wait long for them
+        registry.add("strategy.order-settlement.timeout", () -> "300ms");
     }
 
     @AfterAll
@@ -156,6 +160,8 @@ class StrategyServiceIT {
     private ObjectMapper objectMapper;
     @Autowired
     private StrategySignalRepository signals;
+    @Autowired
+    private StrategyRepository strategies;
 
     private final JdbcTemplate owner = new JdbcTemplate(
             new org.springframework.jdbc.datasource.DriverManagerDataSource(postgres.getJdbcUrl(), "test", "test"));
@@ -257,6 +263,13 @@ class StrategyServiceIT {
         return found;
     }
 
+    private void awaitPosition(long id, Position expected) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+        while (strategies.findById(id).orElseThrow().getPosition() != expected && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+        }
+    }
+
     @Test
     @DisplayName("trades a switched-on strategy on replayed bars, through the trading API with its own token")
     void tradesOnReplayedBars() throws Exception {
@@ -271,6 +284,8 @@ class StrategyServiceIT {
         String replayId = UUID.randomUUID().toString();
         publishReplay(replayId, 11, 11, 10, 10, 12, 12, 9, 8);
         List<StrategySignal> fired = awaitSignals(2);
+        // The position moves once the engine has waited for the SELL to settle
+        awaitPosition(id, Position.FLAT);
 
         assertEquals(2, fired.size());
         assertEquals(List.of("BUY", "SELL"), fired.stream().map(StrategySignal::getSide).toList());

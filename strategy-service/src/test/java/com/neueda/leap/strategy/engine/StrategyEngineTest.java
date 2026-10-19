@@ -48,6 +48,7 @@ class StrategyEngineTest {
     private StrategySignalRepository signals;
     private PlatformLookup platform;
     private TradingApiClient tradingApi;
+    private OrderSettlement settlement;
     private StrategyEngine engine;
     private Strategy strategy;
 
@@ -57,7 +58,9 @@ class StrategyEngineTest {
         signals = mock(StrategySignalRepository.class);
         platform = mock(PlatformLookup.class);
         tradingApi = mock(TradingApiClient.class);
-        engine = new StrategyEngine(strategies, signals, platform, tradingApi);
+        settlement = mock(OrderSettlement.class);
+        when(settlement.await(any())).thenReturn(Optional.of("FILLED"));
+        engine = new StrategyEngine(strategies, signals, platform, tradingApi, settlement);
         strategy = new Strategy(7L, "MA 2/4", "SPY", RuleType.MA_CROSSOVER, Map.of("shortWindow", 2, "longWindow", 4), 5);
         ReflectionTestUtils.setField(strategy, "id", 42L);
         strategy.setStatus(StrategyStatus.ACTIVE);
@@ -94,6 +97,30 @@ class StrategyEngineTest {
         assertEquals(SignalOutcome.PLACED, signal.getOutcome());
         assertEquals(orderId, signal.getOrderId());
         assertEquals(BAR_TIME, signal.getBarTime());
+    }
+
+    @Test
+    @DisplayName("Keeps its position when the order it placed is rejected, e.g. for lack of funds")
+    void keepsPositionOfRejectedOrder() {
+        UUID orderId = UUID.randomUUID();
+        when(tradingApi.place(any())).thenReturn(orderId);
+        when(settlement.await(orderId)).thenReturn(Optional.of("REJECTED"));
+
+        engine.onBar(bar(CROSS_UP));
+
+        verify(strategies, never()).updatePosition(anyLong(), any());
+        assertEquals(SignalOutcome.PLACED, savedSignal().getOutcome());
+    }
+
+    @Test
+    @DisplayName("Counts an order still open after the wait as filled")
+    void countsOpenOrderAsFilled() {
+        when(tradingApi.place(any())).thenReturn(UUID.randomUUID());
+        when(settlement.await(any())).thenReturn(Optional.empty());
+
+        engine.onBar(bar(CROSS_UP));
+
+        verify(strategies).updatePosition(42L, Position.LONG);
     }
 
     @Test

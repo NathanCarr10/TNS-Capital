@@ -27,6 +27,9 @@ spring:
       group-id: strategy-service
       # Prices are only useful while fresh: a new consumer group starts at the latest
       auto-offset-reset: latest
+      # The engine waits for each order it places to settle (up to strategy.order-settlement.timeout),
+      # so a poll is kept small to stay well within max.poll.interval.ms (5 minutes)
+      max-poll-records: 10
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   # Calls to the auth service and trading API must not hang the price stream
@@ -46,6 +49,10 @@ strategy:
   auth-url: ${AUTH_URL:http://localhost:4000}
   client-id: strategy-service
   client-secret: ${STRATEGY_CLIENT_SECRET:}
+  order-settlement:
+    # How long the engine waits for an order to be filled or rejected before the next bar
+    timeout: 15s
+    poll-interval: 200ms
 
 jwt:
   # Must match the auth service. Set JWT_SECRET in the environment; there is no default.

@@ -31,9 +31,11 @@ import java.util.UUID;
  *
  * A strategy buys its quantity on BUY only when FLAT, and sells it on SELL
  * only when LONG, through the trading API. Each signal is stored with the
- * order it placed, or why it failed. The position follows the order: if the
- * order the strategy last placed ends REJECTED or CANCELLED, the position
- * goes back to what it was before it.
+ * order it placed, or why it failed. The engine waits for each order to
+ * settle (OrderSettlement) and moves the position only if it was filled, so
+ * the next signal acts on what the account really holds. An order still open
+ * after the wait counts as filled; if it ends REJECTED or CANCELLED later, the
+ * position goes back to what it was before it at the next signal.
  */
 @Component
 public class StrategyEngine {
@@ -44,13 +46,15 @@ public class StrategyEngine {
     private final StrategySignalRepository signals;
     private final PlatformLookup platform;
     private final TradingApiClient tradingApi;
+    private final OrderSettlement settlement;
 
     public StrategyEngine(StrategyRepository strategies, StrategySignalRepository signals, PlatformLookup platform,
-            TradingApiClient tradingApi) {
+            TradingApiClient tradingApi, OrderSettlement settlement) {
         this.strategies = Objects.requireNonNull(strategies);
         this.signals = Objects.requireNonNull(signals);
         this.platform = Objects.requireNonNull(platform);
         this.tradingApi = Objects.requireNonNull(tradingApi);
+        this.settlement = Objects.requireNonNull(settlement);
     }
 
     public void onBar(ClosedBar bar) {
@@ -107,10 +111,10 @@ public class StrategyEngine {
                 bar.replayId());
         MarketOrder order = new MarketOrder(strategy.getAccountId(), strategy.getSymbol(), side,
                 strategy.getQuantity(), idempotencyKey(strategy, side, bar), bar.close());
+        UUID orderId = null;
         try {
-            UUID orderId = tradingApi.place(order);
+            orderId = tradingApi.place(order);
             signal.placed(orderId);
-            strategies.updatePosition(strategy.getId(), after);
             log.info("Strategy {} placed {} {} x{} for account {} (order {})", strategy.getId(), side,
                     strategy.getSymbol(), strategy.getQuantity(), strategy.getAccountId(), orderId);
         } catch (OrderRefusedException e) {
@@ -123,6 +127,20 @@ public class StrategyEngine {
         } catch (DataIntegrityViolationException e) {
             // The bar was already handled: a redelivered market-data message
             log.info("Strategy {} already acted on the {} bar of {}", strategy.getId(), bar.time(), bar.symbol());
+            return;
+        }
+        if (orderId != null) {
+            settle(strategy, orderId, after);
+        }
+    }
+
+    private void settle(Strategy strategy, UUID orderId, Position after) {
+        Optional<String> outcome = settlement.await(orderId);
+        if (outcome.isEmpty() || "FILLED".equals(outcome.get())) {
+            strategies.updatePosition(strategy.getId(), after);
+        } else {
+            log.info("Strategy {}: order {} was {}, so its position stays {}", strategy.getId(), orderId,
+                    outcome.get(), strategy.getPosition());
         }
     }
 
