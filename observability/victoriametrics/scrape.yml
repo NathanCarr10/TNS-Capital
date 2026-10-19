@@ -1,8 +1,8 @@
-# What VictoriaMetrics scrapes, every 15 s. Every target is on the Compose network only:
-# none of these ports is published or proxied by nginx.
+# What VictoriaMetrics scrapes, every 10 s (SCRAPE_SECONDS in dashboard/monitoring.py). Every
+# target is on the Compose network only: none of these ports is published or proxied by nginx.
 global:
-  scrape_interval: 15s
-  scrape_timeout: 10s
+  scrape_interval: 10s
+  scrape_timeout: 5s
 
 scrape_configs:
   # Trading API: MetricsServer on METRICS_PORT, not the admin-only actuator on :3000

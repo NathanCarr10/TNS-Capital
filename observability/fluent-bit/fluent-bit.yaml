@@ -4,7 +4,8 @@
 # Docker socket (which would be root on the host). docker_metadata.lua names each line's
 # Compose service and drops lines from other projects' containers.
 service:
-  flush: 2
+  # Seconds between sends: log lines reach the dashboard's search within a second or two
+  flush: 1
   log_level: warn
   http_server: off
 
