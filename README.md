@@ -105,7 +105,7 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 |---|---|
 | Trading API | Java 21, Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
 | Auth service | Node.js 22, NestJS 11, TypeScript, Argon2, `pg` |
-| Messaging | Apache Kafka 7.5 (Confluent) with ZooKeeper, Kafka UI |
+| Messaging | Apache Kafka 7.5 (Confluent) in KRaft mode, Kafka UI |
 | Database | PostgreSQL 16 |
 | ETL | Python 3.12, pandas, psycopg2, schedule |
 | Dashboard | Python 3.12, Streamlit, Plotly, pandas |
@@ -211,7 +211,7 @@ docker compose up -d --build
 ```
 
 The first build downloads base images and Maven/npm dependencies, so it takes a few
-minutes. Compose starts the services in order: ZooKeeper and Kafka, then PostgreSQL (which
+minutes. Compose starts the services in order: Kafka, then PostgreSQL (which
 creates the schema and seed data), then the auth service, then the trading API.
 
 Check that everything is up:
