@@ -12,8 +12,8 @@ describe('PerformanceSummaryComponent', () => {
   let store: Pick<MarketQuotesStore, 'quotes' | 'lastUpdated' | 'errorMessage'>;
 
   const positions: PositionResponse[] = [
-    { accountId: 11, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null },
-    { accountId: 11, symbol: 'MSFT', quantity: 5, averageCost: 200, marketValue: null },
+    { accountId: 11, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 100, marketValue: null },
+    { accountId: 11, symbol: 'MSFT', quantity: 5, reservedQuantity: 0, availableQuantity: 5, averageCost: 200, marketValue: null },
   ];
 
   const quote = (symbol: string, price: number | null, previousClose: number | null): MarketQuote => ({
