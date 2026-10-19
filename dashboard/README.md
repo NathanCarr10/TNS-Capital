@@ -27,8 +27,23 @@ The sidebar switches between the trading insights below and the [Monitoring](#mo
 Admins who sign in through the Angular trading app are sent here. The admin signs in here
 separately, as Streamlit cannot read the Angular app's token; see decision 12.
 
-The token is checked again on every interaction, so when it expires (15 minutes) the page
-goes back to the sign-in form. The admin is `admin`, with the `ADMIN_PASSWORD` from `.env`.
+The admin is `admin`, with the `ADMIN_PASSWORD` from `.env`.
+
+### Staying signed in
+
+A page reload keeps the admin signed in, for up to 8 hours from sign-in
+(`DASHBOARD_SESSION_HOURS`). [sessions.py](sessions.py) keeps the access and refresh tokens
+on the server, under a random session id. The browser only gets that id, in the
+`tns_dashboard_session` cookie: path `/analytics`, `SameSite=Strict`, and `Secure` over
+HTTPS. Streamlit cannot send `Set-Cookie` headers, so the page sets the cookie from a
+script. It is therefore not `HttpOnly`, which is why it carries no token.
+
+The token is still checked on every interaction. When the access token expires (15 minutes),
+the dashboard swaps it for a new one through `POST /auth/refresh`, once per session even with
+several tabs open, as presenting a refresh token twice looks like theft (OWASP A09-1). The admin
+goes back to the sign-in form only when the 8 hours are up, the refresh is refused or the
+dashboard restarts, which forgets every session. **Sign out** ends the session here and at the
+auth service (`POST /auth/logout`) and clears the cookie.
 
 ## Insights
 
@@ -87,8 +102,11 @@ While alerts are firing, the sidebar says so on every view.
 | Resources | Heap in use by service | `jvm_memory_used_bytes`, `nodejs_heap_used_bytes` |
 | Logs | Search by text, service and level, newest first; saved searches for failed logins, refresh token reuse, access denied and errors | VictoriaLogs |
 
-The period (1 hour to 7 days) applies to every number and chart. Answers are cached for 15 s,
-the scrape interval. The log search text is sent as a quoted phrase, so it cannot change the
+The period (15 minutes to 7 days) applies to every number and chart. With **Live** on (the
+default) the panels refresh every 10 s, the scrape interval, without reloading the page; turn
+it off to read a chart without it moving. Rates have no fixed window: each point covers its
+own step (10 s over 15 minutes), so a burst of orders shows straight away rather than being
+smoothed over five minutes. The log search text is sent as a quoted phrase, so it cannot change the
 query. `monitoring.py` holds the queries and turns the answers into DataFrames;
 `monitoring_page.py` draws the view.
 
@@ -97,6 +115,7 @@ query. `monitoring.py` holds the queries and turns the answers into DataFrames;
 | File | What it does |
 |---|---|
 | [auth.py](auth.py) | Signs in through the auth service and checks the token is a valid admin one |
+| [sessions.py](sessions.py) | Keeps signed-in admins' tokens on the server, so a reload stays signed in |
 | [data.py](data.py) | Loads the live and batch data from PostgreSQL into DataFrames |
 | [insights.py](insights.py) | Pure pandas functions, one per insight; no database or UI code |
 | [app.py](app.py) | The Streamlit page: headline numbers, insight sentences and Plotly charts |
@@ -146,6 +165,7 @@ python -m pytest
 - `tests/test_app.py`: the Streamlit page rendered headlessly (`AppTest`) with fake data:
   sign-in, traders turned away, expired and forged sessions, sign-out, the per-user view, and
   the Monitoring view with the stack running, down and not configured
+- `tests/test_sessions.py`: the session store: expiry, token rotation, one refresh for many tabs
 - `tests/test_monitoring.py`: the monitoring stack's answers parsed into DataFrames, and the
   LogsQL the log search sends, with a fake HTTP client
 - `tests/integration/test_data_postgres.py`: `data.py` against a real database. Skipped

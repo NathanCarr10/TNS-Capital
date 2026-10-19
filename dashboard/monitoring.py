@@ -33,16 +33,19 @@ LOG_PRESETS = {
     "Errors, every service": ("", ["error"]),
 }
 
-# PromQL, by panel. Rates are per minute, which reads better than per second at this volume.
-ORDERS_ACCEPTED = "sum by (side) (rate(trading_orders_accepted_total[5m])) * 60"
-ORDERS_FINISHED = "sum by (status) (rate(trading_orders_finished_total[5m])) * 60"
-FILL_TIME = ('label_set(histogram_quantile(0.5, sum by (le) (rate(trading_order_fill_time_seconds_bucket[5m]))), '
+# PromQL (MetricsQL), by chart. Rates are per minute, which reads better than per second at
+# this volume. They have no [window]: VictoriaMetrics then uses the chart's step, so each
+# point covers only its own interval. A fixed [5m] window would smooth a burst of orders
+# over five minutes and make the charts trail behind.
+ORDERS_ACCEPTED = "sum by (side) (rate(trading_orders_accepted_total)) * 60"
+ORDERS_FINISHED = "sum by (status) (rate(trading_orders_finished_total)) * 60"
+FILL_TIME = ('label_set(histogram_quantile(0.5, sum by (le) (rate(trading_order_fill_time_seconds_bucket))), '
              '"quantile", "median") or label_set(histogram_quantile(0.95, sum by (le) '
-             '(rate(trading_order_fill_time_seconds_bucket[5m]))), "quantile", "95th percentile")')
+             '(rate(trading_order_fill_time_seconds_bucket))), "quantile", "95th percentile")')
 DLQ_PENDING = "trading_dlq_pending"
 CONSUMER_LAG = "sum by (group) (kafka_consumer_group_lag)"
-LOGINS = "sum by (outcome) (rate(auth_logins_total[5m])) * 60"
-API_REFUSED = 'sum by (status) (rate(http_server_requests_seconds_count{job="api", status=~"401|403|5.."}[5m])) * 60'
+LOGINS = "sum by (outcome) (rate(auth_logins_total)) * 60"
+API_REFUSED = 'sum by (status) (rate(http_server_requests_seconds_count{job="api", status=~"401|403|5.."})) * 60'
 HEAP_USED = ('sum by (job) (jvm_memory_used_bytes{area="heap"}) / 2^20 '
              'or sum by (job) (nodejs_heap_used_bytes) / 2^20')
 
@@ -105,9 +108,12 @@ def series(query, minutes, label):
     return parse_range(_prometheus("/api/v1/query_range", params), label)
 
 
+SCRAPE_SECONDS = 10
+
+
 def step_seconds(minutes):
-    """About 120 points per chart, never under the 15 s scrape interval."""
-    return max(15, minutes * 60 // 120)
+    """About 120 points per chart, never under the scrape interval."""
+    return max(SCRAPE_SECONDS, minutes * 60 // 120)
 
 
 def parse_instant(result):

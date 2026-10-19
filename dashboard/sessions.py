@@ -19,6 +19,7 @@ import threading
 import time
 
 SESSION_HOURS = float(os.getenv("DASHBOARD_SESSION_HOURS", "8"))
+COOKIE = "tns_dashboard_session"
 
 
 class SessionStore:
@@ -79,3 +80,26 @@ class SessionStore:
         now = self.clock()
         for session_id in [key for key, session in self._sessions.items() if session["expires"] <= now]:
             del self._sessions[session_id]
+
+
+# One store per dashboard process, shared by every browser connection
+STORE = SessionStore()
+
+
+def browser_cookie():
+    """The session id the browser sent when it connected, if any."""
+    import streamlit as st
+
+    return st.context.cookies.get(COOKIE)
+
+
+def cookie_script(session_id):
+    """Sets the session cookie, or clears it for None.
+
+    Streamlit cannot set response headers, so the page sets the cookie itself. It is
+    scoped to /analytics and SameSite=Strict, and Secure over HTTPS. Page scripts can read
+    it, so it holds only the session id: the tokens stay on the server.
+    """
+    value, max_age = (session_id, int(SESSION_HOURS * 3600)) if session_id else ("", 0)
+    return (f"<script>document.cookie = '{COOKIE}={value}; Path=/analytics; Max-Age={max_age}; SameSite=Strict'"
+            " + (location.protocol === 'https:' ? '; Secure' : '');</script>")

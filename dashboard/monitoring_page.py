@@ -1,35 +1,39 @@
 """The Monitoring view: alerts, the order pipeline, security events, resources and log search.
 
 Admins only, like the rest of the dashboard: app.py renders it after require_admin. The data
-comes from the monitoring stack (monitoring.py), cached for 15 s, the scrape interval.
+comes from the monitoring stack (monitoring.py). With Live on (the default) the panels below
+the period picker rerun every 10 s, the scrape interval, without reloading the rest of the
+page; answers are cached for 5 s, so each refresh asks the stack again.
 """
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 import monitoring
 
-RANGES = {"Last hour": 60, "Last 6 hours": 360, "Last 24 hours": 1440, "Last 7 days": 10080}
+RANGES = {"Last 15 minutes": 15, "Last hour": 60, "Last 6 hours": 360, "Last 24 hours": 1440, "Last 7 days": 10080}
+REFRESH_SECONDS = monitoring.SCRAPE_SECONDS
 PER_MINUTE = "Per minute"
 STATE_ICONS = {"firing": "🔴", "pending": "🟡"}
 
 
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=5, show_spinner=False)
 def cached_alerts():
     return monitoring.alerts()
 
 
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=5, show_spinner=False)
 def cached_value(query):
     return monitoring.value(query)
 
 
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=5, show_spinner=False)
 def cached_instant(query):
     return monitoring.instant(query)
 
 
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=5, show_spinner=False)
 def cached_series(query, minutes, label):
     return monitoring.series(query, minutes, label)
 
@@ -78,7 +82,14 @@ def render():
                 "`docker compose --profile observability up -d`; it needs about 200 MB.")
         return
 
-    minutes = RANGES[st.selectbox("Period", list(RANGES), index=1, key="monitoring_period")]
+    left, right = st.columns([3, 1], vertical_alignment="bottom")
+    minutes = RANGES[left.selectbox("Period", list(RANGES), key="monitoring_period")]
+    live = right.toggle(f"Live (every {REFRESH_SECONDS} s)", value=True, key="monitoring_live")
+    # A fragment reruns on its own, every REFRESH_SECONDS while live, leaving the rest of the page as it is
+    st.fragment(render_panels, run_every=REFRESH_SECONDS if live else None)(minutes)
+
+
+def render_panels(minutes):
     try:
         render_alerts()
         render_health()
@@ -88,6 +99,7 @@ def render():
     except monitoring.Unavailable as error:
         st.error(str(error))
     render_logs(minutes)
+    st.caption(f"Updated {pd.Timestamp.now(tz='UTC'):%H:%M:%S} UTC.")
 
 
 def render_alerts():

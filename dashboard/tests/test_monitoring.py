@@ -102,7 +102,7 @@ def test_range_query_gives_one_row_per_point_and_drops_gaps(stack):
 def test_steps_give_about_120_points_but_never_under_the_scrape_interval():
     assert monitoring.step_seconds(60) == 30
     assert monitoring.step_seconds(10080) == 5040
-    assert monitoring.step_seconds(10) == 15
+    assert monitoring.step_seconds(15) == 10
 
 
 def test_alerts_come_most_severe_first(stack):
