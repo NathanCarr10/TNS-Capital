@@ -10,7 +10,7 @@ import io.micrometer.core.instrument.binder.MeterBinder;
 import org.springframework.stereotype.Component;
 
 /**
- * Gauges read when the metrics are scraped (every 15 s):
+ * Gauges read when the metrics are scraped (every 10 s):
  *
  * - trading.dlq.pending: dead letters awaiting an admin's review (OWASP A09-4)
  * - marketdata.stream.state{state}: 1 for the Alpaca stream's current state, 0 for the others

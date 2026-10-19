@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  *
  * Measured from the broker rather than from the consumers' own client
  * metrics, so the lag keeps growing when a consumer has died, which is when
- * it matters. One admin client polls every 15 s, the scrape interval.
+ * it matters. One admin client polls every 10 s, the scrape interval.
  *
  * Gauge: kafka.consumer.group.lag{group, topic}. Only runs with the metrics
  * port set (METRICS_PORT), as in Docker Compose.
@@ -54,7 +54,7 @@ public class KafkaLagMonitor {
                 AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10000));
     }
 
-    @Scheduled(fixedDelay = 15, initialDelay = 15, timeUnit = TimeUnit.SECONDS)
+    @Scheduled(fixedDelay = 10, initialDelay = 10, timeUnit = TimeUnit.SECONDS)
     public void poll() {
         for (String group : GROUPS) {
             try {

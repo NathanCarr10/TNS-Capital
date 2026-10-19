@@ -42,7 +42,7 @@ public class MetricsServer {
     public void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/metrics", this::handle);
-        // The default executor runs requests on the server's one thread: a scrape every 15 s needs no more
+        // The default executor runs requests on the server's one thread: a scrape every 10 s needs no more
         server.start();
         log.info("Serving metrics on port {}", port);
     }
