@@ -13,19 +13,19 @@ import { ShellComponent } from './shell.component';
 describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
 
   const create = (): HTMLElement => {
-    authServiceSpy.isAdmin.and.returnValue(isAdmin);
+    authServiceSpy.isSupport.and.returnValue(isSupport);
     fixture = TestBed.createComponent(ShellComponent);
     fixture.detectChanges();
     return fixture.nativeElement;
   };
 
   beforeEach(async () => {
-    authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['logout', 'isAdmin']);
+    authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['logout', 'isSupport']);
     authServiceSpy.logout.and.returnValue(of(undefined));
-    isAdmin = false;
+    isSupport = false;
     const tradingService = tradingServiceStub();
     tradingService.getAccounts.and.returnValue(of([]));
 
@@ -60,8 +60,8 @@ describe('ShellComponent', () => {
     ]);
   });
 
-  it('gives admins no Settings link, as they have no account of their own', () => {
-    isAdmin = true;
+  it('gives support no Settings link, as they have no account of their own', () => {
+    isSupport = true;
 
     const element = create();
 
@@ -77,13 +77,13 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.user .badge')?.textContent).toContain('Trader');
   });
 
-  it('shows an admin by username', () => {
-    isAdmin = true;
+  it('shows support by username', () => {
+    isSupport = true;
 
     const element = create();
 
     expect(element.querySelector('.user-name')?.textContent).toContain('trader1');
-    expect(element.querySelector('.user .badge')?.textContent).toContain('Admin');
+    expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
   });
 
   it('shows whether the NYSE is open', () => {

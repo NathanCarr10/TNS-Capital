@@ -1,6 +1,6 @@
-<label for="admin-account">Account</label>
+<label for="support-account">Account</label>
 <select
-  id="admin-account"
+  id="support-account"
   class="input"
   [disabled]="accounts().length === 0"
   (change)="onSelect($event)"
@@ -9,4 +9,3 @@
     <option [value]="account.id" [selected]="account.id === selectedId()">{{ account.accountNumber }} - {{ account.holderName }}</option>
   }
 </select>
-<button type="button" class="btn" (click)="openAnalytics.emit()">Analytics</button>

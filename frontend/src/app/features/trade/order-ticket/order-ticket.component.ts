@@ -38,7 +38,7 @@ export class OrderTicketComponent {
   /** The latest price, or null when there is none. */
   readonly livePrice = input<number | null>(null);
 
-  readonly isAdmin = this.store.isAdmin;
+  readonly isSupport = this.store.isSupport;
   readonly account = this.store.account;
   readonly accountLoading = this.store.accountLoading;
 
@@ -147,7 +147,7 @@ export class OrderTicketComponent {
 
   isSubmitDisabled(): boolean {
     return (
-      this.isAdmin ||
+      this.isSupport ||
       !this.tradable() ||
       this.orderForm.invalid ||
       this.isSubmitting() ||
@@ -158,8 +158,8 @@ export class OrderTicketComponent {
   }
 
   onSubmit(): void {
-    if (this.isAdmin) {
-      return; // the admin view is read-only
+    if (this.isSupport) {
+      return; // the support view is read-only
     }
     const account = this.account();
     if (!account) {

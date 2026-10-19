@@ -26,8 +26,8 @@ export class OrderHistoryComponent {
 
   readonly account = this.store.account;
   readonly accountError = this.store.accountError;
-  /** Admins view other traders' accounts read-only, so they get no Cancel button. */
-  readonly isAdmin = this.store.isAdmin;
+  /** Support views traders' accounts read-only, so they get no Cancel button. */
+  readonly isSupport = this.store.isSupport;
 
   readonly orderHistory = signal<OrderHistoryRow[]>([]);
   readonly orderHistoryLoading = signal(true);
@@ -51,7 +51,7 @@ export class OrderHistoryComponent {
   });
 
   constructor() {
-    // Reloads when an admin switches to another account
+    // Reloads when support switches to another account
     toObservable(this.store.account)
       .pipe(
         map((account) => account?.id ?? null),
@@ -85,7 +85,7 @@ export class OrderHistoryComponent {
 
   /** Cancels an open order. It may fill first; the API then answers ORD-409. */
   cancel(row: OrderHistoryRow): void {
-    if (this.isAdmin || row.status !== 'NEW' || this.cancellingId()) {
+    if (this.isSupport || row.status !== 'NEW' || this.cancellingId()) {
       return;
     }
     this.cancellingId.set(row.id);

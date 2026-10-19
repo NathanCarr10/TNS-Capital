@@ -4,7 +4,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
-import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountStore } from '../../core/trading/account.store';
 import { MarketDataService } from '../../core/trading/market-data.service';
@@ -15,8 +14,7 @@ import { PortfolioComponent } from './portfolio.component';
 describe('PortfolioComponent', () => {
   let fixture: ComponentFixture<PortfolioComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
-  let analyticsSpy: jasmine.SpyObj<AnalyticsDashboardService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
 
   const otherAccount = { ...ACCOUNT, id: 12, accountNumber: 'ACC-U000012', holderName: 'Trader Two' };
 
@@ -27,8 +25,7 @@ describe('PortfolioComponent', () => {
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
-        { provide: AnalyticsDashboardService, useValue: analyticsSpy },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
         { provide: MarketDataService, useValue: { getQuotes: () => of([]), getBars: () => of([]) } },
       ],
     });
@@ -39,8 +36,7 @@ describe('PortfolioComponent', () => {
 
   beforeEach(() => {
     tradingService = tradingServiceStub();
-    analyticsSpy = jasmine.createSpyObj<AnalyticsDashboardService>('AnalyticsDashboardService', ['open']);
-    isAdmin = false;
+    isSupport = false;
   });
 
   it('greets the trader and shows their account and cash', () => {
@@ -71,30 +67,30 @@ describe('PortfolioComponent', () => {
     expect(element.querySelector('img[src="x"]')).toBeNull();
   });
 
-  it('does not show admin controls to a trader', () => {
+  it('does not show support controls to a trader', () => {
     const element = create();
 
-    expect(element.querySelector('#admin-account')).toBeNull();
+    expect(element.querySelector('#support-account')).toBeNull();
     expect(element.querySelector('[role="switch"]')).toBeNull();
     expect(tradingService.getAccounts).not.toHaveBeenCalled();
   });
 
-  describe('for an admin', () => {
+  describe('for support', () => {
     beforeEach(() => {
-      isAdmin = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+      isSupport = true;
+      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
       tradingService.getAccounts.and.returnValue(of([otherAccount, ACCOUNT]));
     });
 
     it('lists every account and shows the first one, read-only', () => {
       const element = create();
 
-      const options = Array.from(element.querySelectorAll('#admin-account option')).map((option) =>
+      const options = Array.from(element.querySelectorAll('#support-account option')).map((option) =>
         option.textContent?.trim()
       );
       expect(options).toEqual(['ACC-U000011 - Trader One', 'ACC-U000012 - Trader Two']);
       expect(element.querySelector('.account-number')?.textContent).toContain('ACC-U000011');
-      expect(element.textContent).toContain("Admin view: orders can only be placed by the account's owner.");
+      expect(element.textContent).toContain("Support view: orders can only be placed by the account's owner.");
       expect(element.querySelector('.place-order')).toBeNull();
     });
 
@@ -102,23 +98,13 @@ describe('PortfolioComponent', () => {
       tradingService.getAccount.and.returnValue(of(otherAccount));
       const element = create();
 
-      const select = element.querySelector<HTMLSelectElement>('#admin-account')!;
+      const select = element.querySelector<HTMLSelectElement>('#support-account')!;
       select.value = String(otherAccount.id);
       select.dispatchEvent(new Event('change'));
       fixture.detectChanges();
 
       expect(tradingService.getAccount).toHaveBeenCalledWith(otherAccount.id);
       expect(element.querySelector('.account-number')?.textContent).toContain('ACC-U000012');
-    });
-
-    it('opens the analytics dashboard', () => {
-      const element = create();
-
-      Array.from(element.querySelectorAll('button'))
-        .find((button) => button.textContent?.trim() === 'Analytics')!
-        .click();
-
-      expect(analyticsSpy.open).toHaveBeenCalled();
     });
 
     it('suspends the active account and reactivates it', () => {
@@ -227,8 +213,8 @@ describe('PortfolioComponent', () => {
       );
     });
 
-    it('is not offered to admins, who view accounts read-only', () => {
-      isAdmin = true;
+    it('is not offered to support, who view accounts read-only', () => {
+      isSupport = true;
       tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
       create();
 
