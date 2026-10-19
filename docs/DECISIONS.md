@@ -49,7 +49,8 @@ idempotency keys are still rejected synchronously (404, 422, 409).
 An order that fails after it was accepted (insufficient funds or holdings at the limit or
 fill price, inactive account, broker unreachable) is stored as `REJECTED` with a reason,
 published as a trade event, and captured in `dlq_messages` with an `is_retryable` flag. There
-are no automatic Kafka retries. Admins review and replay messages through `/api/v1/dlq`.
+are no automatic Kafka retries. Admins and support review, replay and dismiss messages through
+`/api/v1/dlq`; support does so on the trading app's Dead Letters page.
 
 Why: chosen by the team (PR #72) so every failure is visible and auditable, and so a
 business failure (e.g. insufficient funds) is never retried blindly.
@@ -148,8 +149,8 @@ and are kept apart, so neither one does the other's job:
 | Role | Where | Can do |
 |---|---|---|
 | `USER` | Trading app | Only the account opened when they registered |
-| `SUPPORT` | Trading app (account viewer) | View every account and order read-only; suspend or reactivate accounts; open accounts; add and change instruments |
-| `ADMIN` | Analytics dashboard (`/analytics/`) | The analytics dashboard, the DLQ endpoints, the actuator's metrics, info and health details (observability) |
+| `SUPPORT` | Trading app (account viewer) | View every account and order read-only; suspend or reactivate accounts; open accounts; add and change instruments; review, replay and dismiss dead letters (the DLQ endpoints) |
+| `ADMIN` | Analytics dashboard (`/analytics/`) | The analytics dashboard, the DLQ endpoints (shared with support), the actuator's metrics, info and health details (observability) |
 
 An admin is not support: the trading API gives `ADMIN` no access to traders' accounts, and the
 Angular app sends an admin who signs in there to the analytics dashboard (`notAdminGuard`).
@@ -170,7 +171,7 @@ date.
 The admin analytics dashboard is the Streamlit app in `dashboard/` (spec §7 asks for a Python
 dashboard). The Angular login sends admins there. The read-only account viewer in the Angular app
 belongs to support, not admins (see 10): support staff pick any account and see its balance,
-holdings and orders, without the order ticket, and can suspend or reactivate it.
+holdings and orders, without the order ticket or market data, and can suspend or reactivate it.
 
 Streamlit's session lives in its Python server and cannot read the Angular app's token, which
 is kept in the browser tab's `sessionStorage`, so the admin signs in on each (even though both

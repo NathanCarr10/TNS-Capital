@@ -92,8 +92,9 @@ flowchart LR
    later is ignored.
 6. A failed order (insufficient funds or holdings, inactive account, broker unreachable,
    etc.) is saved as `REJECTED` with a reason and captured in the dead-letter queue
-   (`dlq_messages` table). Admins can inspect and replay these messages through
-   `/api/v1/dlq`; a replay sends the order to the broker again.
+   (`dlq_messages` table). Admins and support can inspect, replay and dismiss these
+   messages through `/api/v1/dlq` (support on the trading app's Dead Letters page); a
+   replay sends the order to the broker again.
 7. Clients poll `GET /api/v1/orders/{orderId}` to see the final status, and
    `GET /api/v1/orders/{orderId}/events` for its history.
 
@@ -329,7 +330,7 @@ and logout.
 
 | User | Password | Role | Access |
 |---|---|---|---|
-| `support` | `SUPPORT_PASSWORD` from `.env` | `SUPPORT` | The trading app's account viewer: every account read-only, suspending and reactivating them, opening accounts, adding and changing instruments |
+| `support` | `SUPPORT_PASSWORD` from `.env` | `SUPPORT` | The trading app's account viewer: every account read-only, suspending and reactivating them, opening accounts, adding and changing instruments, reviewing and closing dead letters |
 | `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | The analytics dashboard, the DLQ and the actuator's metrics; no traders' accounts (see [decision 10](docs/DECISIONS.md#10-roles)) |
 | A user you register | your own | `USER` | Only the account opened at registration |
 
@@ -382,7 +383,7 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 | Orders | `POST /orders` · `GET /orders` · `GET /orders/{orderId}` · `DELETE /orders/{orderId}` (cancel) · `GET /orders/{orderId}/events` (status history) · `GET /orders/history/{orderId}` · `GET /orders/{accountId}/history` |
 | Positions | `GET /positions/{accountId}` · `GET /positions/{accountId}/{symbol}` |
 | Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (SUPPORT) · `PUT /instruments/{symbol}` (SUPPORT) |
-| Dead-letter queue (ADMIN) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
+| Dead-letter queue (ADMIN, SUPPORT) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:
 
