@@ -88,7 +88,6 @@ describe('OrderTicketComponent', () => {
       jasmine.objectContaining({ accountId: ACCOUNT.id, symbol: 'AAPL', side: 'BUY', quantity: 10, price: 150 })
     );
     expect(toastMessages()).toEqual(['Order filled: BUY 10 AAPL at 150.00.']);
-    expect(component.successMessage()).toBeNull();
     expect(component.errorMessage()).toBeNull();
     expect(component.isTracking()).toBeFalse();
     // The fill moves cash and holdings, so both are reloaded for every page
@@ -168,7 +167,6 @@ describe('OrderTicketComponent', () => {
     tick();
 
     expect(toastMessages()).toEqual(['BUY AAPL rejected: Insufficient funds (ORD-400).']);
-    expect(component.successMessage()).toBeNull();
     expect(component.isTracking()).toBeFalse();
     flush();
   }));
@@ -184,7 +182,7 @@ describe('OrderTicketComponent', () => {
 
     expect(component.isTracking()).toBeTrue();
     expect(submitButton().textContent).toContain('Tracking order...');
-    expect(fixture.nativeElement.querySelector('.note.success')?.textContent).toContain('Tracking order ord-open');
+    expect(fixture.nativeElement.querySelector('.note.success')).toBeNull();
 
     tradingService.getOrder.and.returnValue(of(order({ id: 'ord-open' })));
     tick(OrderTrackerService.POLL_INTERVAL_MS);

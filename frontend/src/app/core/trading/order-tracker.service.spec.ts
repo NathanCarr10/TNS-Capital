@@ -108,7 +108,7 @@ describe('OrderTrackerService', () => {
 
     expect(tradingService.getOrder).toHaveBeenCalledTimes(OrderTrackerService.POLL_MAX_ATTEMPTS);
     expect(toasts()).toEqual([
-      { kind: 'info', message: 'Order ord-9 was accepted but is still processing. Check the order history.' },
+      { kind: 'info', message: 'The order is still processing. Check the order history for its status.' },
     ]);
     flush();
   }));
@@ -119,7 +119,7 @@ describe('OrderTrackerService', () => {
     tracker.track('ord-1').subscribe();
     tick();
 
-    expect(toasts()).toEqual([{ kind: 'info', message: 'Failed to retrieve the final status of order ord-1.' }]);
+    expect(toasts()).toEqual([{ kind: 'info', message: 'Failed to retrieve the final status of the order.' }]);
     flush();
   }));
 

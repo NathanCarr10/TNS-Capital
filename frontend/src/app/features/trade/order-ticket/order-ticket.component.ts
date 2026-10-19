@@ -44,7 +44,6 @@ export class OrderTicketComponent {
 
   readonly isSubmitting = signal(false);
   readonly isTracking = signal(false);
-  readonly successMessage = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
 
   readonly orderForm = this.formBuilder.group({
@@ -118,7 +117,6 @@ export class OrderTicketComponent {
       this.symbol();
       untracked(() => {
         this.orderForm.controls.price.setValue(null);
-        this.successMessage.set(null);
         this.errorMessage.set(null);
       });
     });
@@ -171,7 +169,6 @@ export class OrderTicketComponent {
       return;
     }
 
-    this.successMessage.set(null);
     this.errorMessage.set(null);
     this.isSubmitting.set(true);
 
@@ -179,7 +176,6 @@ export class OrderTicketComponent {
       next: (accepted: PlaceOrderResponse) => {
         this.isSubmitting.set(false);
         this.isTracking.set(true);
-        this.successMessage.set(`Order ${accepted.status || 'ACCEPTED'}. Tracking order ${accepted.orderId}.`);
         this.follow(accepted.orderId);
       },
       error: (error: unknown) => {
@@ -210,7 +206,6 @@ export class OrderTicketComponent {
     // The tracker announces the result with a toast; the ticket only unlocks for the next order
     this.trackingSubscription = this.orderTracker.track(orderId).subscribe(() => {
       this.isTracking.set(false);
-      this.successMessage.set(null);
     });
   }
 

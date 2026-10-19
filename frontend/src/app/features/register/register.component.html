@@ -40,19 +40,7 @@
         placeholder="Re-enter your password"
       />
 
-      <p class="field-error" *ngIf="registerForm.controls.username.hasError('pattern') && registerForm.controls.username.touched">
-        Username can only contain letters, numbers, dots, underscores and hyphens.
-      </p>
-
-      <p class="field-error" *ngIf="registerForm.controls.holderName.hasError('pattern') && registerForm.controls.holderName.touched">
-        Account holder name can only contain letters, numbers, spaces and . , ' -
-      </p>
-
-      <p class="field-error" *ngIf="hasCredentialsError()">
-        Enter a username and passwords with at least 8 characters.
-      </p>
-
-      <p class="server-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+      <p class="field-error" [class.visible]="!!validationMessage()">{{ validationMessage() }}</p>
 
       <button type="submit" [disabled]="isSubmitting()">
         {{ isSubmitting() ? 'Creating Account...' : 'Register' }}

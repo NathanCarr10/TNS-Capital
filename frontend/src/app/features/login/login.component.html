@@ -22,11 +22,11 @@
         placeholder="Enter password"
       />
 
-      <p class="field-error" *ngIf="loginForm.invalid && loginForm.touched">
+      <p class="field-error" [class.visible]="loginForm.invalid && loginForm.touched">
         Username and password are required.
       </p>
 
-      <p class="server-error" *ngIf="errorMessage()">{{ errorMessage() }}</p>
+      <p class="server-error" [class.visible]="!!errorMessage()">{{ errorMessage() }}</p>
 
       <button type="submit" [disabled]="isSubmitting()">
         {{ isSubmitting() ? 'Signing In...' : 'Login' }}

@@ -100,9 +100,6 @@
   } @else if (instrument() && !tradable()) {
     <p class="note">{{ symbol() }} is not tradable.</p>
   }
-  @if (successMessage()) {
-    <output class="note success">{{ successMessage() }}</output>
-  }
   @if (errorMessage()) {
     <p class="note error" role="alert">{{ errorMessage() }}</p>
   }
