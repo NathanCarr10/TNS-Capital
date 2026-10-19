@@ -108,8 +108,8 @@ erDiagram
         BIGINT id PK
         VARCHAR(255) username UK
         VARCHAR(255) password_hash "Argon2id; plaintext never stored"
-        VARCHAR(20) role "USER | ADMIN"
-        BIGINT account_id FK, UK "opened at registration; NULL for admins"
+        VARCHAR(20) role "USER | SUPPORT | ADMIN"
+        BIGINT account_id FK, UK "opened at registration; NULL for support and admins"
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }

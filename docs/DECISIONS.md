@@ -15,7 +15,7 @@ be explained at the showcase and revisited later.
 | 7 | Jenkins instead of GitHub Actions | §4.1 | In place |
 | 8 | No TLS, SASL or Kafka ACLs in the local stack | §5 | Deployment concern |
 | 9 | Trading API contract generated from the code; the committed copy is checked by `ApiContractIT` | §9.2 task 2 | In place |
-| 10 | Only admins open accounts and manage instruments | §22 | Team decision |
+| 10 | Separate SUPPORT and ADMIN roles: support works on traders' accounts in the trading app, admins run analytics and operations | §22 | Team decision |
 | 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
@@ -133,9 +133,21 @@ to `target/trading-api.json`; after reviewing the difference, update the copy wi
 
 ## 10. Roles
 
-Users have the role `USER` or `ADMIN`. A user can use only the account opened when they
-registered; admins can use every account. Admin-only: opening accounts, creating or changing
-instruments, and the DLQ endpoints. Any further role rules are to be agreed by the team.
+Users have the role `USER`, `SUPPORT` or `ADMIN`. The two staff roles have no trading account
+and are kept apart, so neither one does the other's job:
+
+| Role | Where | Can do |
+|---|---|---|
+| `USER` | Trading app | Only the account opened when they registered |
+| `SUPPORT` | Trading app (account viewer) | View every account and order read-only; suspend or reactivate accounts; open accounts; add and change instruments |
+| `ADMIN` | Analytics dashboard (`/analytics/`) | The analytics dashboard, the DLQ endpoints, the actuator's metrics, info and health details (observability) |
+
+An admin is not support: the trading API gives `ADMIN` no access to traders' accounts, and the
+Angular app sends an admin who signs in there to the analytics dashboard (`notAdminGuard`).
+Support is turned away by the analytics dashboard. The auth service creates both accounts at
+startup, `admin` from `ADMIN_PASSWORD` and `support` from `SUPPORT_PASSWORD`, refuses the same
+password for both, and never changes an existing user's role. A user holds one role
+(`users.role`).
 
 ## 11. Accepted vulnerabilities
 
@@ -147,11 +159,9 @@ date.
 ## 12. Admin analytics sign-in
 
 The admin analytics dashboard is the Streamlit app in `dashboard/` (spec §7 asks for a Python
-dashboard). The Angular login sends admins there, and its **Trading dashboard** button brings
-them back to the Angular app. Admins have no trading account of their own, so there the
-dashboard becomes a read-only account viewer: the admin picks any account (the API already lets
-admins read every account) and sees its balance, holdings and orders, without the order ticket.
-Whether admins may place orders for traders is left for the team to decide.
+dashboard). The Angular login sends admins there. The read-only account viewer in the Angular app
+belongs to support, not admins (see 10): support staff pick any account and see its balance,
+holdings and orders, without the order ticket, and can suspend or reactivate it.
 
 Streamlit's session lives in its Python server and cannot read the Angular app's token, which
 is kept in the browser tab's `sessionStorage`, so the admin signs in on each (even though both
@@ -164,19 +174,17 @@ verifies the token it gets itself (HS256 signature, issuer, `typ`, expiry) and a
 `ADMIN` role.
 
 When a signed-out user opens a protected page, the login sends them back to it afterwards
-(`?returnUrl=`), admins included. That is how the Trading dashboard button, which opens a new
-tab without the Angular session, lands on the account viewer and not back on analytics.
+(`?returnUrl=`).
 
 ## 13. Analytics dashboard under `/analytics/`
 
 The Angular app's nginx (and `ng serve`'s `proxy.conf.json`) forwards `/analytics/` to the
 Streamlit container, which runs with the base path `analytics` (`dashboard/.streamlit/config.toml`),
-WebSocket included. The home page's admin link, the admin login and the Analytics button all go to that
+WebSocket included. The home page's admin link and the admin login both go to that
 relative path. Linking to `http://localhost:8501` only worked when the browser ran on the Docker
 host with that port open: through a forwarded or remote address it gave "page not found", and a
 browser in the end-to-end tests could not reach it either. The same pattern carries over to the
-sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. The
-Streamlit **Trading dashboard** button is the relative `/portfolio` for the same reason. Port 8501
+sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. Port 8501
 stays published for direct access (`http://localhost:8501/analytics/`).
 
 ## 14. Angular 19
