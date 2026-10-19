@@ -48,6 +48,15 @@ describe('PortfolioComponent', () => {
     expect(element.querySelector('.cash strong')?.textContent).toContain('$5,000.00');
   });
 
+  it('shows the cash left to trade and the cash held for open orders', () => {
+    tradingService.getAccount.and.returnValue(of({ ...ACCOUNT, reservedCash: 1500, availableCash: 3500 }));
+    const element = create();
+
+    expect(element.querySelector('.cash strong')?.textContent).toContain('$5,000.00');
+    expect(element.querySelector('.cash .available')?.textContent).toContain('$3,500.00 available to trade');
+    expect(element.querySelector('.cash .reserved')?.textContent).toContain('$1,500.00 in open orders');
+  });
+
   it('links to the order history and the trade page', () => {
     const element = create();
 

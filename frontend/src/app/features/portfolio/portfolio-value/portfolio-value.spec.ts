@@ -9,6 +9,8 @@ describe('buildValueSeries', () => {
     accountId: 11,
     symbol,
     quantity,
+    reservedQuantity: 0,
+    availableQuantity: quantity,
     averageCost: 1,
     marketValue: null,
   });

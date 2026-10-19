@@ -90,11 +90,14 @@ export class OrderTrackerService {
   private announce(result: OrderOutcome): void {
     if (result.status === 'FILLED') {
       this.toast.success(result.message);
-      this.store.refresh();
     } else if (result.status === 'REJECTED') {
       this.toast.error(result.message);
     } else if (result.status === 'UNKNOWN') {
       this.toast.info(result.message);
+    }
+    // Filling moves cash and shares; every outcome releases what the order reserved
+    if (result.status !== 'UNKNOWN') {
+      this.store.refresh();
     }
   }
 }

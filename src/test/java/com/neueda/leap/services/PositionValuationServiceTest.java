@@ -40,10 +40,23 @@ class PositionValuationServiceTest {
                 new Position(1L, "MSFT", 5, new BigDecimal("400.00"))));
 
         verify(priceProvider, times(1)).latestPrices(any());
-        assertEquals(new PositionResponse(1L, "AAPL", 10, new BigDecimal("200.00"), new BigDecimal("2273.10")),
+        assertEquals(new PositionResponse(1L, "AAPL", 10, 0, 10, new BigDecimal("200.00"), new BigDecimal("2273.10")),
                 responses.get(0));
         // No live price: market value is unknown, not zero
         assertNull(responses.get(1).marketValue());
+    }
+
+    @Test
+    @DisplayName("Shows the shares reserved for open SELL orders and those left to sell")
+    void showsReservedShares() {
+        Position position = new Position(1L, "AAPL", 10, new BigDecimal("200.00"));
+        position.reserve(4);
+
+        PositionResponse response = service.toResponse(position);
+
+        assertEquals(10, response.quantity());
+        assertEquals(4, response.reservedQuantity());
+        assertEquals(6, response.availableQuantity());
     }
 
     @Test

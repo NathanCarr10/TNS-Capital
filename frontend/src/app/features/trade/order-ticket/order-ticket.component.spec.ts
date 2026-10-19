@@ -235,9 +235,35 @@ describe('OrderTicketComponent', () => {
     expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('more than your available cash');
   });
 
+  it('counts only the cash not reserved by open orders as available', () => {
+    tradingService.getAccount.and.returnValue(of({ ...ACCOUNT, reservedCash: 4000, availableCash: 1000 }));
+    create(100);
+    component.orderForm.patchValue({ quantity: 20 });
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('$1,000.00');
+    expect(text).toContain('$4,000.00 is held for your open orders.');
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('more than your available cash');
+  });
+
+  it('warns when selling shares that open orders reserved', () => {
+    tradingService.getAccountPositions.and.returnValue(
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, reservedQuantity: 8, availableQuantity: 2, averageCost: 100, marketValue: null }])
+    );
+    create();
+    component.orderForm.patchValue({ side: 'SELL', quantity: 5 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain(
+      'You can sell 2 AAPL; 8 are in open orders.'
+    );
+    expect(fixture.nativeElement.textContent).toContain('8 of your 10 AAPL are in open orders.');
+  });
+
   it('warns when selling more than is held', () => {
     tradingService.getAccountPositions.and.returnValue(
-      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 3, averageCost: 100, marketValue: null }])
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 3, reservedQuantity: 0, availableQuantity: 3, averageCost: 100, marketValue: null }])
     );
     create();
     component.orderForm.patchValue({ side: 'SELL', quantity: 5 });
@@ -265,7 +291,7 @@ describe('OrderTicketComponent', () => {
 
   it('warns that a sell limit above the market price will not fill', () => {
     tradingService.getAccountPositions.and.returnValue(
-      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null }])
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 100, marketValue: null }])
     );
     create(150);
     component.orderForm.patchValue({ side: 'SELL', quantity: 1, price: 10000 });

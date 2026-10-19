@@ -62,7 +62,8 @@ describe('OrderTrackerService', () => {
     flush();
   }));
 
-  it('toasts a rejection with its mapped reason', fakeAsync(() => {
+  it('toasts a rejection with its mapped reason and reloads the account, whose reservation was released', fakeAsync(() => {
+    spyOn(store, 'refresh');
     tradingService.getOrder.and.returnValue(
       of(order({ side: 'SELL', status: 'REJECTED', statusReason: 'Insufficient holdings for AAPL' }))
     );
@@ -71,6 +72,7 @@ describe('OrderTrackerService', () => {
     tick();
 
     expect(toasts()).toEqual([{ kind: 'error', message: 'SELL AAPL rejected: Insufficient holdings (ORD-409).' }]);
+    expect(store.refresh).toHaveBeenCalledTimes(1);
     flush();
   }));
 
@@ -89,7 +91,8 @@ describe('OrderTrackerService', () => {
     flush();
   }));
 
-  it('stops quietly when the trader cancels the order', fakeAsync(() => {
+  it('stops quietly when the trader cancels the order, reloading the released cash', fakeAsync(() => {
+    spyOn(store, 'refresh');
     tradingService.getOrder.and.returnValue(of(order({ status: 'CANCELLED' })));
     let outcome: OrderOutcome | undefined;
 
@@ -98,6 +101,7 @@ describe('OrderTrackerService', () => {
 
     expect(outcome?.status).toBe('CANCELLED');
     expect(toasts()).toEqual([]);
+    expect(store.refresh).toHaveBeenCalledTimes(1);
   }));
 
   it('says the order is still processing when it does not settle in time', fakeAsync(() => {

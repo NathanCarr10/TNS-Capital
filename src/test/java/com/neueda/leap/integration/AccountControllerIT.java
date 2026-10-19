@@ -83,7 +83,9 @@ class AccountControllerIT extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.id", equalTo(testAccount.getId().intValue())))
                 .andExpect(jsonPath("$.holderName", equalTo("John Doe")))
                 .andExpect(jsonPath("$.status", equalTo("ACTIVE")))
-                .andExpect(jsonPath("$.cashBalance", is(10000.0)));
+                .andExpect(jsonPath("$.cashBalance", is(10000.0)))
+                .andExpect(jsonPath("$.reservedCash", is(0.0)))
+                .andExpect(jsonPath("$.availableCash", is(10000.0)));
     }
 
     @Test
@@ -102,7 +104,9 @@ class AccountControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/accounts/{accountId}/balance", testAccount.getId())
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance", is(10000.0)));
+                .andExpect(jsonPath("$.balance", is(10000.0)))
+                .andExpect(jsonPath("$.reservedCash", is(0.0)))
+                .andExpect(jsonPath("$.availableCash", is(10000.0)));
     }
 
     @Test

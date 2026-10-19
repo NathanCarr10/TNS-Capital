@@ -15,10 +15,12 @@ class PositionResponseTest {
         Integer quantity = 100;
         BigDecimal averageCost = new BigDecimal("150.00");
         BigDecimal marketValue = new BigDecimal("15000.00");
-        PositionResponse response = new PositionResponse(accountId, symbol, quantity, averageCost, marketValue);
+        PositionResponse response = new PositionResponse(accountId, symbol, quantity, 40, 60, averageCost, marketValue);
         assertEquals(accountId, response.accountId());
         assertEquals(symbol, response.symbol());
         assertEquals(quantity, response.quantity());
+        assertEquals(40, response.reservedQuantity());
+        assertEquals(60, response.availableQuantity());
         assertEquals(averageCost, response.averageCost());
         assertEquals(marketValue, response.marketValue());
     }
@@ -26,16 +28,16 @@ class PositionResponseTest {
     @Test
     void testPositionResponseWithDifferentSymbols() {
         PositionResponse aapl = new PositionResponse(
-                1L, "AAPL", 100, new BigDecimal("150.00"), new BigDecimal("15000.00"));
+                1L, "AAPL", 100, 0, 100, new BigDecimal("150.00"), new BigDecimal("15000.00"));
         PositionResponse msft = new PositionResponse(
-                1L, "MSFT", 100, new BigDecimal("300.00"), new BigDecimal("30000.00"));
+                1L, "MSFT", 100, 0, 100, new BigDecimal("300.00"), new BigDecimal("30000.00"));
         assertNotEquals(aapl.symbol(), msft.symbol());
     }
 
     @Test
     void testPositionResponseZeroQuantity() {
         PositionResponse response = new PositionResponse(
-                1L, "AAPL", 0, new BigDecimal("150.00"), new BigDecimal("0.00"));
+                1L, "AAPL", 0, 0, 0, new BigDecimal("150.00"), new BigDecimal("0.00"));
         assertEquals(0, response.quantity());
     }
 }
