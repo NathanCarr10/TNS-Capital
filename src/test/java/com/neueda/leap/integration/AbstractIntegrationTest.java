@@ -116,6 +116,6 @@ public abstract class AbstractIntegrationTest {
     }
 
     private void truncate() {
-        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log, newsletter_issues RESTART IDENTITY CASCADE");
     }
 }

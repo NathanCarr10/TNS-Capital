@@ -146,7 +146,7 @@ class AlpacaRestClientTest {
     }
 
     @Test
-    @DisplayName("Makes no snapshot or bars call when no API key is configured")
+    @DisplayName("Makes no snapshot, bars or news call when no API key is configured")
     void makesNoMarketDataCallWithoutKeys() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -154,6 +154,84 @@ class AlpacaRestClientTest {
 
         assertTrue(client.dailyCloses(List.of("AAPL")).isEmpty());
         assertTrue(client.bars("AAPL", BarTimeframe.DAY_1, Instant.parse("2026-09-12T00:00:00Z"), 10).isEmpty());
+        assertTrue(client.news(List.of("AAPL"), Instant.parse("2026-10-12T00:00:00Z"), 50).isEmpty());
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("Reads news about the symbols, newest first")
+    void readsNews() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://data.example.test/v1beta1/news")))
+                .andExpect(header("APCA-API-KEY-ID", "my-key"))
+                .andExpect(queryParam("symbols", "AAPL,TSLA"))
+                .andExpect(queryParam("start", "2026-10-12T00:00:00Z"))
+                .andExpect(queryParam("limit", "50"))
+                .andExpect(queryParam("sort", "desc"))
+                .andRespond(withSuccess("""
+                        {"news": [
+                          {"id": 2, "headline": " Tesla beats delivery estimates ", "author": "A", "source": "benzinga",
+                           "url": "https://www.benzinga.com/news/2", "created_at": "2026-10-15T13:00:00Z",
+                           "updated_at": "2026-10-15T13:05:00Z", "summary": "", "images": [], "symbols": ["TSLA"]},
+                          {"id": 1, "headline": "Apple unveils new chip", "source": "benzinga",
+                           "url": "https://www.benzinga.com/news/1", "created_at": "2026-10-14T09:30:00Z",
+                           "symbols": ["AAPL", "QCOM"]}
+                        ], "next_page_token": null}""", MediaType.APPLICATION_JSON));
+
+        List<NewsArticle> news = new AlpacaRestClient(properties("my-key"), builder)
+                .news(List.of("AAPL", "TSLA"), Instant.parse("2026-10-12T00:00:00Z"), 50);
+
+        server.verify();
+        assertEquals(List.of(
+                new NewsArticle("Tesla beats delivery estimates", "benzinga", "https://www.benzinga.com/news/2",
+                        Instant.parse("2026-10-15T13:00:00Z"), List.of("TSLA")),
+                new NewsArticle("Apple unveils new chip", "benzinga", "https://www.benzinga.com/news/1",
+                        Instant.parse("2026-10-14T09:30:00Z"), List.of("AAPL", "QCOM"))), news);
+    }
+
+    @Test
+    @DisplayName("Leaves out news without a headline or an https link")
+    void leavesOutUnsafeNews() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://data.example.test/v1beta1/news")))
+                .andRespond(withSuccess("""
+                        {"news": [
+                          {"headline": "Script link", "source": "x", "url": "javascript:alert(1)", "created_at": "2026-10-15T13:00:00Z", "symbols": ["AAPL"]},
+                          {"headline": "Plain http", "source": "x", "url": "http://example.com", "created_at": "2026-10-15T13:00:00Z", "symbols": ["AAPL"]},
+                          {"headline": "No link", "source": "x", "created_at": "2026-10-15T13:00:00Z", "symbols": ["AAPL"]},
+                          {"headline": "  ", "source": "x", "url": "https://example.com/blank", "created_at": "2026-10-15T13:00:00Z", "symbols": ["AAPL"]},
+                          {"headline": "Kept", "source": "x", "url": "https://example.com/kept", "created_at": "2026-10-15T13:00:00Z"}
+                        ]}""", MediaType.APPLICATION_JSON));
+
+        List<NewsArticle> news = new AlpacaRestClient(properties("my-key"), builder)
+                .news(List.of("AAPL"), Instant.parse("2026-10-12T00:00:00Z"), 50);
+
+        assertEquals(List.of(new NewsArticle("Kept", "x", "https://example.com/kept",
+                Instant.parse("2026-10-15T13:00:00Z"), List.of())), news);
+    }
+
+    @Test
+    @DisplayName("Returns no news when the news call fails")
+    void returnsNoNewsOnError() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://data.example.test/v1beta1/news")))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.FORBIDDEN));
+
+        assertTrue(new AlpacaRestClient(properties("my-key"), builder)
+                .news(List.of("AAPL"), Instant.parse("2026-10-12T00:00:00Z"), 50).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Makes no news call for no symbols")
+    void makesNoNewsCallForNoSymbols() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+
+        assertTrue(new AlpacaRestClient(properties("my-key"), builder)
+                .news(List.of(), Instant.parse("2026-10-12T00:00:00Z"), 50).isEmpty());
         server.verify();
     }
 

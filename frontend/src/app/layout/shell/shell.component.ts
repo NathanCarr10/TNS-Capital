@@ -40,6 +40,7 @@ export class ShellComponent {
     { label: 'Trade', link: '/trade', icon: 'trade' },
     { label: 'Order History', link: '/orders', icon: 'history' },
     { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
+    { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
     ...(this.isSupport ? [] : [{ label: 'Settings', link: '/settings', icon: 'settings' as const }]),
   ];
 

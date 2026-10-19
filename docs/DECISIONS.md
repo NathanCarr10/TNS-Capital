@@ -21,6 +21,8 @@ be explained at the showcase and revisited later.
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
 | 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
+| 16 | Strategy Lab: automated strategy execution in its own service | §13.2 | Team decision |
+| 17 | Newsletter issues stored as JSONB snapshots, not child tables | — (newsletter story) | Team decision |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -258,4 +260,22 @@ Lab write-up; what was built, and why:
 - **Reporting.** Traders get a toast whenever a strategy trades, and a comparison of their strategies'
   realized P&L with their own (average cost). The admin analytics dashboard shows strategy orders next
   to everyone else's.
+
+## 17. Newsletter issues as JSONB snapshots
+
+The weekly newsletter stores each issue as one row of `newsletter_issues`, with its gainers,
+losers and news as `JSONB` arrays, rather than in `newsletter_movers` and `newsletter_news`
+child tables. An issue is written once by the weekly job, never changed, and always read
+whole, so it is a document rather than relational data. It also has to show what was
+published: with no foreign keys to `instruments`, renaming or removing an instrument does not
+alter or block past issues. Nothing queries individual movers; if the dashboard ever needs to,
+`jsonb_array_elements` or the ETL can flatten them. Postgres only checks that each column is
+an array, so `NewsletterService` validates the contents. `tns_api` has `SELECT` and `INSERT`
+only, so the database itself keeps issues immutable.
+
+The Friday job publishes. Support staff (the trading app's staff role, decision 10) get `GET /api/v1/newsletters/preview`, which builds the week
+so far and saves nothing: with one immutable issue per week, an early "publish" would take the
+place of that week's real issue. Demos before a Friday still need a published issue, so
+`POST /api/v1/newsletters/publish` lets support publish the week so far, but only where
+`NEWSLETTER_EARLY_PUBLISH=true` (a demo environment); elsewhere it answers `403 NWS-403`.
 

@@ -1,0 +1,27 @@
+meta {
+  name: List Issues
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{apiUrl}}/api/v1/newsletters
+  body: none
+  auth: inherit
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.length > 0) {
+    bru.setEnvVar("newsletterId", res.body[0].id);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Every published weekly newsletter, newest first, without its contents
+  (id, weekStart, generatedAt). Saves the newest issue's id as newsletterId
+  for Get Issue. Empty until the Friday job has published an issue.
+}
