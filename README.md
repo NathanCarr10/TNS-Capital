@@ -313,6 +313,11 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
 - **Admins can preview** the week so far with **Preview this week's issue** on the page, or
   `GET /api/v1/newsletters/preview`. A preview is never saved, so it cannot take the place of the
   Friday issue.
+- **Publishing early (demos):** with `NEWSLETTER_EARLY_PUBLISH=true` in `.env`, admins can also
+  click **Publish this issue** on a preview (`POST /api/v1/newsletters/publish`). That issue is
+  then the week's issue and the Friday run skips the week. It is off by default (`403 NWS-403`);
+  keep it off in production. To undo a demo locally, delete the row from `newsletter_issues` as the
+  database owner.
 - **Schedule:** `NEWSLETTER_CRON` in `.env` (a Spring cron in New York time; `-` switches it off).
   The number of movers and headlines is set under `newsletter.*` in `application.yml`.
 - **Existing database:** the table is created when the `postgres` volume is new. To add it to an
@@ -397,7 +402,7 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 | Orders | `POST /orders` · `GET /orders` · `GET /orders/{orderId}` · `DELETE /orders/{orderId}` (cancel) · `GET /orders/{orderId}/events` (status history) · `GET /orders/history/{orderId}` · `GET /orders/{accountId}/history` |
 | Positions | `GET /positions/{accountId}` · `GET /positions/{accountId}/{symbol}` |
 | Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (ADMIN) · `PUT /instruments/{symbol}` (ADMIN) |
-| Newsletter | `GET /newsletters` · `GET /newsletters/{id}` · `GET /newsletters/preview` (ADMIN) |
+| Newsletter | `GET /newsletters` · `GET /newsletters/{id}` · `GET /newsletters/preview` (ADMIN) · `POST /newsletters/publish` (ADMIN, demos only) |
 | Dead-letter queue (ADMIN) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:

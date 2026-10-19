@@ -23,6 +23,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import com.neueda.leap.config.NewsletterProperties;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
+import com.neueda.leap.exceptions.NewsletterPublishingDisabledException;
 import com.neueda.leap.marketdata.AlpacaRestClient;
 import com.neueda.leap.marketdata.BarTimeframe;
 import com.neueda.leap.marketdata.MarketDataService;
@@ -52,8 +53,12 @@ class NewsletterServiceTest {
     private final List<Instrument> instruments = new ArrayList<>();
 
     private NewsletterService service(int moversPerSide, int headlinesPerMover) {
+        return service(moversPerSide, headlinesPerMover, false);
+    }
+
+    private NewsletterService service(int moversPerSide, int headlinesPerMover, boolean earlyPublish) {
         return new NewsletterService(issueRepository, instrumentRepository, marketDataService, alpacaRestClient,
-                new NewsletterProperties("-", NEW_YORK, moversPerSide, headlinesPerMover), clock);
+                new NewsletterProperties("-", NEW_YORK, moversPerSide, headlinesPerMover, earlyPublish), clock);
     }
 
     private final NewsletterService service = service(5, 3);
@@ -248,6 +253,41 @@ class NewsletterServiceTest {
     @DisplayName("A preview without prices fails like publishing does")
     void previewWithoutPrices() {
         assertThrows(MarketDataUnavailableException.class, service::previewWeeklyIssue);
+    }
+
+    @Test
+    @DisplayName("Refuses to publish early unless early publishing is switched on")
+    void earlyPublishingOffByDefault() {
+        instrument("AAPL", "100", "110");
+
+        assertThrows(NewsletterPublishingDisabledException.class, service::publishEarly);
+
+        verifyNoInteractions(marketDataService);
+        verify(issueRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Publishes the week so far early when switched on")
+    void publishesEarly() {
+        clock.setNow(Instant.parse("2026-10-14T15:00:00Z"));
+        instrument("AAPL", "100", "110");
+
+        NewsletterIssue issue = service(5, 3, true).publishEarly();
+
+        assertEquals(WEEK_START, issue.getWeekStart());
+        assertEquals(List.of("AAPL"), symbols(issue.getGainers()));
+        verify(issueRepository).save(issue);
+    }
+
+    @Test
+    @DisplayName("Returns the week's issue when publishing early after it was published")
+    void publishEarlyReturnsPublishedIssue() {
+        NewsletterIssue published = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of(), List.of());
+        when(issueRepository.findByWeekStart(WEEK_START)).thenReturn(Optional.of(published));
+
+        assertSame(published, service(5, 3, true).publishEarly());
+
+        verify(issueRepository, never()).save(any());
     }
 
     @Test

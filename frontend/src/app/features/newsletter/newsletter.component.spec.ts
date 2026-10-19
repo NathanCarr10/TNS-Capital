@@ -68,6 +68,7 @@ describe('NewsletterComponent', () => {
       'listIssues',
       'getIssue',
       'previewIssue',
+      'publishIssue',
     ]);
     newsletterApi.listIssues.and.returnValue(of(SUMMARIES) as never);
     newsletterApi.getIssue.and.returnValue(of(ISSUE) as never);
@@ -191,7 +192,7 @@ describe('NewsletterComponent', () => {
     element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
     fixture.detectChanges();
 
-    element.querySelector<HTMLButtonElement>('.preview-banner button')!.click();
+    element.querySelector<HTMLButtonElement>('.preview-actions .btn:not(.btn-primary)')!.click();
     fixture.detectChanges();
 
     expect(element.querySelector('.preview-banner')).toBeNull();
@@ -215,5 +216,46 @@ describe('NewsletterComponent', () => {
 
     expect(texts(element, '[role="alert"]')).toEqual(['Market data is unavailable right now; try again later']);
     expect(element.querySelector('.preview-banner')).toBeNull();
+  });
+
+  it('lets admins publish the preview and opens the published issue', () => {
+    newsletterApi.previewIssue.and.returnValue(of({ ...ISSUE, id: null, weekStart: '2026-10-19' }) as never);
+    newsletterApi.publishIssue.and.returnValue(of({ ...ISSUE, id: 3, weekStart: '2026-10-19' }) as never);
+    const element = create({ isAdmin: true });
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate').and.resolveTo(true);
+    element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
+    fixture.detectChanges();
+
+    element.querySelector<HTMLButtonElement>('.preview-actions .btn-primary')!.click();
+    fixture.detectChanges();
+
+    expect(newsletterApi.publishIssue).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/newsletter', 3]);
+    expect(element.querySelector('.preview-banner')).toBeNull();
+  });
+
+  it('explains when publishing before Friday is switched off', () => {
+    newsletterApi.previewIssue.and.returnValue(of({ ...ISSUE, id: null }) as never);
+    newsletterApi.publishIssue.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { errorCode: 'NWS-403', message: 'Publishing the newsletter before the weekly run is switched off' },
+          })
+      ) as never
+    );
+    const element = create({ isAdmin: true });
+    element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
+    fixture.detectChanges();
+
+    element.querySelector<HTMLButtonElement>('.preview-actions .btn-primary')!.click();
+    fixture.detectChanges();
+
+    expect(texts(element, '[role="alert"]')).toEqual([
+      'Publishing before Friday is switched off. Set NEWSLETTER_EARLY_PUBLISH=true for a demo.',
+    ]);
+    expect(element.querySelector('.preview-banner')).not.toBeNull();
   });
 });

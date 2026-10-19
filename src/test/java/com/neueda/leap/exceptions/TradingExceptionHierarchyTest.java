@@ -30,6 +30,7 @@ class TradingExceptionHierarchyTest {
                 Arguments.of(new OrderNotFoundException("x"), "ORD-404"),
                 Arguments.of(new PositionNotFoundException("x"), "POS-404"),
                 Arguments.of(new NewsletterNotFoundException("x"), "NWS-404"),
+                Arguments.of(new NewsletterPublishingDisabledException("x"), "NWS-403"),
                 Arguments.of(new AccountNotActiveException("x"), "ACC-403"),
                 Arguments.of(new InsufficientFundsException("x"), "ORD-400"),
                 Arguments.of(new InsufficientHoldingsException("x"), "ORD-409"),

@@ -3,6 +3,7 @@ package com.neueda.leap.integration;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.math.BigDecimal;
@@ -115,6 +116,24 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/newsletters/preview"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.errorCode", equalTo("MKT-503")));
+        assertEquals(0, repository.count());
+    }
+
+    @Test
+    @DisplayName("Refuses to let traders publish an issue")
+    void tradersCannotPublish() throws Exception {
+        mockMvc.perform(post("/api/v1/newsletters/publish"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode", equalTo("AUTH-403")));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    @DisplayName("Answers 403 NWS-403 when an admin publishes early while it is switched off")
+    void earlyPublishingSwitchedOff() throws Exception {
+        mockMvc.perform(post("/api/v1/newsletters/publish"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode", equalTo("NWS-403")));
         assertEquals(0, repository.count());
     }
 }

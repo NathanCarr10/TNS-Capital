@@ -81,6 +81,9 @@ newsletter:
   zone: America/New_York
   movers-per-side: 5
   headlines-per-mover: 3
+  # Lets admins publish the week's issue before Friday, e.g. for a demo. The Friday run then skips
+  # that week, so keep it off in production. NEWSLETTER_EARLY_PUBLISH=true switches it on
+  early-publish: ${NEWSLETTER_EARLY_PUBLISH:false}
 
 dlq:
   auto-resolve:

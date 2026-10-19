@@ -38,6 +38,12 @@
   border: 1px dashed var(--border-strong);
 }
 
+.preview-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.5rem;
+}
+
 .issue-picker {
   margin: 0;
 }

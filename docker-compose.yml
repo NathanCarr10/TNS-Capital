@@ -136,6 +136,8 @@ services:
       ALPACA_FEED: ${ALPACA_FEED:-iex}
       # When the weekly newsletter is published (Spring cron, New York time); - switches it off
       NEWSLETTER_CRON: ${NEWSLETTER_CRON:-0 0 17 * * FRI}
+      # Lets admins publish the week's issue before Friday (demos); off unless set to true
+      NEWSLETTER_EARLY_PUBLISH: ${NEWSLETTER_EARLY_PUBLISH:-false}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
     # Localhost only: browsers reach it through the frontend's /api/ proxy
     ports:

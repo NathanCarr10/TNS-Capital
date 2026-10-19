@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,7 +24,8 @@ import java.util.Objects;
 /**
  * The weekly market newsletter. Every signed-in trader reads the same issues;
  * a scheduled job publishes one each Friday. Admins can preview the current
- * week's, e.g. for a demo; a preview is not saved.
+ * week's, e.g. for a demo; a preview is not saved. Where early publishing is
+ * switched on (a demo), admins can also publish it before Friday.
  */
 @RestController
 @RequestMapping("/api/v1/newsletters")
@@ -65,6 +67,19 @@ public class NewsletterController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<NewsletterResponse> previewIssue() {
         return ResponseEntity.ok(toResponse(newsletterService.previewWeeklyIssue()));
+    }
+
+    /** Publishing before Friday is for demos, so it is switched off unless configured. */
+    @Operation(summary = "Publish this week's newsletter early",
+            description = "Admins only, where newsletter.early-publish is on (e.g. a demo). Publishes the week so far; "
+                    + "the weekly run then skips this week. If this week's issue was published already, returns it.")
+    @ApiResponse(responseCode = "200", description = "This week's published issue")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only; NWS-403 Early publishing is switched off")
+    @ApiResponse(responseCode = "503", description = "MKT-503 No prices to rank the week's movers")
+    @PostMapping("/publish")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<NewsletterResponse> publishIssue() {
+        return ResponseEntity.ok(toResponse(newsletterService.publishEarly()));
     }
 
     private static NewsletterResponse toResponse(NewsletterIssue issue) {

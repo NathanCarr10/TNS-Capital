@@ -38,9 +38,15 @@
   <div class="note preview-banner" role="status">
     <span>
       <strong>Preview, not published.</strong> This is the week so far. Traders see the issue the weekly job
-      publishes on Friday after the close.
+      publishes on Friday after the close. Publishing it now makes it this week's issue, and the Friday run
+      then skips this week.
     </span>
-    <button type="button" class="btn btn-small" (click)="closePreview()">Close preview</button>
+    <span class="preview-actions">
+      <button type="button" class="btn btn-small btn-primary" [disabled]="publishing()" (click)="publish()">
+        {{ publishing() ? 'Publishing...' : 'Publish this issue' }}
+      </button>
+      <button type="button" class="btn btn-small" [disabled]="publishing()" (click)="closePreview()">Close preview</button>
+    </span>
   </div>
 }
 

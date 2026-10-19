@@ -209,6 +209,8 @@ alter or block past issues. Nothing queries individual movers; if the dashboard 
 an array, so `NewsletterService` validates the contents. `tns_api` has `SELECT` and `INSERT`
 only, so the database itself keeps issues immutable.
 
-Only the Friday job publishes. Admins get `GET /api/v1/newsletters/preview`, which builds the
-week so far and saves nothing: with one immutable issue per week, an early "publish" for a demo
-would have taken the place of that week's real issue.
+The Friday job publishes. Admins get `GET /api/v1/newsletters/preview`, which builds the week
+so far and saves nothing: with one immutable issue per week, an early "publish" would take the
+place of that week's real issue. Demos before a Friday still need a published issue, so
+`POST /api/v1/newsletters/publish` lets admins publish the week so far, but only where
+`NEWSLETTER_EARLY_PUBLISH=true` (a demo environment); elsewhere it answers `403 NWS-403`.

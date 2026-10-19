@@ -3,6 +3,7 @@ package com.neueda.leap.services;
 import com.neueda.leap.config.NewsletterProperties;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
 import com.neueda.leap.exceptions.NewsletterNotFoundException;
+import com.neueda.leap.exceptions.NewsletterPublishingDisabledException;
 import com.neueda.leap.marketdata.AlpacaRestClient;
 import com.neueda.leap.marketdata.BarTimeframe;
 import com.neueda.leap.marketdata.MarketDataService;
@@ -41,9 +42,11 @@ import java.util.stream.Stream;
  * and fell the most this week, with the latest news about each of them.
  *
  * A week's change runs from the close of the last trading day before its
- * Monday to the latest close since. Only the weekly job publishes, one issue
- * per week; a preview (for admins, e.g. a demo) covers the week so far and is
- * never saved, so it cannot take the place of the week's real issue.
+ * Monday to the latest close since. The weekly job publishes, one issue per
+ * week; a preview (for admins, e.g. a demo) covers the week so far and is
+ * never saved, so it cannot take the place of the week's real issue. Where
+ * newsletter.early-publish is on (a demo), admins may also publish the week
+ * so far, and the job then skips that week.
  * News is optional: without it the issue is still published, without
  * headlines. Without prices there is nothing to rank and nothing is published.
  */
@@ -106,6 +109,24 @@ public class NewsletterService {
             // Published by another run in the meantime (week_start is unique)
             return issueRepository.findByWeekStart(weekStart).orElseThrow(() -> e);
         }
+    }
+
+    /**
+     * Publishes this week's issue before the weekly job, e.g. for a demo, or
+     * returns it if it was published already. The job then skips this week.
+     *
+     * @throws NewsletterPublishingDisabledException if newsletter.early-publish is off
+     * @throws MarketDataUnavailableException        if no instrument has prices for the week
+     */
+    public NewsletterIssue publishEarly() {
+        if (!properties.earlyPublish()) {
+            throw new NewsletterPublishingDisabledException(
+                    "Publishing before the weekly run is switched off (newsletter.early-publish)");
+        }
+        NewsletterIssue issue = publishWeeklyIssue();
+        log.warn("Newsletter for the week of {} published early by an admin; the weekly run will skip it",
+                issue.getWeekStart());
+        return issue;
     }
 
     /**

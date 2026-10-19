@@ -42,6 +42,8 @@ class GlobalExceptionHandlerTest {
                         m -> handler.handleOrderNotFound(new OrderNotFoundException(m))),
                 Arguments.of("NWS-404", 404, (Function<String, ResponseEntity<ErrorResponse>>)
                         m -> handler.handleNewsletterNotFound(new NewsletterNotFoundException(m))),
+                Arguments.of("NWS-403", 403, (Function<String, ResponseEntity<ErrorResponse>>)
+                        m -> handler.handleNewsletterPublishingDisabled(new NewsletterPublishingDisabledException(m))),
                 Arguments.of("MKT-503", 503, (Function<String, ResponseEntity<ErrorResponse>>)
                         m -> handler.handleMarketDataUnavailable(new MarketDataUnavailableException(m))),
                 Arguments.of("ACC-409", 409, (Function<String, ResponseEntity<ErrorResponse>>)

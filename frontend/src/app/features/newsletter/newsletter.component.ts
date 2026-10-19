@@ -13,7 +13,7 @@ import {
   NewsletterSummaryResponse,
 } from '../../api/trading';
 import { AuthService } from '../../core/auth/auth.service';
-import { readErrorMessage } from '../../core/trading/api-error';
+import { readApiError, readErrorMessage } from '../../core/trading/api-error';
 
 /** A mover with the headlines shown under it. */
 export interface MoverNews {
@@ -25,7 +25,8 @@ export interface MoverNews {
  * The weekly market newsletter: the week's biggest gainers and losers and the
  * news about them. Opens the latest issue, or the one in the URL
  * (/newsletter/:id). Admins can preview the current week's issue; a preview
- * is not saved, so traders never see it.
+ * is not saved, so traders never see it. Where the API allows it (a demo),
+ * admins can publish the preview before Friday.
  */
 @Component({
   selector: 'app-newsletter',
@@ -47,6 +48,7 @@ export class NewsletterComponent {
   readonly preview = signal<NewsletterResponse | null>(null);
   readonly previewing = signal(false);
   readonly previewError = signal<string | null>(null);
+  readonly publishing = signal(false);
 
   /** The preview while there is one, otherwise the published issue. */
   readonly shown = computed(() => this.preview() ?? this.issue());
@@ -117,5 +119,33 @@ export class NewsletterComponent {
 
   closePreview(): void {
     this.preview.set(null);
+  }
+
+  /**
+   * Admin only: publishes this week's issue now, for traders to read, and opens it.
+   * The API builds it again from the latest prices, and refuses (NWS-403) unless
+   * early publishing is switched on.
+   */
+  publish(): void {
+    if (!this.isAdmin || this.publishing()) {
+      return;
+    }
+    this.publishing.set(true);
+    this.previewError.set(null);
+    this.newsletterApi.publishIssue().subscribe({
+      next: (issue) => {
+        this.publishing.set(false);
+        this.preview.set(null);
+        void this.router.navigate(['/newsletter', issue.id]);
+      },
+      error: (error: unknown) => {
+        this.publishing.set(false);
+        this.previewError.set(
+          readApiError(error)?.errorCode === 'NWS-403'
+            ? 'Publishing before Friday is switched off. Set NEWSLETTER_EARLY_PUBLISH=true for a demo.'
+            : readErrorMessage(error, "This week's newsletter could not be published.")
+        );
+      },
+    });
   }
 }
