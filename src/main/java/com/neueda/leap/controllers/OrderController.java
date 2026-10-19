@@ -64,15 +64,16 @@ public class OrderController {
      */
     @Operation(summary = "Place an order", description = "Checks the account and instrument, stores the order as NEW and queues it for the Trade Executor. Poll GET /api/v1/orders/{orderId} until it is FILLED or REJECTED; funds and holdings are checked then. Without a price the order is priced at the live market price. Limit orders are immediate-or-cancel: when a live price is available, a BUY limit below it or a SELL limit above it is refused with ORD-422; a marketable order fills at the market price, never worse than its limit.")
     @ApiResponse(responseCode = "202", description = "Accepted for execution")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's; ACC-403 the account is not ACTIVE")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The account is not the caller's (for the strategy service: the account has no ACTIVE strategy); ACC-403 the account is not ACTIVE")
     @ApiResponse(responseCode = "404", description = "ACC-404 Account not found; INS-404 instrument not found or not tradable")
     @ApiResponse(responseCode = "409", description = "ORD-409 The idempotency key was already used")
     @ApiResponse(responseCode = "422", description = "VAL-422 Invalid input; ORD-422 the limit would not fill at the live price (a BUY limit below it or a SELL limit above it)")
     @ApiResponse(responseCode = "503", description = "PRC-503 No price given and no live price; SYS-503 the order could not be queued (it is stored as REJECTED)")
     @PostMapping
     public ResponseEntity<PlaceOrderResponse> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
-        // Checked first, so a non-owner cannot probe which account IDs exist
-        accessGuard.checkAccess(request.accountId());
+        // Checked first, so a non-owner cannot probe which account IDs exist. The
+        // strategy service may trade for an account with an ACTIVE strategy
+        accessGuard.checkTradingAccess(request.accountId());
         Order order = orderService.submitOrder(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(PlaceOrderResponse.accepted(order.getId(), order.getPrice()));
@@ -96,7 +97,7 @@ public class OrderController {
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID orderId) {
         Order order = orderService.getOrder(orderId);
-        accessGuard.checkAccess(order.getAccountId());
+        accessGuard.checkTradingAccess(order.getAccountId());
         return ResponseEntity.ok(mapToResponse(order));
     }
 

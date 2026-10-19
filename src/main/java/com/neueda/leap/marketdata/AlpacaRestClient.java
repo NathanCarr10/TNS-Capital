@@ -31,6 +31,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AlpacaRestClient {
     private static final String SYMBOLS_PARAM = "symbols";
+    // A trading day is at most 16 hours of 1-minute bars (pre-market to after-hours)
+    private static final int MAX_MINUTE_BARS = 1000;
 
     private final AlpacaProperties properties;
     private final RestClient restClient;
@@ -146,6 +148,45 @@ public class AlpacaRestClient {
             return bars;
         } catch (RestClientException e) {
             log.warn("Could not fetch {} bars from Alpaca for {}: {}", timeframe.value(), symbol, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Fetches the 1-minute bars of one symbol between two times, for a replay
+     * of a past trading day. A regular session has 390 of them, so one page holds them.
+     *
+     * @param symbol normalized symbol, e.g. SPY
+     * @param start  first bar time to include
+     * @param end    bar times before this are included
+     * @param feed   the data feed; the free plan has every exchange (sip) for times
+     *               more than 15 minutes ago
+     * @return bars oldest first; empty if Alpaca has none (e.g. a market holiday) or the call fails
+     */
+    public List<PriceBar> minuteBars(String symbol, Instant start, Instant end, String feed) {
+        if (!properties.isConfigured()) {
+            return List.of();
+        }
+        try {
+            BarsResponse response = restClient.get()
+                    .uri(uri -> uri.path("/v2/stocks/bars")
+                            .queryParam(SYMBOLS_PARAM, symbol)
+                            .queryParam("timeframe", "1Min")
+                            .queryParam("start", start.toString())
+                            .queryParam("end", end.toString())
+                            .queryParam("limit", MAX_MINUTE_BARS)
+                            .queryParam("adjustment", "raw")
+                            .queryParam("feed", feed)
+                            .queryParam("sort", "asc")
+                            .build())
+                    .retrieve()
+                    .body(BarsResponse.class);
+            if (response == null || response.bars() == null || response.bars().get(symbol) == null) {
+                return List.of();
+            }
+            return response.bars().get(symbol).stream().map(Bar::toPriceBar).toList();
+        } catch (RestClientException e) {
+            log.warn("Could not fetch 1Min bars from Alpaca for {}: {}", symbol, e.getMessage());
             return List.of();
         }
     }

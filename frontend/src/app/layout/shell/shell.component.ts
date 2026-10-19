@@ -4,6 +4,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { interval } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { StrategyActivityService } from '../../core/strategy/strategy-activity.service';
 import { ThemeService } from '../../core/theme/theme.service';
 import { AccountStore } from '../../core/trading/account.store';
 import { OrderTrackerService } from '../../core/trading/order-tracker.service';
@@ -21,7 +22,7 @@ interface NavItem {
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive, IconComponent, SymbolSearchComponent],
-  providers: [AccountStore, OrderTrackerService],
+  providers: [AccountStore, OrderTrackerService, StrategyActivityService],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',
 })
@@ -34,17 +35,19 @@ export class ShellComponent {
   readonly isSupport = this.store.isSupport;
 
   // Support staff neither trade nor have an account of their own, so they get no trade page or
-  // settings; they close dead letters instead
+  // settings; they watch strategies read-only and close dead letters instead
   readonly nav: NavItem[] = this.isSupport
     ? [
         { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
         { label: 'Order History', link: '/orders', icon: 'history' },
+        { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
         { label: 'Dead Letters', link: '/dead-letters', icon: 'inbox' },
       ]
     : [
         { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
         { label: 'Trade', link: '/trade', icon: 'trade' },
         { label: 'Order History', link: '/orders', icon: 'history' },
+        { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
         { label: 'Settings', link: '/settings', icon: 'settings' },
       ];
 
@@ -68,6 +71,10 @@ export class ShellComponent {
   );
 
   constructor() {
+    // Traders hear when one of their strategies trades, on any page
+    if (!this.isSupport) {
+      inject(StrategyActivityService).start();
+    }
     interval(1000)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.now.set(new Date()));

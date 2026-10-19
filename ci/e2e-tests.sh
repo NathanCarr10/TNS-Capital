@@ -30,6 +30,7 @@ ADMIN_PASSWORD=$ADMIN_PASSWORD
 SUPPORT_PASSWORD=$SUPPORT_PASSWORD
 DB_PASSWORD=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
 JWT_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+STRATEGY_CLIENT_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 AUTH_RATE_LIMIT=1000
 BROKER_MIN_DELAY=4s
 BROKER_MAX_DELAY=5s

@@ -17,6 +17,8 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     ['/', 200],
     ['/auth/me', 401],
     ['/api/v1/instruments', 401],
+    // nginx sends Strategy Lab's API to the strategy service
+    ['/api/v1/strategies', 401],
     ['/analytics/_stcore/health', 200],
   ];
 

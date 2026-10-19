@@ -52,6 +52,13 @@ class DatabaseRolesIT extends AbstractIntegrationTest {
             "tns_etl    | CREATE TABLE IF NOT EXISTS analytics.role_check (i INT)",
             "tns_reader | SELECT u.username FROM orders o JOIN accounts a ON a.id = o.account_id LEFT JOIN users u ON u.account_id = a.id",
             "tns_reader | SELECT * FROM v_account_summary",
+            "tns_reader | SELECT s.name, g.order_id FROM strategy_signals g JOIN strategies s ON s.id = g.strategy_id",
+            "tns_api    | SELECT EXISTS (SELECT 1 FROM strategies WHERE account_id = 1 AND status = 'ACTIVE')",
+            "tns_strategy | SELECT account_id FROM users WHERE username = 'trader'",
+            "tns_strategy | SELECT symbol FROM instruments WHERE tradable",
+            "tns_strategy | UPDATE strategies SET position = 'LONG'",
+            "tns_strategy | INSERT INTO strategy_signals (strategy_id, side, price, bar_time, source, outcome) SELECT id, 'BUY', 1, NOW(), 'LIVE', 'PLACED' FROM strategies",
+            "tns_strategy | SELECT id, status, price FROM orders",
     })
     void allowed(String role, String sql) {
         assertDoesNotThrow(() -> run(role, sql));
@@ -74,6 +81,13 @@ class DatabaseRolesIT extends AbstractIntegrationTest {
             "tns_reader | SELECT password_hash FROM users",
             "tns_reader | UPDATE accounts SET cash_balance = 1000000",
             "tns_reader | CREATE TABLE analytics.extra (i INT)",
+            "tns_api    | SELECT rule_params FROM strategies",
+            "tns_api    | UPDATE strategies SET status = 'ACTIVE'",
+            "tns_strategy | SELECT password_hash FROM users",
+            "tns_strategy | SELECT cash_balance FROM accounts",
+            "tns_strategy | UPDATE orders SET status = 'FILLED'",
+            "tns_strategy | INSERT INTO orders (account_id, symbol, side, quantity, price, idempotency_key) VALUES (1, 'AAPL', 'BUY', 1, 1, 'x')",
+            "tns_strategy | DELETE FROM strategy_signals",
     })
     void refused(String role, String sql) {
         assertThrows(SQLException.class, () -> run(role, sql));

@@ -35,6 +35,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Long> findAccountIdByUsername(@Param("username") String username);
 
     /**
+     * Whether the account's owner has switched a strategy on. The strategy
+     * service may only place orders on such an account (AccountAccessGuard).
+     */
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM strategies WHERE account_id = :accountId AND status = 'ACTIVE')",
+            nativeQuery = true)
+    boolean hasActiveStrategy(@Param("accountId") Long accountId);
+
+    /**
      * Finds an account and locks its row until the transaction ends. Orders
      * reserve, release and settle cash and shares under this lock, so two
      * orders for one account take turns instead of both passing the check.

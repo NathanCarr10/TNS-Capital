@@ -1,0 +1,71 @@
+<section class="card" aria-labelledby="detail-title">
+  <div class="card-header">
+    <div>
+      <p class="eyebrow">{{ strategy().symbol }} &middot; {{ strategy().rule }}</p>
+      <h2 id="detail-title" class="card-title">{{ strategy().name }}</h2>
+    </div>
+    <span class="badge" [class.badge-positive]="strategy().status === 'ACTIVE'">
+      {{ strategy().status === 'ACTIVE' ? 'On' : 'Off' }} &middot; {{ strategy().position === 'LONG' ? 'holding ' + strategy().quantity + ' shares' : 'in cash' }}
+    </span>
+  </div>
+
+  @if (series().length === 0) {
+    <p class="note">
+      No {{ strategy().symbol }} prices received yet. Live prices arrive while the market is open; a replay works any time.
+    </p>
+  } @else {
+    <ul class="series">
+      @for (view of series(); track view.source) {
+        <li>
+          <span class="source">{{ view.source === 'LIVE' ? 'Live' : 'Replay' }}</span>
+          <progress class="meter" max="100" [value]="progress(view)" [attr.aria-label]="warmUp(view)"></progress>
+          <span class="muted">{{ warmUp(view) }}</span>
+          <span class="num">{{ view.lastClose | currency:'USD':'symbol':'1.2-2' }} at {{ view.lastBarTime | date:'HH:mm' }}</span>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (error()) {
+    <p class="note error">{{ error() }}</p>
+  } @else if (loading()) {
+    <p class="note">Loading activity...</p>
+  } @else if (signals().length === 0) {
+    <p class="note">No signals yet. Each time the rule fires, the order it placed shows here.</p>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Bar</th>
+            <th>Side</th>
+            <th class="numeric">Price</th>
+            <th>Order</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (signal of signals(); track signal.id) {
+            <tr>
+              <td class="num">
+                {{ signal.barTime | date:'MMM d, HH:mm' }}
+                @if (signal.source === 'REPLAY') {
+                  <span class="badge">Replay</span>
+                }
+              </td>
+              <td [class.pnl-up]="signal.side === 'BUY'" [class.pnl-down]="signal.side === 'SELL'">{{ signal.side }}</td>
+              <td class="numeric num">{{ signal.price | currency:'USD':'symbol':'1.2-2' }}</td>
+              <td>
+                @if (signal.outcome === 'PLACED') {
+                  <span class="badge" [class]="'status-' + (signal.orderStatus ?? 'new').toLowerCase()">{{ signal.orderStatus ?? 'Placed' }}</span>
+                } @else {
+                  <span class="badge badge-negative" [title]="signal.detail ?? ''">Refused</span>
+                  <span class="detail muted">{{ signal.detail }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>

@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { StrategyLabService } from '../../core/strategy/strategy-lab.service';
 import { ThemeService } from '../../core/theme/theme.service';
 import { tradingServiceStub } from '../../core/trading/testing/trading-fixtures';
 import { TradingService } from '../../core/trading/trading.service';
@@ -14,6 +15,7 @@ describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
   let isSupport: boolean;
+  let strategyLab: jasmine.SpyObj<StrategyLabService>;
 
   const create = (): HTMLElement => {
     authServiceSpy.isSupport.and.returnValue(isSupport);
@@ -28,6 +30,8 @@ describe('ShellComponent', () => {
     isSupport = false;
     const tradingService = tradingServiceStub();
     tradingService.getAccounts.and.returnValue(of([]));
+    strategyLab = jasmine.createSpyObj<StrategyLabService>('StrategyLabService', ['activity']);
+    strategyLab.activity.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
@@ -35,6 +39,7 @@ describe('ShellComponent', () => {
         provideRouter([]),
         { provide: AuthService, useValue: authServiceSpy },
         { provide: TradingService, useValue: tradingService },
+        { provide: StrategyLabService, useValue: strategyLab },
       ],
     }).compileComponents();
   });
@@ -49,13 +54,14 @@ describe('ShellComponent', () => {
   const navLinks = (element: HTMLElement): (string | null | undefined)[][] =>
     Array.from(element.querySelectorAll('nav a')).map((link) => [link.textContent?.trim(), link.getAttribute('href')]);
 
-  it('links to Portfolio, Trade, Order History and Settings', () => {
+  it('links to Portfolio, Trade, Order History, Strategy Lab and Settings', () => {
     const element = create();
 
     expect(navLinks(element)).toEqual([
       ['Portfolio', '/portfolio'],
       ['Trade', '/trade'],
       ['Order History', '/orders'],
+      ['Strategy Lab', '/strategies'],
       ['Settings', '/settings'],
     ]);
   });
@@ -68,6 +74,7 @@ describe('ShellComponent', () => {
     expect(navLinks(element)).toEqual([
       ['Portfolio', '/portfolio'],
       ['Order History', '/orders'],
+      ['Strategy Lab', '/strategies'],
       ['Dead Letters', '/dead-letters'],
     ]);
     expect(element.querySelector('app-symbol-search')).toBeNull();

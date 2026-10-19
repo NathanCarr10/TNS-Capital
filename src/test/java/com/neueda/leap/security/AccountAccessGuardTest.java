@@ -98,4 +98,44 @@ class AccountAccessGuardTest {
         assertEquals(Optional.empty(), guard.currentAccountId());
         assertThrows(AccessDeniedException.class, () -> guard.checkAccess(7L));
     }
+
+    @Test
+    @DisplayName("The strategy service may trade for an account with an ACTIVE strategy")
+    void strategyServiceTradesForActiveStrategy() {
+        loginAs("service:strategy-service", "STRATEGY");
+        when(accountRepository.hasActiveStrategy(7L)).thenReturn(true);
+
+        assertTrue(guard.isStrategyService());
+        assertFalse(guard.isSupport());
+        assertDoesNotThrow(() -> guard.checkTradingAccess(7L));
+    }
+
+    @Test
+    @DisplayName("The strategy service may not trade for an account without an ACTIVE strategy")
+    void strategyServiceRefusedWithoutActiveStrategy() {
+        loginAs("service:strategy-service", "STRATEGY");
+        when(accountRepository.hasActiveStrategy(8L)).thenReturn(false);
+
+        assertThrows(AccessDeniedException.class, () -> guard.checkTradingAccess(8L));
+        assertThrows(AccessDeniedException.class, () -> guard.checkTradingAccess(null));
+    }
+
+    @Test
+    @DisplayName("The strategy service gets no other access to an account, even with an ACTIVE strategy")
+    void strategyServiceHasNoAccountAccess() {
+        loginAs("service:strategy-service", "STRATEGY");
+        when(accountRepository.hasActiveStrategy(7L)).thenReturn(true);
+
+        assertThrows(AccessDeniedException.class, () -> guard.checkAccess(7L));
+    }
+
+    @Test
+    @DisplayName("Users trade under the usual ownership rule, whatever strategies exist")
+    void usersTradeOnlyTheirOwnAccount() {
+        loginAs("trader", "USER");
+
+        assertDoesNotThrow(() -> guard.checkTradingAccess(7L));
+        assertThrows(AccessDeniedException.class, () -> guard.checkTradingAccess(8L));
+        verify(accountRepository, never()).hasActiveStrategy(any());
+    }
 }
