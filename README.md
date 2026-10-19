@@ -206,15 +206,21 @@ Edit `.env` and set:
 |---|---|
 | `DB_USER` | PostgreSQL user. The default `tns-capital-db-user` is fine. |
 | `DB_PASSWORD` | Any password for the local database. |
-| `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API and dashboard to verify them. At least 32 bytes; generate one with `openssl rand -hex 32`. All three refuse to start (or to sign anyone in) with the `change-me` placeholder. |
+| `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API, strategy service and dashboard to verify them. At least 32 bytes; generate one with `openssl rand -hex 32`. All three refuse to start (or to sign anyone in) with the `change-me` placeholder. |
 | `ADMIN_PASSWORD` | Password of the `admin` account (role `ADMIN`: the analytics dashboard and operations), which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
 | `SUPPORT_PASSWORD` | Password of the `support` account (role `SUPPORT`: the trading app's account viewer, suspending and reactivating accounts), created the same way. At least 12 characters, and not the `ADMIN_PASSWORD`. |
+| `STRATEGY_CLIENT_SECRET` | The strategy service's secret for logging in to the auth service, so [Strategy Lab](#strategy-lab) strategies can place orders. At least 32 characters; generate one with `openssl rand -hex 32`. The stack starts without it, but strategies cannot trade. |
+| `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` | Optional market data keys ([Market Data](#market-data-alpaca)). Without them there are no live prices (orders must include a price), no price history for charts and backtests, and no Strategy Lab replay. |
+
+`.env.example` has a quick start at the top and lists every setting with its default.
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
 `DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `8086`) and
 `AUTH_RATE_LIMIT` (default `10` register/login/refresh requests per IP per minute) and
 `AUTH_TRUST_PROXY` (default `loopback, uniquelocal`: the proxies whose `X-Forwarded-For` the
-auth service believes; see [shared/auth-service/README.md](shared/auth-service/README.md#rate-limiting)).
+auth service believes; see [shared/auth-service/README.md](shared/auth-service/README.md#rate-limiting)),
+`LOG_FORMAT` (default `ecs`), `BROKER_MIN_DELAY` / `BROKER_MAX_DELAY` (default `500ms` / `2000ms`, how long the
+broker simulator takes to fill an order) and `STRATEGY_MAX_ACTIVE_PER_ACCOUNT` (default `3`).
 
 ### 3. Start the stack
 
@@ -549,8 +555,8 @@ for the quality gate.
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
-| `password authentication failed for user "tns_api"` (or `tns_auth`, `tns_etl`, `tns_reader`), or `role ... does not exist` | The database volume predates the services' roles, or a `DB_*_PASSWORD` changed after it was created. Run `docker compose down -v` and start again. |
-| Port already in use (3000, 4000, 8086, 8087, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
+| `password authentication failed for user "tns_api"` (or `tns_auth`, `tns_etl`, `tns_reader`, `tns_strategy`), or `role ... does not exist` | The database volume predates the services' roles, or a `DB_*_PASSWORD` changed after it was created. Run `docker compose down -v` and start again. |
+| Port already in use (3000, 4000, 8086, 8087, 5432, 8090, 8501, 9092) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |
 | Order stays `NEW` | Check the consumer with `docker compose logs app`, and the `orders` topic in Kafka UI. |
