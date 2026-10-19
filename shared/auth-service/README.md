@@ -27,6 +27,7 @@ yours with `db/recreate_db.sh`.
 |---|---|---|
 | `POST /auth/register` | no | create a user and their trading account |
 | `POST /auth/login` | no | get an access token and a refresh token |
+| `POST /auth/token` | no (takes a client id and secret) | a backend service's access token (client credentials); only the strategy service has one |
 | `POST /auth/refresh` | no (takes the refresh token) | spend the refresh token for a new access token and refresh token |
 | `POST /auth/logout` | no (takes the refresh token) | end the session the refresh token belongs to |
 | `GET /auth/me` | **yes** | the user the access token belongs to |
@@ -116,6 +117,29 @@ expired refresh token". Revoking a session stops only new access tokens: ones al
 keep working until they expire, at most 15 minutes later, because the trading API verifies
 them without calling this service.
 
+## Service tokens (client credentials)
+
+Backend services log in with a client id and secret instead of a username and password. The
+only client is the strategy service (Strategy Lab), which places orders for traders who have
+switched a strategy on while they are not logged in (docs/DECISIONS.md 16).
+
+```bash
+curl -X POST http://localhost:4000/auth/token \
+  -H "Content-Type: application/json" \
+  -d "{\"clientId\":\"strategy-service\",\"clientSecret\":\"$STRATEGY_CLIENT_SECRET\"}"
+# -> {"accessToken":"eyJhbGc...","tokenType":"Bearer","expiresIn":900}
+```
+
+- The secret is `STRATEGY_CLIENT_SECRET` from the project's `.env`: at least 32 characters, and
+  the `change-me` placeholder is refused. Without it the client does not exist and every request
+  gets `401 AUTH-401` "invalid client credentials", the same answer as a wrong secret.
+- The access token has the usual claims, with `sub` `service:strategy-service` (usernames cannot
+  contain `:`, so it never names a user) and `roles` `["STRATEGY"]`. It lasts 15 minutes and comes
+  with no refresh token: the service asks for a new one before it expires.
+- The trading API accepts `STRATEGY` only for placing and reading orders, and only on an account
+  whose owner has an ACTIVE strategy.
+- The secret is compared in constant time, and every attempt is logged like a login.
+
 ## Protected routes
 
 ```bash
@@ -149,6 +173,7 @@ the next refresh.
 |---|---|---|
 | HTTP | `auth/auth.controller.ts` | routes and DTO validation only |
 | Service | `auth/auth.service.ts` | `register`, `login`, `refresh` (rotation, reuse detection), `logout`, `validate` (credential check), `me` |
+| Service | `auth/service-clients.service.ts` | `issueToken`: client credentials of backend services (the strategy service) |
 | Service | `auth/token.service.ts` | `issue`, `verify`, `decode`; generating and hashing refresh tokens |
 | Data | `users/users.service.ts` | SQL on the `users` and `accounts` tables; never sees a plaintext password |
 | Data | `users/refresh-tokens.service.ts` | SQL on the `refresh_tokens` table; rotation runs in one transaction |
@@ -164,7 +189,7 @@ unknown property), `AUTH-401` (wrong credentials, with no hint which part was wr
 
 ## Rate limiting
 
-`POST /auth/register`, `/auth/login` and `/auth/refresh` allow `AUTH_RATE_LIMIT` requests
+`POST /auth/register`, `/auth/login`, `/auth/refresh` and `/auth/token` allow `AUTH_RATE_LIMIT` requests
 (default 10) per client IP per minute, to slow down password guessing. Above that the
 service answers `429 AUTH-429` with a `Retry-After` header. The other routes are not limited.
 

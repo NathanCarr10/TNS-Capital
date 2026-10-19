@@ -19,7 +19,8 @@ The services and models in `src/app/api/` are generated from the OpenAPI specs i
 | Spec | Generated into | Used by |
 | --- | --- | --- |
 | `contracts/auth-api.yaml` | `src/app/api/auth` | `core/auth/auth.service.ts`, `core/trading/trading.service.ts` |
-| `contracts/trading-api.json` | `src/app/api/trading` | `core/trading/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices) |
+| `contracts/trading-api.json` | `src/app/api/trading` | `core/trading/trading.service.ts` (accounts, positions, orders), `market-data.service.ts` (prices), `core/strategy/strategy-lab.service.ts` (market replay) |
+| `contracts/strategy-api.json` | `src/app/api/strategy` | `core/strategy/strategy-lab.service.ts` (Strategy Lab), `core/strategy/strategy-activity.service.ts` (strategy trade toasts) |
 
 `npm start`, `npm run build`, `npm test` and `npm run typecheck` regenerate them first. Generating needs Java 11+.
 
@@ -30,7 +31,7 @@ npm run fetch:trading-spec   # needs the Spring Boot app on :3000 (TRADING_API_U
 npm run typecheck            # regenerates, then fails on any code that no longer matches
 ```
 
-Auth spec changes are made by hand in `contracts/auth-api.yaml`. Which response fields are required or nullable comes from `@Schema` on the backend DTOs. Call the APIs through the generated services, never with `HttpClient` directly. `core/api/api-types.spec.ts` checks that the generated types still reject invalid requests.
+The strategy service's spec is checked against the running service by `StrategyServiceIT`; after an API change, copy it over as that test's failure message says. Auth spec changes are made by hand in `contracts/auth-api.yaml`. Which response fields are required or nullable comes from `@Schema` on the backend DTOs. Call the APIs through the generated services, never with `HttpClient` directly. `core/api/api-types.spec.ts` checks that the generated types still reject invalid requests.
 
 ## Admins and the analytics dashboard
 

@@ -39,6 +39,7 @@ goes back to the sign-in form. The admin is `admin`, with the `ADMIN_PASSWORD` f
 | Average trade size | `average_trade_size` |
 | Buy and sell value by asset class | `value_by_asset_class` |
 | Trading by user: orders, fill rate, bought and sold value, top instrument, last order | `trades_by_user` |
+| Automated strategies: orders placed by Strategy Lab strategies next to traders' own (orders, filled, fill rate, filled value), and per strategy (owner, instrument, bought, sold) | `strategy_vs_trader`, `strategy_trades`, `placed_by` |
 | Why orders are rejected, grouped into categories | `rejection_reasons`, `rejected_orders` |
 | Time from order to fill: median, 95th percentile, slowest fills | `fill_time_summary`, `fill_times` |
 | Stuck orders: still NEW after 5 minutes | `stuck_orders` |
@@ -48,7 +49,8 @@ Below the per-user table, choose an account holder (listed by holder name and ac
 to see their fill rate, average trade size, buy/sell mix and every order they placed. The list
 is keyed by account, since holder names can repeat. Each trade is also labelled with the
 username that owns the account (`users.account_id`); accounts no user owns, such as the seeded
-ones, show as `(no login)`.
+ones, show as `(no login)`. Each trade also carries `strategy_name`: the Strategy Lab strategy that
+placed it (from `strategy_signals`), or empty for an order the trader placed themselves.
 
 The top of the page also states the main findings in plain sentences.
 
