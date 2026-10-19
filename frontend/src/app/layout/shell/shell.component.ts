@@ -35,12 +35,13 @@ export class ShellComponent {
   readonly isSupport = this.store.isSupport;
 
   // Support staff neither trade nor have an account of their own, so they get no trade page or
-  // settings; they watch strategies read-only and close dead letters instead
+  // settings; they watch strategies read-only, read the newsletter and close dead letters instead
   readonly nav: NavItem[] = this.isSupport
     ? [
         { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
         { label: 'Order History', link: '/orders', icon: 'history' },
         { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
+        { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
         { label: 'Dead Letters', link: '/dead-letters', icon: 'inbox' },
       ]
     : [
@@ -48,6 +49,7 @@ export class ShellComponent {
         { label: 'Trade', link: '/trade', icon: 'trade' },
         { label: 'Order History', link: '/orders', icon: 'history' },
         { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
+        { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
         { label: 'Settings', link: '/settings', icon: 'settings' },
       ];
 
