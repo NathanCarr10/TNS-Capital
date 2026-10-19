@@ -21,7 +21,9 @@ be explained at the showcase and revisited later.
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
 | 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
-| 16 | Monitoring on VictoriaMetrics, VictoriaLogs and the Streamlit dashboard; no Grafana or tracing | §22 (observability) | In place |
+| 16 | Strategy Lab: automated strategy execution in its own service | §13.2 | Team decision |
+| 17 | Newsletter issues stored as JSONB snapshots, not child tables | — (newsletter story) | Team decision |
+| 18 | Monitoring on VictoriaMetrics, VictoriaLogs and the Streamlit dashboard; no Grafana or tracing | §22 (observability) | In place |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -212,27 +214,6 @@ upgrade during the build would touch every component, the test setup and the gen
 clients for no change a user would see. The upgrade (`ng update @angular/core@21
 @angular/cli@21`, one major at a time) is revisited if the tutor asks for it.
 
-## 16. A small monitoring stack, shown in the dashboard
-
-The monitoring stack ([observability/README.md](../observability/README.md)) has to fit next to
-the rest of the stack on a developer machine with little free memory. The usual stack would
-need 0.8–1.5 GB: Prometheus (~300 MB), Grafana (~200 MB), Loki (300–500 MB) and Tempo or Jaeger
-(300–500 MB). Instead:
-
-- **VictoriaMetrics, not Prometheus.** It scrapes the same `/metrics` endpoints and answers the
-  same PromQL in about 40 MB. vmalert evaluates the alert rules in about 20 MB.
-- **VictoriaLogs and Fluent Bit, not Loki and Promtail.** About 30 MB together. Promtail is end of
-  life. Fluent Bit reads Docker's log files read-only rather than through the Docker socket.
-- **No Grafana.** Admins see alerts, metrics and logs in the analytics dashboard's Monitoring view,
-  behind the admin sign-in it already has. No second UI with its own users or published port.
-- **No tracing.** A tracing backend and a tracer in each JVM would cost more than the rest of the
-  stack together. The fill time histogram and the consumer lag show where an order is waiting.
-- **Off by default** (Compose profile `observability`), as it costs ~90 MB measured, 400 MB at
-  its limits.
-
-The stack closes OWASP A09-5: alerts on reused refresh tokens (A09-1), failed login spikes
-(A09-2), refused and failing API requests, and dead letters waiting for review (A09-4).
-
 ## 15. Node.js 22 for the auth service
 
 §4.2 lists Node.js 20 LTS. Node 20 reached end of life on 2026-04-30 and no longer gets security
@@ -282,3 +263,41 @@ Lab write-up; what was built, and why:
   realized P&L with their own (average cost). The admin analytics dashboard shows strategy orders next
   to everyone else's.
 
+## 17. Newsletter issues as JSONB snapshots
+
+The weekly newsletter stores each issue as one row of `newsletter_issues`, with its gainers,
+losers and news as `JSONB` arrays, rather than in `newsletter_movers` and `newsletter_news`
+child tables. An issue is written once by the weekly job, never changed, and always read
+whole, so it is a document rather than relational data. It also has to show what was
+published: with no foreign keys to `instruments`, renaming or removing an instrument does not
+alter or block past issues. Nothing queries individual movers; if the dashboard ever needs to,
+`jsonb_array_elements` or the ETL can flatten them. Postgres only checks that each column is
+an array, so `NewsletterService` validates the contents. `tns_api` has `SELECT` and `INSERT`
+only, so the database itself keeps issues immutable.
+
+The Friday job publishes. Support staff (the trading app's staff role, decision 10) get `GET /api/v1/newsletters/preview`, which builds the week
+so far and saves nothing: with one immutable issue per week, an early "publish" would take the
+place of that week's real issue. Demos before a Friday still need a published issue, so
+`POST /api/v1/newsletters/publish` lets support publish the week so far, but only where
+`NEWSLETTER_EARLY_PUBLISH=true` (a demo environment); elsewhere it answers `403 NWS-403`.
+
+## 18. A small monitoring stack, shown in the dashboard
+
+The monitoring stack ([observability/README.md](../observability/README.md)) has to fit next to
+the rest of the stack on a developer machine with little free memory. The usual stack would
+need 0.8–1.5 GB: Prometheus (~300 MB), Grafana (~200 MB), Loki (300–500 MB) and Tempo or Jaeger
+(300–500 MB). Instead:
+
+- **VictoriaMetrics, not Prometheus.** It scrapes the same `/metrics` endpoints and answers the
+  same PromQL in about 40 MB. vmalert evaluates the alert rules in about 20 MB.
+- **VictoriaLogs and Fluent Bit, not Loki and Promtail.** About 30 MB together. Promtail is end of
+  life. Fluent Bit reads Docker's log files read-only rather than through the Docker socket.
+- **No Grafana.** Admins see alerts, metrics and logs in the analytics dashboard's Monitoring view,
+  behind the admin sign-in it already has. No second UI with its own users or published port.
+- **No tracing.** A tracing backend and a tracer in each JVM would cost more than the rest of the
+  stack together. The fill time histogram and the consumer lag show where an order is waiting.
+- **Off by default** (Compose profile `observability`), as it costs ~90 MB measured, 400 MB at
+  its limits.
+
+The stack closes OWASP A09-5: alerts on reused refresh tokens (A09-1), failed login spikes
+(A09-2), refused and failing API requests, and dead letters waiting for review (A09-4).

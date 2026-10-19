@@ -320,6 +320,37 @@ Live prices and price history both come from the [Alpaca market data API](https:
 - **Setup:** create free API keys at [alpaca.markets](https://alpaca.markets) and set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `.env`. Without keys, the pool is off and orders must include a price.
 - **Free plan limits:** the live feed is IEX only (about 2.5% of US volume), up to 30 streamed symbols, and one stream connection per account, so only one app instance can stream at a time. Set `ALPACA_FEED=sip` on a paid plan for all exchanges.
 
+### Weekly newsletter
+
+Every Friday at 17:00 New York time, after the US market closes, the API publishes a newsletter
+that every signed-in user reads on the **Newsletter** page (`/newsletter`):
+
+- **Movers:** the 5 tradable instruments that rose the most this week and the 5 that fell the
+  most, from Alpaca daily bars. A week's change runs from the close before Monday to the latest close.
+- **News:** up to 3 recent headlines about each mover from Alpaca's News API (Benzinga), using the
+  same keys. Only `https://` links are kept, and the page shows headlines as text. Without news the
+  issue is still published; without prices nothing is published and the API logs an error.
+- **One issue per week**, stored as a JSONB snapshot in `newsletter_issues` and never changed
+  afterwards ([DECISIONS.md](docs/DECISIONS.md) #17).
+- **Support staff can preview** the week so far with **Preview this week's issue** on the page, or
+  `GET /api/v1/newsletters/preview`. A preview is never saved, so it cannot take the place of the
+  Friday issue.
+- **Publishing early (demos):** with `NEWSLETTER_EARLY_PUBLISH=true` in `.env`, support can also
+  click **Publish this issue** on a preview (`POST /api/v1/newsletters/publish`). That issue is
+  then the week's issue and the Friday run skips the week. It is off by default (`403 NWS-403`);
+  keep it off in production. To undo a demo locally, delete the row from `newsletter_issues` as the
+  database owner.
+- **Schedule:** `NEWSLETTER_CRON` in `.env` (a Spring cron in New York time; `-` switches it off).
+  The number of movers and headlines is set under `newsletter.*` in `application.yml`.
+- **Existing database:** the table is created when the `postgres` volume is new. To add it to an
+  existing one without losing data, run as the database owner:
+
+  ```bash
+  source .env
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital < db/tables/13_newsletter_issues.sql
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "GRANT SELECT, INSERT ON newsletter_issues TO tns_api;"
+  ```
+
 ---
 
 ## Strategy Lab
@@ -414,6 +445,7 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 | Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (SUPPORT) · `PUT /instruments/{symbol}` (SUPPORT) |
 | Market replay | `POST /market-data/replays` (replay a past day's 1-minute bars on `market-data`) · `GET /market-data/replays/current` · `DELETE /market-data/replays/current` |
 | Strategies (strategy service) | `GET/POST /strategies` · `GET/DELETE /strategies/{id}` · `PUT /strategies/{id}/status` (ACTIVE or PAUSED) · `GET /strategies/{id}/signals` · `GET /strategies/activity?since=` · `GET /strategies/performance` · `POST /strategies/backtests` |
+| Newsletter | `GET /newsletters` · `GET /newsletters/{id}` · `GET /newsletters/preview` (SUPPORT) · `POST /newsletters/publish` (SUPPORT, demos only) |
 | Dead-letter queue (ADMIN, SUPPORT) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:
@@ -440,7 +472,7 @@ rest of the stack, through `COMPOSE_PROFILES=observability` in `.env` (from `.en
 ### Bruno collection
 
 The `bruno/` folder is a ready-made [Bruno](https://www.usebruno.com/) collection covering
-the auth, account, order and price endpoints, plus **API Health** (no token needed).
+the auth, account, order, price and newsletter endpoints, plus **API Health** (no token needed).
 
 1. Open the `bruno/` folder as a collection in Bruno and select the **local** environment.
 2. Set the secret variables `password` (and `accountId` once you have one).
