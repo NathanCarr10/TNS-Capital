@@ -5,6 +5,57 @@
   margin: 0 auto;
 }
 
+.preference-list {
+  display: grid;
+}
+
+.preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+
+  strong,
+  small {
+    display: block;
+  }
+
+  strong {
+    font-size: 0.9rem;
+  }
+
+  small {
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+  }
+
+  input[type='checkbox'] {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: var(--primary);
+    flex: 0 0 auto;
+  }
+}
+
+.choice-row {
+  margin: 0;
+  border-inline: none;
+  border-bottom: none;
+
+  legend {
+    padding: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .preference-row {
+    align-items: flex-start;
+  }
+}
+
 .page-header {
   h1 {
     font-size: 1.75rem;
