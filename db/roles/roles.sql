@@ -27,6 +27,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE
     ON accounts, instruments, orders, positions, executions, order_history, dlq_messages, trade_event_log
     TO tns_api;
 GRANT SELECT (username, account_id) ON users TO tns_api;
+-- Newsletter issues are published once and never changed
+GRANT SELECT, INSERT ON newsletter_issues TO tns_api;
 
 -- Auth service: users and their refresh tokens, and opening the account of a
 -- user who registers (RETURNING id, account_number)

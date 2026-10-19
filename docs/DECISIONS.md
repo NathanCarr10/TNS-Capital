@@ -21,6 +21,7 @@ be explained at the showcase and revisited later.
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
 | 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
+| 16 | Newsletter issues stored as JSONB snapshots, not child tables | — (newsletter story) | Team decision |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -195,3 +196,15 @@ fixes (docs/OWASP_REVIEW.md A06-3), so the auth service builds, tests (Jenkins) 
 `node:22-alpine`, the current LTS. NestJS 11, Argon2 and the test suite run unchanged on it. The
 runtime image also drops the npm CLI, which only the build needs; it carried every HIGH finding
 in Trivy's scan of the image (A06-4).
+
+## 16. Newsletter issues as JSONB snapshots
+
+The weekly newsletter stores each issue as one row of `newsletter_issues`, with its gainers,
+losers and news as `JSONB` arrays, rather than in `newsletter_movers` and `newsletter_news`
+child tables. An issue is written once by the weekly job, never changed, and always read
+whole, so it is a document rather than relational data. It also has to show what was
+published: with no foreign keys to `instruments`, renaming or removing an instrument does not
+alter or block past issues. Nothing queries individual movers; if the dashboard ever needs to,
+`jsonb_array_elements` or the ETL can flatten them. Postgres only checks that each column is
+an array, so `NewsletterService` validates the contents. `tns_api` has `SELECT` and `INSERT`
+only, so the database itself keeps issues immutable.
