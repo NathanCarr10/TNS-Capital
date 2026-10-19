@@ -33,7 +33,7 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@WithMockUser(username = "testuser", roles = "ADMIN")
+@WithMockUser(username = "testuser", roles = "SUPPORT")
 public abstract class AbstractIntegrationTest {
 
     @SuppressWarnings("resource")
