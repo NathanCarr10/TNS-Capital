@@ -3,3 +3,5 @@
 
 # Truncated example token ("Bearer eyJhbGc...") in the curl sample.
 bd4842431ff067c7543492e303d122f2db4d9508:docs/SECURITY_GUIDE.md:curl-auth-header:474
+# Test-only JWT secret for StrategyServiceIT's tokens (like JwtSecurityTest's); never a real key
+eeb7f7779c83babe7930fac3c5d493a214fd8dc3:strategy-service/src/test/java/com/neueda/leap/strategy/StrategyServiceIT.java:generic-api-key:78

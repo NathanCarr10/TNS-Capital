@@ -129,6 +129,49 @@ def trades_by_user(trades):
     return users[columns]
 
 
+def placed_by(trades):
+    """Who placed each order: "Strategy" (Strategy Lab) or "Trader" (by hand).
+
+    Uses the strategy_name column from data.py; without it every order counts as the trader's.
+    """
+    if "strategy_name" not in trades:
+        return pd.Series("Trader", index=trades.index)
+    return trades["strategy_name"].notna().map({True: "Strategy", False: "Trader"})
+
+
+def strategy_vs_trader(trades):
+    """Orders placed by strategies next to everyone's own: one row each for "Strategy" and "Trader"."""
+    columns = ["placed_by", "orders", "filled", "fill_rate", "traded_value"]
+    if trades.empty:
+        return pd.DataFrame(columns=columns)
+    done = trades["status"] == "FILLED"
+    flagged = trades.assign(placed_by=placed_by(trades), filled=done,
+                            finished=trades["status"].isin(FINAL_STATUSES),
+                            traded_value=trades["notional"].where(done, 0))
+    summary = flagged.groupby("placed_by", as_index=False).agg(
+        orders=("order_id", "count"), filled=("filled", "sum"), finished=("finished", "sum"),
+        traded_value=("traded_value", "sum"))
+    summary["fill_rate"] = (summary["filled"] / summary["finished"]).where(summary["finished"] > 0)
+    return summary.sort_values("placed_by").reset_index(drop=True)[columns]
+
+
+def strategy_trades(trades):
+    """What each strategy has traded, busiest first: one row per strategy and owner."""
+    columns = ["strategy_name", "username", "symbol", "orders", "filled", "buy_value", "sell_value", "last_order"]
+    if trades.empty or "strategy_name" not in trades or trades["strategy_name"].isna().all():
+        return pd.DataFrame(columns=columns)
+    theirs = trades[trades["strategy_name"].notna()]
+    done = theirs["status"] == "FILLED"
+    flagged = theirs.assign(
+        filled=done,
+        buy_value=theirs["notional"].where(done & (theirs["side"] == "BUY"), 0),
+        sell_value=theirs["notional"].where(done & (theirs["side"] == "SELL"), 0))
+    summary = flagged.groupby(["strategy_name", "username", "symbol"], as_index=False).agg(
+        orders=("order_id", "count"), filled=("filled", "sum"), buy_value=("buy_value", "sum"),
+        sell_value=("sell_value", "sum"), last_order=("created_on", "max"))
+    return summary.sort_values(["orders", "strategy_name"], ascending=[False, True]).reset_index(drop=True)[columns]
+
+
 # Rejection reasons are free text with symbols, accounts and amounts in them
 # ("Cannot sell 20 of MSFT, only 0 available"), so they are grouped by keyword.
 REJECTION_CATEGORIES = [

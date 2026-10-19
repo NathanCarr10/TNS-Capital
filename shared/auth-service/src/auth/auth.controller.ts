@@ -4,8 +4,10 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { methodNotAllowed } from '../common/method-not-allowed';
 import type { AuthenticatedUser, RegisteredUser } from '../users/users.service';
 import { AuthService, LoginResult } from './auth.service';
+import { ServiceClientsService, ServiceTokenResult } from './service-clients.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
+import { ClientTokenDto } from './dto/client-token.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -14,7 +16,10 @@ import type { AccessTokenPayload } from './token.service';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly serviceClients: ServiceClientsService,
+  ) {}
 
   /**
    * POST /auth/register - Register a new user and open their trading account
@@ -61,6 +66,25 @@ export class AuthController {
     return this.authService.login(body.username, body.password, clientIp);
   }
 
+  /**
+   * POST /auth/token - A backend service's access token (client credentials)
+   *
+   * Claims as for a user, with sub "service:<clientId>" and the client's
+   * service roles, e.g. ["STRATEGY"]. No refresh token: the service asks for
+   * a new access token before this one expires.
+   */
+  @Public()
+  @Post('token')
+  @UseGuards(ThrottlerGuard)
+  @ApiResponse({ status: 429, description: 'Too many attempts from this client; retry after Retry-After seconds' })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Issue a backend service's access token from its client id and secret" })
+  @ApiResponse({ status: 200, description: 'accessToken (15 min), tokenType Bearer, expiresIn in seconds' })
+  @ApiResponse({ status: 401, description: 'Unknown client or wrong secret' })
+  token(@Body() body: ClientTokenDto, @Ip() clientIp: string): Promise<ServiceTokenResult> {
+    return this.serviceClients.issueToken(body.clientId, body.clientSecret, clientIp);
+  }
+
   /** POST /auth/refresh - Spend a refresh token for a new access token and refresh token */
   @Public()
   @Post('refresh')
@@ -97,7 +121,7 @@ export class AuthController {
 
   // Declared after the real handlers, so only the wrong methods reach it
   @Public()
-  @All(['register', 'login', 'refresh', 'logout', 'me'])
+  @All(['register', 'login', 'token', 'refresh', 'logout', 'me'])
   @ApiExcludeEndpoint()
   methodNotAllowed(): never {
     return methodNotAllowed();

@@ -18,12 +18,17 @@ import java.util.Optional;
  *   username (the token's "sub") in users.account_id, opened when they
  *   registered. Admins run the analytics dashboard and operations, not
  *   traders' accounts (docs/DECISIONS.md, "Roles")
+ * - The strategy service (token roles ["STRATEGY"], from the auth service's
+ *   client credentials) may place and read orders, checkTradingAccess, only
+ *   on an account whose owner has an ACTIVE strategy. SecurityConfig keeps its
+ *   token away from every other endpoint (docs/DECISIONS.md #16)
  *
  * Denials throw AccessDeniedException, returned as 403 AUTH-403.
  */
 @Component
 public class AccountAccessGuard {
     private static final String SUPPORT_AUTHORITY = "ROLE_SUPPORT";
+    private static final String STRATEGY_AUTHORITY = "ROLE_STRATEGY";
 
     private final AccountRepository accountRepository;
 
@@ -32,9 +37,20 @@ public class AccountAccessGuard {
     }
 
     public boolean isSupport() {
+        return hasAuthority(SUPPORT_AUTHORITY);
+    }
+
+    /**
+     * @return whether the caller is the strategy service rather than a user
+     */
+    public boolean isStrategyService() {
+        return hasAuthority(STRATEGY_AUTHORITY);
+    }
+
+    private static boolean hasAuthority(String name) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.getAuthorities().stream()
-                .anyMatch(authority -> SUPPORT_AUTHORITY.equals(authority.getAuthority()));
+                .anyMatch(authority -> name.equals(authority.getAuthority()));
     }
 
     /**
@@ -58,6 +74,22 @@ public class AccountAccessGuard {
         boolean owner = accountId != null && currentAccountId().map(accountId::equals).orElse(false);
         if (!owner) {
             throw new AccessDeniedException("Account " + accountId + " does not belong to the caller");
+        }
+    }
+
+    /**
+     * For placing and reading orders: what checkAccess allows, and the
+     * strategy service on an account with an ACTIVE strategy.
+     *
+     * @throws AccessDeniedException otherwise
+     */
+    public void checkTradingAccess(Long accountId) {
+        if (!isStrategyService()) {
+            checkAccess(accountId);
+            return;
+        }
+        if (accountId == null || !accountRepository.hasActiveStrategy(accountId)) {
+            throw new AccessDeniedException("Account " + accountId + " has no active strategy");
         }
     }
 }

@@ -516,6 +516,58 @@ describe('Auth API contract', () => {
     });
   });
 
+  describe('POST /auth/token - client credentials of a backend service', () => {
+    const STRATEGY_CLIENT = { clientId: 'strategy-service', clientSecret: process.env.STRATEGY_CLIENT_SECRET };
+    const clientToken = (body: unknown) => post('/auth/token', body);
+
+    it('issues a 15-minute bearer token with the STRATEGY role and no refresh token', async () => {
+      const response = await clientToken(STRATEGY_CLIENT).expect(200);
+
+      expect(Object.keys(response.body).sort()).toEqual(['accessToken', 'expiresIn', 'tokenType']);
+      expect(response.body.tokenType).toBe('Bearer');
+      expect(response.body.expiresIn).toBe(15 * 60);
+      const verified = jwt.verify(response.body.accessToken, SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
+      expect(Object.keys(verified).sort()).toEqual(['exp', 'iat', 'iss', 'jti', 'roles', 'sub', 'typ']);
+      expect(verified.sub).toBe('service:strategy-service');
+      expect(verified.roles).toEqual(['STRATEGY']);
+      expect(verified.typ).toBe('access');
+      expect(verified.exp! - verified.iat!).toBe(15 * 60);
+    });
+
+    it('never touches the users or refresh tokens', async () => {
+      const response = await clientToken(STRATEGY_CLIENT).expect(200);
+
+      expect(response.body.accessToken).toBeDefined();
+      expect(fakeUsers.findByUsername).not.toHaveBeenCalled();
+      expect(fakeRefreshTokens.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a wrong secret', { clientId: 'strategy-service', clientSecret: 'wrong' }],
+      ['an unknown client', { clientId: 'trader', clientSecret: process.env.STRATEGY_CLIENT_SECRET }],
+    ])('rejects %s with the same AUTH-401', async (_case, body) => {
+      const response = await clientToken(body).expect(401);
+
+      expect(response.body).toEqual({
+        errorCode: 'AUTH-401',
+        message: 'invalid client credentials',
+        timestamp: expect.stringMatching(ISO_8601),
+      });
+    });
+
+    it('rejects a missing secret with VAL-422', async () => {
+      const response = await clientToken({ clientId: 'strategy-service' }).expect(400);
+
+      expect(response.body.errorCode).toBe('VAL-422');
+    });
+
+    it('does not let a user log in with their password as a client', async () => {
+      const response = await clientToken({ clientId: TRADER.username, clientSecret: TRADER.password }).expect(401);
+
+      expect(response.body.errorCode).toBe('AUTH-401');
+    });
+  });
+
   describe('GET /auth/me (protected by JwtAuthGuard)', () => {
     const unauthorised = {
       errorCode: 'AUTH-401',
@@ -647,7 +699,7 @@ describe('Auth API contract', () => {
       const response = await request(app.getHttpServer()).get('/docs-json').expect(200);
       expect(response.body.openapi).toMatch(/^3\./);
       expect(Object.keys(response.body.paths)).toEqual(
-        expect.arrayContaining(['/auth/register', '/auth/login', '/auth/refresh', '/auth/logout', '/auth/me']),
+        expect.arrayContaining(['/auth/register', '/auth/login', '/auth/token', '/auth/refresh', '/auth/logout', '/auth/me']),
       );
     });
 

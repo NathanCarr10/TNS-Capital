@@ -224,4 +224,24 @@ class JwtSecurityTest {
                 get(DLQ_URL).header("Authorization", "Bearer " + validToken(List.of("MISSION_OPERATOR", "ADMIN"))))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    @DisplayName("The strategy service's token is refused everywhere but orders and prices, with an AUTH-403 body")
+    void strategyTokenRefusedOutsideOrders() throws Exception {
+        String strategyToken = "Bearer " + validToken(List.of("STRATEGY"));
+
+        mockMvc.perform(get(ACCOUNT_URL).header("Authorization", strategyToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("AUTH-403"))
+                .andExpect(jsonPath("$.message").value("You do not have permission to access this resource"));
+        mockMvc.perform(get(DLQ_URL).header("Authorization", strategyToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("A user's token that also claims STRATEGY is treated as the strategy service")
+    void strategyRoleIsNeverCombinedWithUserAccess() throws Exception {
+        mockMvc.perform(get(ACCOUNT_URL).header("Authorization", "Bearer " + validToken(List.of("USER", "STRATEGY"))))
+                .andExpect(status().isForbidden());
+    }
 }

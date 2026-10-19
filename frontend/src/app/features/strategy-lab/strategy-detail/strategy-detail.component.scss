@@ -1,0 +1,55 @@
+:host {
+  display: block;
+}
+
+.series {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 4rem minmax(4rem, 1fr) auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+  }
+}
+
+.source {
+  font-weight: 600;
+}
+
+.meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-muted);
+  width: 100%;
+  border: 0;
+  overflow: hidden;
+  appearance: none;
+  color: var(--accent);
+
+  &::-webkit-progress-bar {
+    background: var(--surface-muted);
+  }
+
+  &::-webkit-progress-value {
+    background: var(--accent);
+  }
+
+  &::-moz-progress-bar {
+    background: var(--accent);
+  }
+}
+
+.detail {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.note.error {
+  color: var(--negative);
+}

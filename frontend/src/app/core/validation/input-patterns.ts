@@ -10,3 +10,6 @@ export const USERNAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 /** Letters in any language, digits, spaces and . , ' - e.g. Ada O'Neill-Lovelace */
 export const HOLDER_NAME_PATTERN = /^[\p{L}\p{M}\p{N} .,'-]+$/u;
+
+/** Letters in any language, digits, spaces and . , ' / _ - e.g. MA 20/50 on SPY */
+export const STRATEGY_NAME_PATTERN = /^[\p{L}\p{M}\p{N} .,'/_-]+$/u;
