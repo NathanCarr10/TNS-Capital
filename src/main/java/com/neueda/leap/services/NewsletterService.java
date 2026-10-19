@@ -2,6 +2,7 @@ package com.neueda.leap.services;
 
 import com.neueda.leap.config.NewsletterProperties;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
+import com.neueda.leap.exceptions.NewsletterNotFoundException;
 import com.neueda.leap.marketdata.AlpacaRestClient;
 import com.neueda.leap.marketdata.BarTimeframe;
 import com.neueda.leap.marketdata.MarketDataService;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -124,6 +126,23 @@ public class NewsletterService {
             // Published by another run in the meantime (week_start is unique)
             return issueRepository.findByWeekStart(weekStart).orElseThrow(() -> e);
         }
+    }
+
+    /**
+     * @return every published issue, newest first
+     */
+    @Transactional(readOnly = true)
+    public List<NewsletterIssue> issues() {
+        return issueRepository.findAllByOrderByWeekStartDesc();
+    }
+
+    /**
+     * @throws NewsletterNotFoundException if there is no issue with that ID
+     */
+    @Transactional(readOnly = true)
+    public NewsletterIssue issue(long id) {
+        return issueRepository.findById(id)
+                .orElseThrow(() -> new NewsletterNotFoundException("Newsletter issue not found: " + id));
     }
 
     /**
