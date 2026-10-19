@@ -85,10 +85,19 @@ export class OrderTicketComponent {
     return price > market ? `A sell limit above the market price (${market.toFixed(2)}) will not fill.` : null;
   });
 
-  /** Shares of this symbol held, which caps a sell. */
-  readonly heldQuantity = computed(
-    () => this.store.positions()?.find((position) => position.symbol === this.symbol())?.quantity ?? 0
+  /** The trader's position in this symbol, if any. */
+  private readonly position = computed(
+    () => this.store.positions()?.find((position) => position.symbol === this.symbol()) ?? null
   );
+
+  /** Shares of this symbol held, including those open sell orders reserved. */
+  readonly heldQuantity = computed(() => this.position()?.quantity ?? 0);
+
+  /** Shares not reserved by open sell orders, which caps a sell. */
+  readonly availableQuantity = computed(() => this.position()?.availableQuantity ?? 0);
+
+  /** Shares held for open sell orders. */
+  readonly reservedQuantity = computed(() => this.position()?.reservedQuantity ?? 0);
 
   /** Quantity at the limit price, or at the latest price for a market order. */
   readonly estimatedTotal = computed(() => {
@@ -105,10 +114,16 @@ export class OrderTicketComponent {
     }
     const quantity = this.formValue().quantity;
     if (this.side() === 'SELL') {
-      return quantity > this.heldQuantity() ? `You hold ${this.heldQuantity()} ${this.symbol()}.` : null;
+      if (quantity <= this.availableQuantity()) {
+        return null;
+      }
+      return this.reservedQuantity() > 0
+        ? `You can sell ${this.availableQuantity()} ${this.symbol()}; ${this.reservedQuantity()} are in open orders.`
+        : `You hold ${this.heldQuantity()} ${this.symbol()}.`;
     }
     const total = this.estimatedTotal();
-    const cash = this.account()?.cashBalance;
+    // Cash reserved by open buy orders is not available
+    const cash = this.account()?.availableCash;
     return total != null && cash != null && total > cash ? 'The estimated cost is more than your available cash.' : null;
   });
 

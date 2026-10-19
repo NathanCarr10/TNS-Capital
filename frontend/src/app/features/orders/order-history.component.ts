@@ -94,6 +94,8 @@ export class OrderHistoryComponent {
       next: (order) => {
         this.cancellingId.set(null);
         this.setStatus(row.id, order.status);
+        // Cancelling releases the cash or shares the order reserved
+        this.store.refresh();
       },
       error: (error: unknown) => {
         this.cancellingId.set(null);
