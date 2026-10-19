@@ -6,6 +6,9 @@ import { APIRequestContext, Locator, Page, expect } from '@playwright/test';
  */
 export const ADMIN = { username: 'admin', password: process.env['E2E_ADMIN_PASSWORD'] ?? '' };
 
+/** The support user, created the same way from SUPPORT_PASSWORD (E2E_SUPPORT_PASSWORD here). */
+export const SUPPORT = { username: 'support', password: process.env['E2E_SUPPORT_PASSWORD'] ?? '' };
+
 export interface Trader {
   username: string;
   password: string;
