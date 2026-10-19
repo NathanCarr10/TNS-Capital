@@ -56,7 +56,12 @@
               <button type="submit" class="send" [disabled]="sending() || !reply.trim()"><app-icon name="send" /><span>Send reply</span></button>
             </form>
             } @else {
-              <p class="closed-note">This conversation is closed. The message history is still available.</p>
+              <div class="closed-note">
+                <p>This conversation is closed. The message history is still available.</p>
+                @if (!isSupport) {
+                  <button type="button" class="send" (click)="startNewConversation()"><app-icon name="send" /><span>Start a new conversation</span></button>
+                }
+              </div>
             }
           } @else if (!isSupport) {
             <form class="new-request" (ngSubmit)="submitRequest()">

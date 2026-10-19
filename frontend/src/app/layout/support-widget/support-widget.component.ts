@@ -68,6 +68,13 @@ export class SupportWidgetComponent {
     this.reply = '';
   }
 
+  startNewConversation(): void {
+    this.selectedId.set(null);
+    this.subject = '';
+    this.body = '';
+    this.error.set('');
+  }
+
   viewCustomerAccount(conversation: SupportConversation, event: Event): void {
     event.stopPropagation();
     if (!this.isSupport || conversation.accountId == null) return;
