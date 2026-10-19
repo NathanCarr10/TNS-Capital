@@ -58,7 +58,9 @@ class StrategyServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-19T14:00:00Z");
     private static final Caller TRADER = new Caller("trader", false, Optional.of(7L));
     private static final Caller OTHER = new Caller("someone", false, Optional.of(8L));
-    private static final Caller ADMIN = new Caller("admin", true, Optional.empty());
+    private static final Caller SUPPORT = new Caller("support", true, Optional.empty());
+    // Admins work in the analytics dashboard: no account, no strategies here
+    private static final Caller ADMIN = new Caller("admin", false, Optional.empty());
 
     private StrategyRepository strategies;
     private StrategySignalRepository signals;
@@ -106,12 +108,13 @@ class StrategyServiceTest {
     }
 
     @Test
-    @DisplayName("Refuses to create a strategy for an admin, on an untradable instrument or with bad settings")
+    @DisplayName("Refuses to create a strategy for support or an admin, on an untradable instrument or with bad settings")
     void refusesBadCreation() {
         CreateStrategyRequest onSpy = new CreateStrategyRequest("Trend", "SPY", RuleType.MA_CROSSOVER, null, 1);
         CreateStrategyRequest badRule = new CreateStrategyRequest("Trend", "SPY", RuleType.MA_CROSSOVER,
                 Map.of("shortWindow", 60.0), 1);
 
+        assertThrows(NotOwnerException.class, () -> service.create(SUPPORT, onSpy));
         assertThrows(NotOwnerException.class, () -> service.create(ADMIN, onSpy));
         assertThrows(InstrumentNotTradableException.class, () -> service.create(TRADER, onSpy));
         when(platform.isTradable("SPY")).thenReturn(true);
@@ -120,7 +123,7 @@ class StrategyServiceTest {
     }
 
     @Test
-    @DisplayName("Lists a trader's own strategies and every strategy for an admin")
+    @DisplayName("Lists a trader's own strategies, every strategy for support and none for an admin")
     void listsStrategies() {
         when(strategies.findByAccountIdAndStatusNotOrderByCreatedOnDesc(7L, StrategyStatus.ARCHIVED))
                 .thenReturn(List.of(owned));
@@ -128,15 +131,17 @@ class StrategyServiceTest {
                 .thenReturn(List.of(owned, strategy(2L, 8L)));
 
         assertEquals(1, service.list(TRADER).size());
-        assertEquals(2, service.list(ADMIN).size());
+        assertEquals(2, service.list(SUPPORT).size());
+        assertTrue(service.list(ADMIN).isEmpty());
         assertTrue(service.list(new Caller("new", false, Optional.empty())).isEmpty());
     }
 
     @Test
-    @DisplayName("Lets the owner and admins see a strategy; others get AUTH-403, a missing one STR-404")
+    @DisplayName("Lets the owner and support see a strategy; others, admins included, get AUTH-403, a missing one STR-404")
     void checksVisibility() {
         assertEquals(1L, service.get(TRADER, 1L).id());
-        assertEquals(1L, service.get(ADMIN, 1L).id());
+        assertEquals(1L, service.get(SUPPORT, 1L).id());
+        assertThrows(NotOwnerException.class, () -> service.get(ADMIN, 1L));
         assertThrows(NotOwnerException.class, () -> service.get(OTHER, 1L));
         assertThrows(StrategyNotFoundException.class, () -> service.get(TRADER, 99L));
     }
@@ -156,7 +161,7 @@ class StrategyServiceTest {
     @Test
     @DisplayName("Only the owner changes a strategy; an archived one stays archived")
     void protectsChanges() {
-        assertThrows(NotOwnerException.class, () -> service.changeStatus(ADMIN, 1L, StrategyStatus.PAUSED));
+        assertThrows(NotOwnerException.class, () -> service.changeStatus(SUPPORT, 1L, StrategyStatus.PAUSED));
         assertThrows(NotOwnerException.class, () -> service.archive(OTHER, 1L));
         assertThrows(StrategyStateException.class, () -> service.changeStatus(TRADER, 1L, StrategyStatus.ARCHIVED));
 
@@ -231,7 +236,7 @@ class StrategyServiceTest {
     }
 
     @Test
-    @DisplayName("Compares the strategies' filled orders with the trader's own, for their account or one an admin names")
+    @DisplayName("Compares the strategies' filled orders with the trader's own, for their account or one support names")
     void comparesPerformance() {
         UUID strategyOrder = UUID.randomUUID();
         StrategySignal placed = new StrategySignal(1L, "BUY", BigDecimal.TEN, NOW, SignalSource.LIVE, null);
@@ -244,8 +249,9 @@ class StrategyServiceTest {
                 new PlatformLookup.FilledOrder(UUID.randomUUID(), "SPY", "BUY", 1, BigDecimal.ONE, NOW)));
 
         assertEquals(1, service.performance(TRADER, null).strategies().trades());
-        assertEquals(1, service.performance(ADMIN, 7L).manual().trades());
-        assertThrows(NotOwnerException.class, () -> service.performance(ADMIN, null));
+        assertEquals(1, service.performance(SUPPORT, 7L).manual().trades());
+        assertThrows(NotOwnerException.class, () -> service.performance(SUPPORT, null));
+        assertThrows(NotOwnerException.class, () -> service.performance(ADMIN, 7L));
         assertThrows(NotOwnerException.class, () -> service.performance(TRADER, 8L));
         assertThrows(NotOwnerException.class, () -> service.performance(new Caller("new", false, Optional.empty()), null));
     }

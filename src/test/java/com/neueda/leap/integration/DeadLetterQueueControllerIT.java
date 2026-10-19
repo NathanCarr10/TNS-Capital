@@ -202,6 +202,17 @@ class DeadLetterQueueControllerIT extends AbstractIntegrationTest {
     @DisplayName("Should deny access without ADMIN role")
     @WithMockUser(roles = "USER")
     void testAccessDeniedWithoutAdminRole() throws Exception {
+        assertEveryEndpointForbidden();
+    }
+
+    @Test
+    @DisplayName("Should deny support staff: the DLQ is an operations (ADMIN) task")
+    @WithMockUser(roles = "SUPPORT")
+    void testAccessDeniedForSupport() throws Exception {
+        assertEveryEndpointForbidden();
+    }
+
+    private void assertEveryEndpointForbidden() throws Exception {
         mockMvc.perform(get("/api/v1/dlq/messages"))
                 .andExpect(status().isForbidden());
 

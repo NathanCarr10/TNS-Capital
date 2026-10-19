@@ -9,7 +9,8 @@ Strategy Lab's backend: the platform's Sprint 10 extension, automated strategy e
   (live and replayed kept apart), and on each closed bar places market orders through the trading API
   with its own `STRATEGY` token from the auth service (`POST /auth/token`).
 - **REST API** at `/api/v1/strategies` (contract: [contracts/strategy-api.json](../contracts/strategy-api.json),
-  Swagger UI at `/swagger-ui.html`): traders manage their own strategies; admins read every strategy.
+  Swagger UI at `/swagger-ui.html`): traders manage their own strategies; support staff read every strategy (admins: none, they work in
+  the analytics dashboard).
 
 | Rule | Settings (defaults) | Signals |
 |---|---|---|

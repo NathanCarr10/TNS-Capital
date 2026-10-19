@@ -99,6 +99,15 @@ describe('AuthService', () => {
 
     expect(authService.isAdmin()).toBeFalse();
   });
+
+  it('tells support and admin apart', () => {
+    sessionStorage.setItem('tns.accessToken', createJwtWithExpOffset(120, ['SUPPORT']));
+    expect(authService.isSupport()).toBeTrue();
+    expect(authService.isAdmin()).toBeFalse();
+
+    sessionStorage.setItem('tns.accessToken', createJwtWithExpOffset(120, ['ADMIN']));
+    expect(authService.isSupport()).toBeFalse();
+  });
 });
 
 function createJwtWithExpOffset(offsetInSeconds: number, roles?: string[]): string {

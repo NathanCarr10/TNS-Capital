@@ -209,7 +209,7 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
         }
 
         @Test
-        @DisplayName("cannot suspend or reactivate any account, not even their own; that is an admin task")
+        @DisplayName("cannot suspend or reactivate any account, not even their own; that is a support task")
         void cannotChangeAccountStatus() throws Exception {
             for (Account account : new Account[] {ownAccount, otherAccount}) {
                 mockMvc.perform(put("/api/v1/accounts/{id}/status", account.getId())
@@ -223,9 +223,9 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
     }
 
     @Nested
-    @DisplayName("as an admin")
-    @WithMockUser(username = "admin", roles = "ADMIN")
-    class AsAdmin {
+    @DisplayName("as support")
+    @WithMockUser(username = "support", roles = "SUPPORT")
+    class AsSupport {
 
         @Test
         @DisplayName("lists every account and order")
@@ -252,6 +252,16 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
         }
 
         @Test
+        @DisplayName("can stop trading an instrument")
+        void changesInstruments() throws Exception {
+            mockMvc.perform(put("/api/v1/instruments/AAPL").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"symbol\":\"AAPL\",\"name\":\"Apple\",\"assetClass\":\"EQUITY\","
+                            + "\"currency\":\"USD\",\"tradable\":false}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.tradable").value(false));
+        }
+
+        @Test
         @DisplayName("can suspend and reactivate an account")
         void changesAccountStatus() throws Exception {
             mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
@@ -262,6 +272,43 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"ACTIVE\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("ACTIVE"));
+        }
+    }
+
+    @Nested
+    @DisplayName("as an admin")
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    class AsAdmin {
+
+        @Test
+        @DisplayName("sees no trader's account or order: those are support's, admins run operations")
+        void seesNoTraderData() throws Exception {
+            mockMvc.perform(get("/api/v1/accounts"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", empty()));
+            mockMvc.perform(get("/api/v1/orders"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", empty()));
+            mockMvc.perform(get("/api/v1/accounts/{id}", otherAccount.getId()))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/v1/orders/{id}", otherOrder.getId()))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("cannot suspend accounts, open them or change instruments")
+        void cannotDoSupportTasks() throws Exception {
+            mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"SUSPENDED\"}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("AUTH-403"));
+            mockMvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"accountNumber\": \"ACC-X\", \"holderName\": \"X\", \"cashBalance\": 0}"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(put("/api/v1/instruments/AAPL").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"symbol\":\"AAPL\",\"name\":\"Apple\",\"assetClass\":\"EQUITY\","
+                            + "\"currency\":\"USD\",\"tradable\":false}"))
+                    .andExpect(status().isForbidden());
         }
     }
 }

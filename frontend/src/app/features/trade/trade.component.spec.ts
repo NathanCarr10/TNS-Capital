@@ -62,7 +62,7 @@ describe('TradeComponent', () => {
         OrderTrackerService,
         { provide: MarketDataService, useValue: marketDataServiceSpy },
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => false } },
+        { provide: AuthService, useValue: { isSupport: () => false } },
       ],
     }).compileComponents();
     router = TestBed.inject(Router);

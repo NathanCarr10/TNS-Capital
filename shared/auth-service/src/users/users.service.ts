@@ -2,7 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
 
-export type Role = 'USER' | 'ADMIN';
+/**
+ * USER trades on their own account. The two staff roles have no account and are kept apart:
+ * SUPPORT works in the trading app, ADMIN runs the analytics dashboard and operations.
+ */
+export type Role = 'USER' | 'SUPPORT' | 'ADMIN';
+export type StaffRole = Exclude<Role, 'USER'>;
 
 export interface RegisteredUser {
   id: number;
@@ -16,7 +21,7 @@ export interface AuthenticatedUser {
   id: number;
   username: string;
   roles: Role[];
-  /** The user's trading account; null for admins, who have none */
+  /** The user's trading account; null for support and admin users, who have none */
   accountId: number | null;
 }
 
@@ -31,10 +36,11 @@ export class UsernameTakenError extends Error {
   }
 }
 
-/** The admin username belongs to a trader, so it cannot be made the admin. */
-export class AdminNameTakenError extends Error {
-  constructor(username: string) {
-    super(`"${username}" is a trader's username, so it cannot be the admin account`);
+/** A staff username already belongs to a user with another role, which is never changed. */
+export class StaffNameTakenError extends Error {
+  constructor(username: string, role: StaffRole, existingRoles: Role[]) {
+    const owner = existingRoles.includes('USER') ? "a trader's username" : `already the ${existingRoles.join(', ')} account`;
+    super(`"${username}" is ${owner}, so it cannot be the ${role} account`);
   }
 }
 
@@ -114,14 +120,16 @@ export class UsersService {
   }
 
   /**
-   * Creates the ADMIN user, or sets a new password on it. Admins have no trading account.
+   * Creates a staff user (SUPPORT or ADMIN), or sets a new password on it. Staff have no
+   * trading account.
    *
-   * @throws AdminNameTakenError if a trader (USER) already has this username
+   * @throws StaffNameTakenError if a user with another role (a trader, or the other staff
+   *   role) already has this username
    */
-  async saveAdmin(username: string, passwordHash: string): Promise<void> {
+  async saveStaff(username: string, passwordHash: string, role: StaffRole): Promise<void> {
     const existing = await this.findByUsername(username);
-    if (existing && !existing.roles.includes('ADMIN')) {
-      throw new AdminNameTakenError(username);
+    if (existing && !existing.roles.includes(role)) {
+      throw new StaffNameTakenError(username, role, existing.roles);
     }
     if (existing) {
       await this.pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [
@@ -131,8 +139,8 @@ export class UsersService {
       return;
     }
     await this.pool.query(
-      "INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, 'ADMIN', NOW(), NOW())",
-      [username, passwordHash],
+      'INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
+      [username, passwordHash, role],
     );
   }
 

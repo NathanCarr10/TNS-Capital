@@ -36,7 +36,7 @@ export const RULES: { type: RuleType; label: string; params: { key: string; labe
 
 /**
  * Strategy Lab: backtest a trading rule on five years of daily prices, save it
- * as a strategy, switch it on and watch it trade. Admins see every strategy and
+ * as a strategy, switch it on and watch it trade. Support staff see every strategy and
  * can backtest, but cannot create or change strategies.
  */
 @Component({
@@ -51,7 +51,7 @@ export class StrategyLabComponent {
   private readonly store = inject(AccountStore);
   private readonly toasts = inject(ToastService);
 
-  readonly isAdmin = this.store.isAdmin;
+  readonly isSupport = this.store.isSupport;
   readonly instruments = this.store.tradableInstruments;
   readonly rules = RULES;
 
@@ -88,7 +88,7 @@ export class StrategyLabComponent {
   readonly selectedId = signal<number | null>(null);
   readonly selected = computed(() => this.strategies().find((strategy) => strategy.id === this.selectedId()) ?? null);
   readonly busyId = signal<number | null>(null);
-  /** The strategies' trading against the trader's own; admins have no account */
+  /** The strategies' trading against the trader's own; support staff have no account */
   readonly performance = signal<PerformanceResponse | null>(null);
 
   constructor() {
@@ -97,7 +97,7 @@ export class StrategyLabComponent {
   }
 
   loadPerformance(): void {
-    if (this.isAdmin) {
+    if (this.isSupport) {
       return;
     }
     this.strategyLab.performance().subscribe({
@@ -145,7 +145,7 @@ export class StrategyLabComponent {
   }
 
   save(): void {
-    if (this.isAdmin || this.invalidRule() || this.form.controls.name.invalid || this.form.controls.quantity.invalid) {
+    if (this.isSupport || this.invalidRule() || this.form.controls.name.invalid || this.form.controls.quantity.invalid) {
       this.form.markAllAsTouched();
       return;
     }
@@ -175,7 +175,7 @@ export class StrategyLabComponent {
 
   /** Switches a strategy on or off; only one per account can be on. */
   toggle(strategy: StrategyResponse): void {
-    if (this.isAdmin || this.busyId() != null) {
+    if (this.isSupport || this.busyId() != null) {
       return;
     }
     const next = strategy.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
@@ -194,7 +194,7 @@ export class StrategyLabComponent {
   }
 
   remove(strategy: StrategyResponse): void {
-    if (this.isAdmin || this.busyId() != null) {
+    if (this.isSupport || this.busyId() != null) {
       return;
     }
     this.busyId.set(strategy.id!);

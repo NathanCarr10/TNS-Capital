@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard } from './core/auth/auth.guard';
+import { authGuard, notAdminGuard } from './core/auth/auth.guard';
 import { HomeComponent } from './features/home/home.component';
 import { LoginComponent } from './features/login/login.component';
 import { RegisterComponent } from './features/register/register.component';
@@ -16,7 +16,7 @@ export const routes: Routes = [
 	{
 		path: '',
 		component: ShellComponent,
-		canActivate: [authGuard],
+		canActivate: [authGuard, notAdminGuard],
 		children: [
 			{ path: 'portfolio', loadComponent: () => import('./features/portfolio/portfolio.component').then((m) => m.PortfolioComponent), title: 'Portfolio · TNS Capital' },
 			// Without a symbol, the trade page opens the last symbol viewed or the first one available

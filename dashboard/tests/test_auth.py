@@ -35,6 +35,13 @@ def test_a_trader_token_is_valid_but_not_admin():
     assert not auth.is_admin(auth.verify(token(roles=["USER"])))
 
 
+def test_a_support_token_is_valid_but_not_admin():
+    claims = auth.verify(token(roles=["SUPPORT"]))
+
+    assert auth.is_support(claims)
+    assert not auth.is_admin(claims)
+
+
 @pytest.mark.parametrize("bad_token, message", [
     (token(expires_in=-60), "expired"),
     (token(key="another-secret-that-is-32-bytes-long!!"), "not valid"),

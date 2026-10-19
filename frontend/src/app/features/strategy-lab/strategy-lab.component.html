@@ -58,7 +58,7 @@
         }
       </p>
 
-      @if (!isAdmin) {
+      @if (!isSupport) {
         <div class="field-row">
           <div class="field">
             <label for="strategy-name">Name</label>
@@ -84,7 +84,7 @@
         <button type="button" class="btn" (click)="runBacktest()" [disabled]="backtesting()">
           {{ backtesting() ? 'Running...' : 'Run backtest' }}
         </button>
-        @if (!isAdmin) {
+        @if (!isSupport) {
           <button type="submit" class="btn btn-primary" [disabled]="saving()">{{ saving() ? 'Saving...' : 'Save strategy' }}</button>
         }
       </div>
@@ -149,7 +149,7 @@
 <section class="card" aria-labelledby="strategies-title">
   <div class="card-header">
     <div>
-      <p class="eyebrow">{{ isAdmin ? 'All accounts' : 'Your account' }}</p>
+      <p class="eyebrow">{{ isSupport ? 'All accounts' : 'Your account' }}</p>
       <h2 id="strategies-title" class="card-title">Strategies</h2>
     </div>
   </div>
@@ -159,7 +159,7 @@
   } @else if (strategiesError()) {
     <p class="note error">{{ strategiesError() }}</p>
   } @else if (strategies().length === 0) {
-    <p class="note">{{ isAdmin ? 'No trader has a strategy yet.' : 'No strategies yet. Build one above and save it.' }}</p>
+    <p class="note">{{ isSupport ? 'No trader has a strategy yet.' : 'No strategies yet. Build one above and save it.' }}</p>
   } @else {
     <div class="table-wrap">
       <table class="data-table">
@@ -171,7 +171,7 @@
             <th class="numeric">Shares</th>
             <th>Holding</th>
             <th>Status</th>
-            @if (!isAdmin) {
+            @if (!isSupport) {
               <th><span class="visually-hidden">Actions</span></th>
             }
           </tr>
@@ -191,7 +191,7 @@
               <td>
                 <span class="badge" [class.badge-positive]="strategy.status === 'ACTIVE'">{{ strategy.status === 'ACTIVE' ? 'On' : 'Off' }}</span>
               </td>
-              @if (!isAdmin) {
+              @if (!isSupport) {
                 <td class="row-actions">
                   <button type="button" class="btn btn-small" [class.btn-primary]="strategy.status !== 'ACTIVE'" [disabled]="busyId() != null" (click)="toggle(strategy)">
                     {{ strategy.status === 'ACTIVE' ? 'Switch off' : 'Switch on' }}

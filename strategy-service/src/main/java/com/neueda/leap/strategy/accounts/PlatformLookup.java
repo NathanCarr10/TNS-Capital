@@ -33,7 +33,7 @@ public class PlatformLookup {
     }
 
     /**
-     * @return the account linked to the user (opened when they registered); empty for admins
+     * @return the account linked to the user (opened when they registered); empty for support and admin users
      */
     public Optional<Long> accountIdOf(String username) {
         return jdbc.query("SELECT account_id FROM users WHERE username = ? AND account_id IS NOT NULL",

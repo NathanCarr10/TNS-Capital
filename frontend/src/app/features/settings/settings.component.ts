@@ -21,7 +21,7 @@ export class SettingsComponent {
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly isAdmin = this.store.isAdmin;
+  readonly isSupport = this.store.isSupport;
   readonly account = this.store.account;
   readonly accountLoading = this.store.accountLoading;
   readonly accountError = this.store.accountError;

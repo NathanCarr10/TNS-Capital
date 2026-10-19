@@ -50,8 +50,10 @@ import java.util.stream.Collectors;
  * rules, switch strategies on and off and follow what they did.
  *
  * Access: a trader sees and changes only the strategies on their own account.
- * Admins see every strategy but change none, as they only view accounts in the
- * trading UI (docs/DECISIONS.md #12).
+ * Support staff see every strategy but change none, as they view traders'
+ * accounts read-only in the trading app. Admins work in the analytics
+ * dashboard, not here: with no account they see no strategies (docs/DECISIONS.md,
+ * "Roles").
  */
 @Service
 public class StrategyService {
@@ -83,10 +85,10 @@ public class StrategyService {
     }
 
     /**
-     * Admins get every strategy that is not archived; traders their own.
+     * Support gets every strategy that is not archived; traders their own.
      */
     public List<StrategyResponse> list(Caller caller) {
-        List<Strategy> found = caller.admin()
+        List<Strategy> found = caller.support()
                 ? strategies.findByStatusNotOrderByCreatedOnDesc(StrategyStatus.ARCHIVED)
                 : caller.accountId()
                         .map(id -> strategies.findByAccountIdAndStatusNotOrderByCreatedOnDesc(id, StrategyStatus.ARCHIVED))
@@ -164,10 +166,10 @@ public class StrategyService {
 
     /**
      * Signals of the caller's strategies since the given time, newest first, for
-     * notifications; admins get every strategy's.
+     * notifications; support gets every strategy's.
      */
     public List<SignalResponse> activity(Caller caller, Instant since) {
-        List<Strategy> mine = caller.admin()
+        List<Strategy> mine = caller.support()
                 ? strategies.findAll()
                 : caller.accountId().map(strategies::findByAccountId).orElse(List.of());
         if (mine.isEmpty()) {
@@ -180,14 +182,14 @@ public class StrategyService {
 
     /**
      * The account's strategy trading against the trader's own, from its filled
-     * orders. Traders get their own account; admins name one.
+     * orders. Traders get their own account; support names one.
      */
     public PerformanceResponse performance(Caller caller, Long requestedAccountId) {
-        Long accountId = caller.admin()
+        Long accountId = caller.support()
                 ? Optional.ofNullable(requestedAccountId)
-                        .orElseThrow(() -> new NotOwnerException("Admins choose an account with accountId"))
+                        .orElseThrow(() -> new NotOwnerException("Support chooses an account with accountId"))
                 : caller.accountId().orElseThrow(() -> new NotOwnerException("Only a trader with an account has performance"));
-        if (!caller.admin() && requestedAccountId != null && !requestedAccountId.equals(accountId)) {
+        if (!caller.support() && requestedAccountId != null && !requestedAccountId.equals(accountId)) {
             throw new NotOwnerException("Account " + requestedAccountId + " is not yours");
         }
         List<Long> strategyIds = strategies.findByAccountId(accountId).stream().map(Strategy::getId).toList();
@@ -227,7 +229,7 @@ public class StrategyService {
     /** The strategy, if the caller may see it */
     private Strategy visible(Caller caller, Long id) {
         Strategy strategy = strategies.findById(id).orElseThrow(() -> new StrategyNotFoundException(id));
-        if (!caller.admin() && !caller.accountId().map(strategy.getAccountId()::equals).orElse(false)) {
+        if (!caller.support() && !caller.accountId().map(strategy.getAccountId()::equals).orElse(false)) {
             throw new NotOwnerException("Strategy " + id + " is not on your account");
         }
         return strategy;

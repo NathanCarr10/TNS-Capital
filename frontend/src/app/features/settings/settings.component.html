@@ -6,8 +6,8 @@
   </div>
 </header>
 
-@if (isAdmin) {
-  <p class="note">Admins have no trading account of their own. <a routerLink="/portfolio">View accounts</a></p>
+@if (isSupport) {
+  <p class="note">Support staff have no trading account of their own. <a routerLink="/portfolio">View accounts</a></p>
 } @else if (accountError()) {
   <p class="note error" role="alert">{{ accountError() }}</p>
 } @else {

@@ -33,7 +33,7 @@ import java.util.Objects;
 
 /**
  * Strategy Lab's API. Traders see and change only the strategies on their
- * own account; admins see every strategy and change none.
+ * own account; support sees every strategy and changes none.
  */
 @RestController
 @RequestMapping("/api/v1/strategies")
@@ -47,7 +47,7 @@ public class StrategyController {
         this.callers = Objects.requireNonNull(callers);
     }
 
-    @Operation(summary = "List strategies", description = "A trader's own strategies; every strategy for admins. Deleted (archived) ones are left out.")
+    @Operation(summary = "List strategies", description = "A trader's own strategies; every strategy for support. Deleted (archived) ones are left out.")
     @ApiResponse(responseCode = "200", description = "OK")
     @GetMapping
     public List<StrategyResponse> listStrategies(Authentication caller) {
@@ -56,7 +56,7 @@ public class StrategyController {
 
     @Operation(summary = "Create a strategy", description = "On the caller's own account, PAUSED until switched on. Missing rule settings take their defaults.")
     @ApiResponse(responseCode = "201", description = "Created")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 The caller has no trading account (admins)")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 The caller has no trading account (support and admin users)")
     @ApiResponse(responseCode = "404", description = "INS-404 Instrument not found or not tradable")
     @ApiResponse(responseCode = "422", description = "VAL-422 Invalid input; STR-422 rule settings out of range")
     @PostMapping
@@ -76,7 +76,7 @@ public class StrategyController {
 
     @Operation(summary = "Switch a strategy on or off", description = "ACTIVE: it trades on each 1-minute bar of its symbol. PAUSED: it stops. Up to strategy.max-active-per-account (default 3) strategies per account can be on at a time.")
     @ApiResponse(responseCode = "200", description = "OK")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Not on the caller's account (admins cannot change strategies)")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Not on the caller's account (support cannot change strategies)")
     @ApiResponse(responseCode = "404", description = "STR-404 Strategy not found")
     @ApiResponse(responseCode = "409", description = "STR-409 The account already has its maximum of strategies on, or the strategy is deleted")
     @ApiResponse(responseCode = "422", description = "VAL-422 Invalid input")
@@ -105,7 +105,7 @@ public class StrategyController {
         return service.signals(callers.resolve(caller), id);
     }
 
-    @Operation(summary = "Recent signals of all the caller's strategies", description = "Signals since the given time, newest first (at most 100), for notifications. Admins get every strategy's.")
+    @Operation(summary = "Recent signals of all the caller's strategies", description = "Signals since the given time, newest first (at most 100), for notifications. Support gets every strategy's.")
     @ApiResponse(responseCode = "200", description = "OK")
     @ApiResponse(responseCode = "422", description = "VAL-422 since is missing or not an ISO-8601 time")
     @GetMapping("/activity")
@@ -114,9 +114,9 @@ public class StrategyController {
         return service.activity(callers.resolve(caller), since);
     }
 
-    @Operation(summary = "Strategy trading compared with the trader's own", description = "From the account's filled orders: those its strategies placed, and the rest. Each side at average cost: trades, bought, sold, realized P&L and the cost of shares still held. Traders get their own account; admins pass accountId.")
+    @Operation(summary = "Strategy trading compared with the trader's own", description = "From the account's filled orders: those its strategies placed, and the rest. Each side at average cost: trades, bought, sold, realized P&L and the cost of shares still held. Traders get their own account; support passes accountId.")
     @ApiResponse(responseCode = "200", description = "OK")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Not the caller's account, or an admin without accountId")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Not the caller's account, or support without accountId")
     @GetMapping("/performance")
     public PerformanceResponse getStrategyPerformance(@RequestParam(required = false) Long accountId,
             Authentication caller) {

@@ -1,9 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { AdminAccountBarComponent } from './admin-account-bar.component';
+import { SupportAccountBarComponent } from './support-account-bar.component';
 
-describe('AdminAccountBarComponent', () => {
-  let fixture: ComponentFixture<AdminAccountBarComponent>;
+describe('SupportAccountBarComponent', () => {
+  let fixture: ComponentFixture<SupportAccountBarComponent>;
   let element: HTMLElement;
 
   const accounts = [
@@ -12,7 +12,7 @@ describe('AdminAccountBarComponent', () => {
   ];
 
   beforeEach(() => {
-    fixture = TestBed.createComponent(AdminAccountBarComponent);
+    fixture = TestBed.createComponent(SupportAccountBarComponent);
     fixture.componentRef.setInput('accounts', accounts);
     fixture.componentRef.setInput('selectedId', 2);
     fixture.detectChanges();
@@ -38,14 +38,5 @@ describe('AdminAccountBarComponent', () => {
     select.dispatchEvent(new Event('change'));
 
     expect(chosen).toEqual([1]);
-  });
-
-  it('asks for the analytics dashboard', () => {
-    let opened = false;
-    fixture.componentInstance.openAnalytics.subscribe(() => (opened = true));
-
-    element.querySelector('button')!.click();
-
-    expect(opened).toBeTrue();
   });
 });

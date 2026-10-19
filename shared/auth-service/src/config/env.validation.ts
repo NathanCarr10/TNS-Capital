@@ -2,7 +2,7 @@ import { parseTrustProxy } from '../auth/rate-limit';
 
 /**
  * Validates the environment at startup; the service refuses to start without
- * a usable JWT_SECRET, or with a weak ADMIN_PASSWORD.
+ * a usable JWT_SECRET, or with a weak ADMIN_PASSWORD or SUPPORT_PASSWORD.
  *
  * The trading API (Java) validates tokens signed with this exact value. Both
  * services read it from JWT_SECRET (set in the project's .env), so it is
@@ -16,7 +16,7 @@ export function isPlaceholder(value: string): boolean {
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
   checkJwtSecret(config.JWT_SECRET);
-  checkAdminPassword(config.ADMIN_PASSWORD);
+  checkStaffPasswords(config);
   checkStrategyClientSecret(config.STRATEGY_CLIENT_SECRET);
   checkRateLimit(config.AUTH_RATE_LIMIT);
   checkTrustProxy(config.AUTH_TRUST_PROXY);
@@ -36,15 +36,12 @@ function checkJwtSecret(secret: unknown): void {
   }
 }
 
-function checkAdminPassword(adminPassword: unknown): void {
-  if (adminPassword === undefined || adminPassword === '') {
-    return;
-  }
-  if (typeof adminPassword !== 'string' || adminPassword.length < 12) {
-    throw new Error('ADMIN_PASSWORD must be at least 12 characters.');
-  }
-  if (isPlaceholder(adminPassword)) {
-    throw new Error('ADMIN_PASSWORD is a published placeholder or default. Choose your own.');
+function checkStaffPasswords(config: Record<string, unknown>): void {
+  checkStaffPassword('ADMIN_PASSWORD', config.ADMIN_PASSWORD);
+  checkStaffPassword('SUPPORT_PASSWORD', config.SUPPORT_PASSWORD);
+  // One password for both would undo keeping the two roles apart
+  if (config.ADMIN_PASSWORD && config.ADMIN_PASSWORD === config.SUPPORT_PASSWORD) {
+    throw new Error('SUPPORT_PASSWORD must differ from ADMIN_PASSWORD.');
   }
 }
 
@@ -75,4 +72,17 @@ function checkTrustProxy(trustProxy: unknown): void {
     throw new TypeError('AUTH_TRUST_PROXY must be text: true, false, a number of hops or a list of addresses.');
   }
   parseTrustProxy(trustProxy);
+}
+
+/** A staff account's password, when set: at least 12 characters and not a published default. */
+function checkStaffPassword(name: string, password: unknown): void {
+  if (password === undefined || password === '') {
+    return;
+  }
+  if (typeof password !== 'string' || password.length < 12) {
+    throw new Error(`${name} must be at least 12 characters.`);
+  }
+  if (isPlaceholder(password)) {
+    throw new Error(`${name} is a published placeholder or default. Choose your own.`);
+  }
 }

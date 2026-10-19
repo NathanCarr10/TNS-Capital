@@ -124,12 +124,18 @@ def test_a_forged_token_is_rejected(monkeypatch):
     assert not app.metric
 
 
-def test_links_back_to_the_trading_dashboard(monkeypatch):
+def test_support_is_turned_away_and_pointed_to_the_trading_app(monkeypatch):
+    app = run_app(monkeypatch, FRAMES, signed_in_with=token(roles=["SUPPORT"], sub="support"))
+
+    assert "this dashboard is for admins only" in app.error[0].value
+    assert "trading app" in app.info[0].value
+    assert not app.metric
+
+
+def test_has_no_link_to_the_trading_apps_account_viewer(monkeypatch):
     app = run_app(monkeypatch, FRAMES)
 
-    [link] = app.sidebar.get("link_button")
-    assert link.proto.label == "Trading dashboard"
-    assert link.proto.url == "/portfolio"  # same origin as the Angular app, see docs/DECISIONS.md 13
+    assert not app.sidebar.get("link_button")  # traders' accounts are support's, not admins'
 
 
 def test_sign_out_returns_to_the_form(monkeypatch):

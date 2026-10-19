@@ -331,7 +331,7 @@ class StrategyServiceIT {
     }
 
     @Test
-    @DisplayName("keeps traders to their own strategies, admins read-only and the service's token out")
+    @DisplayName("keeps traders to their own strategies, support read-only, admins and the service's token out")
     void enforcesAccess() throws Exception {
         String trader = token("trader", "USER");
         long id = createStrategy(trader);
@@ -342,8 +342,10 @@ class StrategyServiceIT {
         mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("someone", "USER")))
                 .andExpect(jsonPath("$.length()").value(0));
         mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("admin", "ADMIN")))
+                .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("support", "SUPPORT")))
                 .andExpect(jsonPath("$.length()").value(1));
-        mockMvc.perform(put("/api/v1/strategies/{id}/status", id).header("Authorization", token("admin", "ADMIN"))
+        mockMvc.perform(put("/api/v1/strategies/{id}/status", id).header("Authorization", token("support", "SUPPORT"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"ACTIVE\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("service:strategy-service", "STRATEGY")))
@@ -392,7 +394,7 @@ class StrategyServiceIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountId").value(traderAccount))
                 .andExpect(jsonPath("$.strategies.trades").value(0));
-        mockMvc.perform(get("/api/v1/strategies/performance").header("Authorization", token("admin", "ADMIN")))
+        mockMvc.perform(get("/api/v1/strategies/performance").header("Authorization", token("support", "SUPPORT")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/strategies/{id}", 999).header("Authorization", trader))
                 .andExpect(status().isNotFound())

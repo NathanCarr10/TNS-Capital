@@ -37,7 +37,7 @@ describe('SymbolSearchComponent', () => {
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingServiceStub() },
-        { provide: AuthService, useValue: { isAdmin: () => false } },
+        { provide: AuthService, useValue: { isSupport: () => false } },
       ],
     }).compileComponents();
     router = TestBed.inject(Router);

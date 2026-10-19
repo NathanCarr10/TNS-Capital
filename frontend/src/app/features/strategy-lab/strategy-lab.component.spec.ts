@@ -50,13 +50,13 @@ describe('StrategyLabComponent', () => {
   let strategyLab: jasmine.SpyObj<StrategyLabService>;
   let toasts: jasmine.SpyObj<ToastService>;
 
-  const create = (isAdmin = false): HTMLElement => {
+  const create = (isSupport = false): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [StrategyLabComponent],
       providers: [
         AccountStore,
         { provide: TradingService, useValue: tradingServiceStub() },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
         { provide: StrategyLabService, useValue: strategyLab },
         { provide: ToastService, useValue: toasts },
       ],
@@ -206,7 +206,7 @@ describe('StrategyLabComponent', () => {
     expect(fixture.componentInstance.selectedId()).toBeNull();
   });
 
-  it('lets admins backtest and view strategies but not save or change them', () => {
+  it('lets support backtest and view strategies but not save or change them', () => {
     const element = create(true);
 
     expect(button(element, 'Save strategy')).toBeUndefined();

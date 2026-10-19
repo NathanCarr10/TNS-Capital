@@ -20,9 +20,9 @@ public class CallerResolver {
     }
 
     public Caller resolve(Authentication authentication) {
-        boolean admin = authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
-        Optional<Long> accountId = admin ? Optional.empty() : platform.accountIdOf(authentication.getName());
-        return new Caller(authentication.getName(), admin, accountId);
+        boolean support = authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_SUPPORT".equals(authority.getAuthority()));
+        Optional<Long> accountId = support ? Optional.empty() : platform.accountIdOf(authentication.getName());
+        return new Caller(authentication.getName(), support, accountId);
     }
 }

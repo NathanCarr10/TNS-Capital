@@ -42,7 +42,7 @@ class AccountAccessGuardTest {
         loginAs("trader", "USER");
 
         assertDoesNotThrow(() -> guard.checkAccess(7L));
-        assertFalse(guard.isAdmin());
+        assertFalse(guard.isSupport());
         assertEquals(Optional.of(7L), guard.currentAccountId());
     }
 
@@ -72,19 +72,29 @@ class AccountAccessGuardTest {
     }
 
     @Test
-    @DisplayName("An admin may access every account without an ownership lookup")
-    void adminIsAllowedEverywhere() {
-        loginAs("admin", "ADMIN");
+    @DisplayName("Support may access every account without an ownership lookup")
+    void supportIsAllowedEverywhere() {
+        loginAs("support", "SUPPORT");
 
-        assertTrue(guard.isAdmin());
+        assertTrue(guard.isSupport());
         assertDoesNotThrow(() -> guard.checkAccess(8L));
         verify(accountRepository, never()).findAccountIdByUsername(any());
     }
 
     @Test
+    @DisplayName("An admin is not support: with no account of their own, every account is denied")
+    void adminIsNotSupport() {
+        loginAs("admin", "ADMIN");
+        when(accountRepository.findAccountIdByUsername("admin")).thenReturn(Optional.empty());
+
+        assertFalse(guard.isSupport());
+        assertThrows(AccessDeniedException.class, () -> guard.checkAccess(8L));
+    }
+
+    @Test
     @DisplayName("Without authentication nothing is accessible")
     void unauthenticatedIsDenied() {
-        assertFalse(guard.isAdmin());
+        assertFalse(guard.isSupport());
         assertEquals(Optional.empty(), guard.currentAccountId());
         assertThrows(AccessDeniedException.class, () -> guard.checkAccess(7L));
     }
@@ -96,7 +106,7 @@ class AccountAccessGuardTest {
         when(accountRepository.hasActiveStrategy(7L)).thenReturn(true);
 
         assertTrue(guard.isStrategyService());
-        assertFalse(guard.isAdmin());
+        assertFalse(guard.isSupport());
         assertDoesNotThrow(() -> guard.checkTradingAccess(7L));
     }
 

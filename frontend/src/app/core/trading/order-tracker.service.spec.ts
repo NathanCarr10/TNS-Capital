@@ -40,7 +40,7 @@ describe('OrderTrackerService', () => {
         AccountStore,
         OrderTrackerService,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => false } },
+        { provide: AuthService, useValue: { isSupport: () => false } },
       ],
     });
     tracker = TestBed.inject(OrderTrackerService);

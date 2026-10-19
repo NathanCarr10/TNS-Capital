@@ -74,7 +74,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Not on the caller's account (admins cannot change strategies)",
+            "description": "AUTH-403 Not on the caller's account (support cannot change strategies)",
             "content": {
               "application/json": {
                 "schema": {
@@ -132,7 +132,7 @@
           "strategies"
         ],
         "summary": "List strategies",
-        "description": "A trader's own strategies; every strategy for admins. Deleted (archived) ones are left out.",
+        "description": "A trader's own strategies; every strategy for support. Deleted (archived) ones are left out.",
         "operationId": "listStrategies",
         "responses": {
           "200": {
@@ -219,7 +219,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 The caller has no trading account (admins)",
+            "description": "AUTH-403 The caller has no trading account (support and admin users)",
             "content": {
               "application/json": {
                 "schema": {
@@ -562,7 +562,7 @@
           "strategies"
         ],
         "summary": "Strategy trading compared with the trader's own",
-        "description": "From the account's filled orders: those its strategies placed, and the rest. Each side at average cost: trades, bought, sold, realized P&L and the cost of shares still held. Traders get their own account; admins pass accountId.",
+        "description": "From the account's filled orders: those its strategies placed, and the rest. Each side at average cost: trades, bought, sold, realized P&L and the cost of shares still held. Traders get their own account; support passes accountId.",
         "operationId": "getStrategyPerformance",
         "parameters": [
           {
@@ -597,7 +597,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Not the caller's account, or an admin without accountId",
+            "description": "AUTH-403 Not the caller's account, or support without accountId",
             "content": {
               "application/json": {
                 "schema": {
@@ -625,7 +625,7 @@
           "strategies"
         ],
         "summary": "Recent signals of all the caller's strategies",
-        "description": "Signals since the given time, newest first (at most 100), for notifications. Admins get every strategy's.",
+        "description": "Signals since the given time, newest first (at most 100), for notifications. Support gets every strategy's.",
         "operationId": "listStrategyActivity",
         "parameters": [
           {
