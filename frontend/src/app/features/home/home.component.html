@@ -1,15 +1,69 @@
 <section class="home-page">
   <header class="home-header">
-    <img class="home-logo" src="brand/company-logo.png" alt="TNS Capital" />
+    <div class="home-logo-frame">
+      <img class="home-logo" src="brand/company-logo-welcome.png" alt="TNS Capital" />
+    </div>
   </header>
 
   <a class="trader-entry" routerLink="/login">
     <div class="trader-copy">
+      <span class="trader-eyebrow">Your market workspace</span>
       <h2>Trading Portal</h2>
       <p>Execute orders, monitor real-time market activity, and manage portfolio performance.</p>
+      <div class="home-action">Sign In to Trade <span aria-hidden="true">&rarr;</span></div>
     </div>
-    <span class="home-action">Sign In to Trade <span aria-hidden="true">&rarr;</span></span>
+
+    <div class="market-panel" aria-label="Market overview">
+      <div class="market-panel-header">
+        <div>
+          <span class="market-eyebrow">Market preview</span>
+          <strong>Session overview</strong>
+        </div>
+        <span class="live-indicator"><span aria-hidden="true"></span>Ready</span>
+      </div>
+
+      <div class="chart" aria-hidden="true">
+        <svg class="chart-line" viewBox="0 0 100 48" preserveAspectRatio="none">
+          <polyline points="0,39 12,34 24,37 36,24 48,29 60,18 72,22 84,9 100,4" />
+        </svg>
+        <span style="--bar-height: 34%"></span>
+        <span style="--bar-height: 48%"></span>
+        <span style="--bar-height: 42%"></span>
+        <span style="--bar-height: 65%"></span>
+        <span style="--bar-height: 58%"></span>
+        <span style="--bar-height: 76%"></span>
+        <span style="--bar-height: 71%"></span>
+        <span style="--bar-height: 92%"></span>
+      </div>
+
+      <div class="market-stats">
+        <div><span>Quotes</span><strong>Real-time</strong></div>
+        <div><span>Portfolio</span><strong>Connected</strong></div>
+        <div><span>Access</span><strong>Secure</strong></div>
+      </div>
+
+      <div class="market-status" aria-live="polite">
+        <span>Market status</span>
+        <strong [class.closed]="!marketStatus().open">{{ marketStatus().open ? 'Open' : 'Closed' }}</strong>
+        <time>{{ marketStatus().time }} ET</time>
+      </div>
+    </div>
   </a>
+
+  <section class="home-benefits" aria-label="TNS Capital benefits">
+    <div class="benefit-item">
+      <span class="benefit-mark" aria-hidden="true">&#8599;</span>
+      <div><strong>Real-time insight</strong><span>See the market clearly.</span></div>
+    </div>
+    <div class="benefit-item">
+      <span class="benefit-mark" aria-hidden="true">&#9676;</span>
+      <div><strong>Portfolio control</strong><span>Manage every position.</span></div>
+    </div>
+    <div class="benefit-item">
+      <span class="benefit-mark" aria-hidden="true">&#10003;</span>
+      <div><strong>Secure access</strong><span>Trade with confidence.</span></div>
+    </div>
+  </section>
 
   <div class="admin-access">
     <span>Operations access</span>
