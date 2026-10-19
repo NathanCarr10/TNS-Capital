@@ -1,0 +1,24 @@
+meta {
+  name: Switch On
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{strategyUrl}}/api/v1/strategies/{{strategyId}}/status
+  body: json
+  auth: inherit
+}
+
+body:json {
+  { "status": "ACTIVE" }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  ACTIVE: the strategy trades on each 1-minute bar of its symbol. PAUSED switches it off.
+  STR-409 when the account already has its maximum of strategies on.
+}

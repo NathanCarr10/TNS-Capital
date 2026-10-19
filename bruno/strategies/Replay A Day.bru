@@ -1,0 +1,25 @@
+meta {
+  name: Replay A Day
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{apiUrl}}/api/v1/market-data/replays
+  body: json
+  auth: inherit
+}
+
+body:json {
+  { "symbol": "SPY", "date": "2026-10-16", "barsPerSecond": 10 }
+}
+
+assert {
+  res.status: eq 202
+}
+
+docs {
+  Trading API: replays a past day's regular-session 1-minute bars on market-data, so active
+  strategies on the symbol trade now. Needs the Alpaca keys (MKT-503 otherwise); MKT-404 for a
+  day without trading; MKT-409 while another replay runs.
+}

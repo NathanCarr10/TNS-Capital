@@ -3,6 +3,9 @@ import { PositionResponse } from '../../../api/trading';
 export interface HoldingRow {
   symbol: string;
   quantity: number;
+  /** Shares held for open SELL orders; they cannot be sold again until those orders finish. */
+  reservedQuantity: number;
+  availableQuantity: number;
   averageCost: number;
   /** Quantity at the latest price; null when the symbol has no live price. */
   value: number | null;
@@ -18,6 +21,8 @@ export function toHoldingRow(position: PositionResponse, price: number | null | 
   return {
     symbol: position.symbol,
     quantity: position.quantity,
+    reservedQuantity: position.reservedQuantity,
+    availableQuantity: position.availableQuantity,
     averageCost: position.averageCost,
     value,
     unrealisedReturn,

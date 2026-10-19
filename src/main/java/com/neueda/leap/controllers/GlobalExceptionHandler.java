@@ -185,6 +185,16 @@ public class GlobalExceptionHandler {
                 "Market data is unavailable right now; try again later");
     }
 
+    @ExceptionHandler(ReplayInProgressException.class)
+    public ResponseEntity<ErrorResponse> handleReplayInProgress(ReplayInProgressException e) {
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(ReplayNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleReplayNotFound(ReplayNotFoundException e) {
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), e.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidationError(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()

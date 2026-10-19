@@ -19,7 +19,7 @@ import java.util.Objects;
  * One weekly market newsletter (table newsletter_issues): the week's biggest
  * movers and the news about them, as published. Issues are never changed, so
  * there are no setters; the movers and news are stored as JSONB
- * (docs/DECISIONS.md #16).
+ * (docs/DECISIONS.md #17).
  */
 @Entity
 @Table(name = "newsletter_issues")

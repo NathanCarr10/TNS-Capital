@@ -72,12 +72,15 @@ curl -X POST http://localhost:4000/auth/login \
 | User | Password | roles | Can access |
 |---|---|---|---|
 | any registered user | their own | `["USER"]` | only their own account |
-| `admin` | `ADMIN_PASSWORD` | `["ADMIN"]` | every account, the DLQ, opening accounts |
+| `support` | `SUPPORT_PASSWORD` | `["SUPPORT"]` | every account in the trading app, suspending and reactivating them, opening accounts, instruments |
+| `admin` | `ADMIN_PASSWORD` | `["ADMIN"]` | the analytics dashboard, the DLQ, the actuator; no traders' accounts |
 
 Roles come from `users.role`. Nothing is seeded with a known password: when the service
-starts, `src/users/admin-bootstrap.ts` creates the `admin` user (`ADMIN_USERNAME` to rename it)
-from `ADMIN_PASSWORD`, or sets that password on it if it differs, so changing the variable and
-restarting rotates it. It never promotes a trader who registered the same username. The trading API resolves which account a USER owns from the
+starts, `src/users/staff-bootstrap.ts` creates the `admin` user (`ADMIN_USERNAME` to rename it)
+from `ADMIN_PASSWORD` and the `support` user (`SUPPORT_USERNAME`) from `SUPPORT_PASSWORD`, or sets
+the password on one if it differs, so changing the variable and restarting rotates it. It never
+changes a role: a trader who registered one of those usernames is never promoted, and the
+support user never becomes the admin. The two passwords must differ. The trading API resolves which account a USER owns from the
 token's `sub`.
 
 ## Refresh and log out

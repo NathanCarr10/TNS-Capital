@@ -133,7 +133,8 @@ class OrderServiceTest {
                 transactionManager,
                 brokerClient,
                 executionRepository,
-                priceProvider);
+                priceProvider,
+                new ReservationService(accountRepository, positionRepository, orderRepository));
 
         placeOrderRequest = new PlaceOrderRequest(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"),
                 "ORDER-001");
@@ -424,6 +425,41 @@ class OrderServiceTest {
             verify(orderRepository, times(1)).save(order);
         }
 
+        @DisplayName("Should release the cash a cancelled BUY order reserved")
+        @Test
+        void testCancelReleasesReservedCash() {
+            Order order = new Order(1L, "AAPL", OrderSide.BUY, 100, new BigDecimal("150.00"), "ORDER-001", testClock);
+            testAccount.reserve(new BigDecimal("15000.00"));
+            order.setReserved(true);
+            when(orderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+            when(accountRepository.findWithLockById(1L)).thenReturn(Optional.of(testAccount));
+
+            orderService.cancelOrder(order.getId());
+
+            assertEquals(OrderStatus.CANCELLED, order.getStatus());
+            assertFalse(order.isReserved());
+            assertEquals(0, testAccount.getReservedCash().signum());
+            assertEquals(new BigDecimal("100000.00"), testAccount.getCashBalance());
+        }
+
+        @DisplayName("Should release the shares a cancelled SELL order reserved")
+        @Test
+        void testCancelReleasesReservedShares() {
+            Order order = new Order(1L, "AAPL", OrderSide.SELL, 10, new BigDecimal("150.00"), "ORDER-001", testClock);
+            Position position = new Position(1L, "AAPL", 10, new BigDecimal("100.00"));
+            position.reserve(10);
+            order.setReserved(true);
+            when(orderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+            when(accountRepository.findWithLockById(1L)).thenReturn(Optional.of(testAccount));
+            when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL")).thenReturn(Optional.of(position));
+
+            orderService.cancelOrder(order.getId());
+
+            assertFalse(order.isReserved());
+            assertEquals(0, position.getReservedQuantity());
+            assertEquals(10, position.getAvailableQuantity());
+        }
+
         @DisplayName("Should throw OrderNotFoundException when order not found")
         @Test
         @SuppressWarnings("null")
@@ -578,7 +614,7 @@ class OrderServiceTest {
             when(orderRepository.findById(storedOrder.getId())).thenReturn(Optional.of(storedOrder));
             when(orderRepository.findWithLockById(storedOrder.getId())).thenReturn(Optional.of(storedOrder));
             when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.findWithLockById(1L)).thenReturn(Optional.of(testAccount));
             when(instrumentRepository.findBySymbol("AAPL"))
                     .thenReturn(Optional.of(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true)));
         }
@@ -588,7 +624,7 @@ class OrderServiceTest {
                     order.getQuantity(), order.getPrice(), order.getCreatedOn(), order.getIdempotencyKey());
         }
 
-        @DisplayName("Should send an affordable order to the broker, leaving it NEW and moving no cash")
+        @DisplayName("Should reserve the cash of an affordable order and send it to the broker, leaving it NEW")
         @Test
         void testSendsStoredOrderToBroker() {
             Order result = orderService.processOrderEvent(event);
@@ -599,7 +635,55 @@ class OrderServiceTest {
             // No live price (the mock has none): the broker fills relative to the limit
             verify(brokerClient).submit(storedOrder, null);
             verifyNoInteractions(buyStrategy, tradeEventPublisher);
+            // Nothing is spent yet, but 100 x 150.00 is held for the order
             assertEquals(new BigDecimal("100000.00"), testAccount.getCashBalance());
+            assertEquals(new BigDecimal("15000.00"), testAccount.getReservedCash());
+            assertTrue(storedOrder.isReserved());
+        }
+
+        @DisplayName("Should reject a second order that only fits into cash the first one reserved")
+        @Test
+        void testSecondOrderCannotUseReservedCash() {
+            orderService.processOrderEvent(event);
+
+            // 600 x 150.00 = 90,000.00 fits the 100,000.00 balance but not the 85,000.00 left
+            Order second = new Order(1L, "AAPL", OrderSide.BUY, 600, new BigDecimal("150.00"), "SECOND", testClock);
+            when(orderRepository.findById(second.getId())).thenReturn(Optional.of(second));
+            when(orderRepository.findWithLockById(second.getId())).thenReturn(Optional.of(second));
+
+            OrderEvent secondEvent = eventFor(second);
+            assertThrows(InsufficientFundsException.class, () -> orderService.processOrderEvent(secondEvent));
+
+            assertEquals(OrderStatus.REJECTED, second.getStatus());
+            assertFalse(second.isReserved());
+            assertEquals(new BigDecimal("15000.00"), testAccount.getReservedCash());
+            verify(brokerClient, never()).submit(eq(second), any());
+        }
+
+        @DisplayName("Should not reserve twice when the order message is delivered again")
+        @Test
+        void testRedeliveryDoesNotReserveTwice() {
+            orderService.processOrderEvent(event);
+            orderService.processOrderEvent(event);
+
+            assertEquals(new BigDecimal("15000.00"), testAccount.getReservedCash());
+        }
+
+        @DisplayName("Should reserve the shares of a SELL order")
+        @Test
+        void testReservesSharesForSell() {
+            Order sell = new Order(1L, "AAPL", OrderSide.SELL, 10, new BigDecimal("150.00"), "SELL", testClock);
+            Position position = new Position(1L, "AAPL", 25, new BigDecimal("100.00"));
+            when(orderRepository.findById(sell.getId())).thenReturn(Optional.of(sell));
+            when(orderRepository.findWithLockById(sell.getId())).thenReturn(Optional.of(sell));
+            when(positionRepository.findByAccountIdAndSymbol(1L, "AAPL")).thenReturn(Optional.of(position));
+
+            orderService.processOrderEvent(eventFor(sell));
+
+            assertTrue(sell.isReserved());
+            assertEquals(25, position.getQuantity());
+            assertEquals(10, position.getReservedQuantity());
+            verify(brokerClient).submit(sell, null);
         }
 
         @DisplayName("Should send the live price, rounded to the cent, with the order to the broker")
@@ -649,6 +733,9 @@ class OrderServiceTest {
 
             assertThrows(BrokerUnavailableException.class, () -> orderService.processOrderEvent(event));
             assertEquals(OrderStatus.REJECTED, storedOrder.getStatus());
+            // The reservation taken before the broker call is given back
+            assertFalse(storedOrder.isReserved());
+            assertEquals(0, testAccount.getReservedCash().signum());
         }
 
         @DisplayName("Should not send an order cancelled while it waited")
@@ -676,7 +763,7 @@ class OrderServiceTest {
             when(orderRepository.findWithLockById(working.getId())).thenReturn(Optional.of(working));
             when(orderRepository.findById(working.getId())).thenReturn(Optional.of(working));
             when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-            when(accountRepository.findById(1L)).thenReturn(Optional.of(testAccount));
+            when(accountRepository.findWithLockById(1L)).thenReturn(Optional.of(testAccount));
         }
 
         private ExecutionEvent fillAt(String price) {
@@ -702,6 +789,36 @@ class OrderServiceTest {
             assertEquals(new BigDecimal("149.50"), execution.getValue().getPrice());
             assertEquals("SIM", execution.getValue().getVenue());
             verify(tradeEventPublisher).publish(working, OrderStatus.NEW, null);
+        }
+
+        @DisplayName("Should release the order's reserved cash when its fill is settled")
+        @Test
+        void testSettlementReleasesReservation() {
+            testAccount.reserve(new BigDecimal("1500.00"));
+            working.setReserved(true);
+
+            orderService.settleExecution(fillAt("149.50"));
+
+            assertEquals(OrderStatus.FILLED, working.getStatus());
+            assertFalse(working.isReserved());
+            assertEquals(0, testAccount.getReservedCash().signum());
+            // The strategy then moves the cash at the fill price
+            verify(buyStrategy).execute(eq(testAccount), any(), eq("AAPL"));
+        }
+
+        @DisplayName("Should release the reserved cash of an order rejected at settlement")
+        @Test
+        void testRejectionAtSettlementReleasesReservation() {
+            testAccount.reserve(new BigDecimal("1500.00"));
+            working.setReserved(true);
+            testAccount.setStatus(AccountStatus.SUSPENDED);
+
+            ExecutionEvent fill = fillAt("149.50");
+            assertThrows(SettlementException.class, () -> orderService.settleExecution(fill));
+
+            assertEquals(OrderStatus.REJECTED, working.getStatus());
+            assertFalse(working.isReserved());
+            assertEquals(0, testAccount.getReservedCash().signum());
         }
 
         @DisplayName("Should ignore a fill for an order that is no longer NEW")

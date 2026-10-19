@@ -23,9 +23,9 @@ import java.util.Objects;
 
 /**
  * The weekly market newsletter. Every signed-in trader reads the same issues;
- * a scheduled job publishes one each Friday. Admins can preview the current
- * week's, e.g. for a demo; a preview is not saved. Where early publishing is
- * switched on (a demo), admins can also publish it before Friday.
+ * a scheduled job publishes one each Friday. Support staff can preview the
+ * current week's, e.g. for a demo; a preview is not saved. Where early
+ * publishing is switched on (a demo), support can also publish it before Friday.
  */
 @RestController
 @RequestMapping("/api/v1/newsletters")
@@ -54,30 +54,30 @@ public class NewsletterController {
     }
 
     /**
-     * Previews are for admins (they cost an Alpaca call per instrument). Nothing
+     * Previews are for support staff (they cost an Alpaca call per instrument). Nothing
      * is saved, so a preview never replaces the issue the weekly job publishes.
      */
     @Operation(summary = "Preview this week's newsletter",
-            description = "Admins only. Builds the week so far from the latest prices and news without publishing it; "
+            description = "Support only. Builds the week so far from the latest prices and news without publishing it; "
                     + "the preview has no id.")
     @ApiResponse(responseCode = "200", description = "This week's issue so far, not saved")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Support only")
     @ApiResponse(responseCode = "503", description = "MKT-503 No prices to rank the week's movers")
     @GetMapping("/preview")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPPORT')")
     public ResponseEntity<NewsletterResponse> previewIssue() {
         return ResponseEntity.ok(toResponse(newsletterService.previewWeeklyIssue()));
     }
 
     /** Publishing before Friday is for demos, so it is switched off unless configured. */
     @Operation(summary = "Publish this week's newsletter early",
-            description = "Admins only, where newsletter.early-publish is on (e.g. a demo). Publishes the week so far; "
+            description = "Support only, where newsletter.early-publish is on (e.g. a demo). Publishes the week so far; "
                     + "the weekly run then skips this week. If this week's issue was published already, returns it.")
     @ApiResponse(responseCode = "200", description = "This week's published issue")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only; NWS-403 Early publishing is switched off")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Support only; NWS-403 Early publishing is switched off")
     @ApiResponse(responseCode = "503", description = "MKT-503 No prices to rank the week's movers")
     @PostMapping("/publish")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPPORT')")
     public ResponseEntity<NewsletterResponse> publishIssue() {
         return ResponseEntity.ok(toResponse(newsletterService.publishEarly()));
     }

@@ -1,8 +1,7 @@
 <div class="shell">
   <aside class="sidebar">
     <a class="brand" routerLink="/portfolio" aria-label="TNS Capital home">
-      <span class="brand-mark" aria-hidden="true">T</span>
-      <span class="brand-name">TNS <span>Capital</span></span>
+      <img class="brand-logo" src="brand/company-logo.png" alt="TNS Capital" />
     </a>
 
     <nav aria-label="Main">
@@ -49,7 +48,7 @@
             <span class="user-name">{{ displayName() }}</span>
             <span class="user-sub">{{ subtitle() }}</span>
           </span>
-          <span class="badge">{{ isAdmin ? 'Admin' : 'Trader' }}</span>
+          <span class="badge">{{ isSupport ? 'Support' : 'Trader' }}</span>
         </div>
 
         <span class="divider" aria-hidden="true"></span>

@@ -25,7 +25,7 @@ import com.neueda.leap.repositories.NewsletterIssueRepository;
 
 /**
  * The newsletter endpoints: every signed-in trader reads the issues, only
- * admins preview this week's. Alpaca is switched off in tests, so a preview
+ * support staff preview or publish this week's. Alpaca is switched off in tests, so a preview
  * here can only show the no-prices failure; NewsletterServiceTest covers
  * previews with prices.
  */
@@ -110,8 +110,8 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = "ADMIN")
-    @DisplayName("Answers 503 MKT-503 for an admin's preview without prices, and saves nothing")
+    @WithMockUser(username = "support", roles = "SUPPORT")
+    @DisplayName("Answers 503 MKT-503 for a support preview without prices, and saves nothing")
     void previewWithoutPrices() throws Exception {
         mockMvc.perform(get("/api/v1/newsletters/preview"))
                 .andExpect(status().isServiceUnavailable())
@@ -128,12 +128,20 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = "ADMIN")
-    @DisplayName("Answers 403 NWS-403 when an admin publishes early while it is switched off")
+    @WithMockUser(username = "support", roles = "SUPPORT")
+    @DisplayName("Answers 403 NWS-403 when support publishes early while it is switched off")
     void earlyPublishingSwitchedOff() throws Exception {
         mockMvc.perform(post("/api/v1/newsletters/publish"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode", equalTo("NWS-403")));
         assertEquals(0, repository.count());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    @DisplayName("Refuses admins a preview or publishing: they work in the analytics dashboard")
+    void adminsCannotPreviewOrPublish() throws Exception {
+        mockMvc.perform(get("/api/v1/newsletters/preview")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/newsletters/publish")).andExpect(status().isForbidden());
     }
 }

@@ -99,8 +99,8 @@ To run them against a stack that is already up (`docker compose up -d`, app on :
 
 ```bash
 npx playwright install chromium   # once
-# The admin journeys sign in with your ADMIN_PASSWORD, from the repo's .env
-source ../.env && E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" npm run e2e   # E2E_BASE_URL=... for another address; add --ui to watch
+# The admin and support journeys sign in with your ADMIN_PASSWORD and SUPPORT_PASSWORD, from the repo's .env
+source ../.env && E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" E2E_SUPPORT_PASSWORD="$SUPPORT_PASSWORD" npm run e2e   # E2E_BASE_URL=... for another address; add --ui to watch
 ```
 
 Each run registers new `e2e…` users; afterwards `e2e/global-teardown.ts` deletes them, with their

@@ -33,7 +33,7 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@WithMockUser(username = "testuser", roles = "ADMIN")
+@WithMockUser(username = "testuser", roles = "SUPPORT")
 public abstract class AbstractIntegrationTest {
 
     @SuppressWarnings("resource")
@@ -57,7 +57,8 @@ public abstract class AbstractIntegrationTest {
 
     @SuppressWarnings("resource")
     static final KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+            DockerImageName.parse("confluentinc/cp-kafka:7.5.0"))
+            .withKraft();
 
     // Stand-in for the Broker Simulator: fills every order at once (see TestBroker)
     protected static final TestBroker broker;

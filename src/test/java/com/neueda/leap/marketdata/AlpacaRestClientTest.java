@@ -234,4 +234,45 @@ class AlpacaRestClientTest {
                 .news(List.of(), Instant.parse("2026-10-12T00:00:00Z"), 50).isEmpty());
         server.verify();
     }
+
+    @Test
+    @DisplayName("Reads the 1-minute bars of a past day in time order, from the feed it is given")
+    void readsMinuteBarsOfADay() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://data.example.test/v2/stocks/bars?symbols=SPY&timeframe=1Min"
+                        + "&start=2026-10-09T13:30:00Z&end=2026-10-09T20:00:00Z&limit=1000&adjustment=raw&feed=sip&sort=asc"))
+                .andRespond(withSuccess("""
+                        {"bars": {"SPY": [
+                          {"t": "2026-10-09T13:30:00Z", "o": 580.1, "h": 580.9, "l": 579.8, "c": 580.5, "v": 120000},
+                          {"t": "2026-10-09T13:31:00Z", "o": 580.5, "h": 581.0, "l": 580.2, "c": 580.8, "v": 90000}
+                        ]}}""", MediaType.APPLICATION_JSON));
+
+        List<PriceBar> bars = new AlpacaRestClient(properties("my-key"), builder).minuteBars("SPY",
+                Instant.parse("2026-10-09T13:30:00Z"), Instant.parse("2026-10-09T20:00:00Z"), "sip");
+
+        server.verify();
+        assertEquals(2, bars.size());
+        assertEquals(Instant.parse("2026-10-09T13:30:00Z"), bars.get(0).time());
+        assertEquals(new BigDecimal("580.8"), bars.get(1).close());
+    }
+
+    @Test
+    @DisplayName("Returns no minute bars for a day without trading, a failed call or no API key")
+    void returnsNoMinuteBars() {
+        Instant start = Instant.parse("2026-10-10T13:30:00Z");
+        Instant end = Instant.parse("2026-10-10T20:00:00Z");
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://data.example.test/v2/stocks/bars")))
+                .andRespond(withSuccess("{\"bars\": {}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://data.example.test/v2/stocks/bars")))
+                .andRespond(withServerError());
+        AlpacaRestClient client = new AlpacaRestClient(properties("my-key"), builder);
+
+        assertTrue(client.minuteBars("SPY", start, end, "sip").isEmpty());
+        assertTrue(client.minuteBars("SPY", start, end, "sip").isEmpty());
+        server.verify();
+        assertTrue(new AlpacaRestClient(properties(""), RestClient.builder()).minuteBars("SPY", start, end, "sip").isEmpty());
+    }
 }

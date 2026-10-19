@@ -43,9 +43,9 @@ import java.util.stream.Stream;
  *
  * A week's change runs from the close of the last trading day before its
  * Monday to the latest close since. The weekly job publishes, one issue per
- * week; a preview (for admins, e.g. a demo) covers the week so far and is
+ * week; a preview (for support staff, e.g. a demo) covers the week so far and is
  * never saved, so it cannot take the place of the week's real issue. Where
- * newsletter.early-publish is on (a demo), admins may also publish the week
+ * newsletter.early-publish is on (a demo), support may also publish the week
  * so far, and the job then skips that week.
  * News is optional: without it the issue is still published, without
  * headlines. Without prices there is nothing to rank and nothing is published.
@@ -124,7 +124,7 @@ public class NewsletterService {
                     "Publishing before the weekly run is switched off (newsletter.early-publish)");
         }
         NewsletterIssue issue = publishWeeklyIssue();
-        log.warn("Newsletter for the week of {} published early by an admin; the weekly run will skip it",
+        log.warn("Newsletter for the week of {} published early by support; the weekly run will skip it",
                 issue.getWeekStart());
         return issue;
     }

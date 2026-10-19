@@ -122,4 +122,67 @@ class AccountTest {
             assertFalse(inactiveAccount.isActive(), "Account should not be active when status is not ACTIVE");
         }
     }
+
+    @DisplayName("Reservation Tests")
+    @Nested
+    class ReservationTests {
+        @DisplayName("Reserving holds cash without taking it out of the balance")
+        @Test
+        void testReserveHoldsCash() {
+            account.reserve(new BigDecimal("4000.00"));
+
+            assertEquals(new BigDecimal("10000.00"), account.getCashBalance());
+            assertEquals(new BigDecimal("4000.00"), account.getReservedCash());
+            assertEquals(new BigDecimal("6000.00"), account.getAvailableCash());
+        }
+
+        @DisplayName("Reserved cash cannot be reserved again")
+        @Test
+        void testReserveBeyondAvailableCash() {
+            account.reserve(new BigDecimal("6000.00"));
+
+            BigDecimal more = new BigDecimal("4000.01");
+            assertThrows(InsufficientFundsException.class, () -> account.reserve(more));
+            assertEquals(new BigDecimal("6000.00"), account.getReservedCash());
+        }
+
+        @DisplayName("Reserved cash cannot be debited, e.g. withdrawn")
+        @Test
+        void testDebitCannotTakeReservedCash() {
+            account.reserve(new BigDecimal("6000.00"));
+
+            BigDecimal amount = new BigDecimal("4000.01");
+            assertThrows(InsufficientFundsException.class, () -> account.debit(amount));
+            account.debit(new BigDecimal("4000.00"));
+            assertEquals(new BigDecimal("6000.00"), account.getCashBalance());
+        }
+
+        @DisplayName("Releasing gives the cash back")
+        @Test
+        void testReleaseGivesCashBack() {
+            account.reserve(new BigDecimal("6000.00"));
+            account.release(new BigDecimal("6000.00"));
+
+            assertEquals(0, account.getReservedCash().signum());
+            assertEquals(new BigDecimal("10000.00"), account.getAvailableCash());
+        }
+
+        @DisplayName("Releasing more than is reserved is a bug, not a no-op")
+        @Test
+        void testReleaseMoreThanReserved() {
+            account.reserve(new BigDecimal("100.00"));
+
+            BigDecimal amount = new BigDecimal("100.01");
+            assertThrows(IllegalStateException.class, () -> account.release(amount));
+        }
+
+        @DisplayName("Only positive amounts can be reserved or released")
+        @ParameterizedTest(name = "{0}")
+        @ValueSource(strings = { "0.00", "-1.00" })
+        void testNonPositiveAmounts(String amount) {
+            BigDecimal value = new BigDecimal(amount);
+            assertThrows(IllegalArgumentException.class, () -> account.reserve(value));
+            assertThrows(IllegalArgumentException.class, () -> account.release(value));
+        }
+    }
 }

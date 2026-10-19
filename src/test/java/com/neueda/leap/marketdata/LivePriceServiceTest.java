@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,7 @@ class LivePriceServiceTest {
     private AlpacaRestClient restClient;
     private FixedClock clock;
     private LivePriceService service;
+    private final List<Object> published = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -31,7 +33,7 @@ class LivePriceServiceTest {
         clock = new FixedClock(NOW);
         AlpacaProperties properties = new AlpacaProperties("key", "secret", "iex",
                 "wss://example.test/v2/", "https://example.test", 30, Duration.ofSeconds(60));
-        service = new LivePriceService(restClient, properties, clock);
+        service = new LivePriceService(restClient, properties, clock, published::add);
     }
 
     private static PriceQuote quote(String price, Instant tradedAt) {
@@ -54,6 +56,19 @@ class LivePriceServiceTest {
         service.update(quote("226.00", NOW.minusSeconds(5)));
 
         assertEquals(new BigDecimal("227.10"), service.latestPrice("AAPL").orElseThrow().price());
+    }
+
+    @Test
+    @DisplayName("Announces each price it takes, but not one older than the price it holds")
+    void announcesAcceptedPrices() {
+        PriceQuote first = quote("227.10", NOW);
+        PriceQuote newer = quote("227.40", NOW.plusSeconds(1));
+
+        service.update(first);
+        service.update(quote("226.00", NOW.minusSeconds(5)));
+        service.update(newer);
+
+        assertEquals(List.of(new PriceUpdatedEvent(first), new PriceUpdatedEvent(newer)), published);
     }
 
     @Test

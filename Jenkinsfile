@@ -10,6 +10,8 @@ pipeline {
         IMAGE_NAME = "tns-capital-skeleton"
         // The auth service image, built only so Trivy can scan its OS packages and Node runtime
         AUTH_IMAGE_NAME = "tns-capital-auth"
+        // The strategy service image, built only so Trivy can scan its jar and OS packages
+        STRATEGY_IMAGE_NAME = "tns-capital-strategy"
 
         // Security scanners run as pinned Docker images so the Jenkins agent only
         // needs the Docker CLI — nothing to install, and every build uses the same
@@ -122,6 +124,22 @@ pipeline {
             }
         }
 
+        stage('Strategy Service Tests') {
+            steps {
+                // The Strategy Lab service is its own Maven project. verify runs its unit tests and
+                // StrategyServiceIT (Postgres built from db/ and Kafka, with Testcontainers), and
+                // writes the JaCoCo report SonarQube reads
+                dir('strategy-service') {
+                    sh 'mvn -B verify'
+                }
+            }
+            post {
+                always {
+                    junit 'strategy-service/target/surefire-reports/*.xml, strategy-service/target/failsafe-reports/*.xml'
+                }
+            }
+        }
+
         stage('ETL Tests') {
             steps {
                 // The ETL pytest suite, including its Postgres integration tests against a
@@ -180,8 +198,8 @@ pipeline {
         stage('E2E Tests') {
             steps {
                 // The Playwright journeys (frontend/e2e) in a real browser against the whole
-                // stack: register, log in, place a BUY that fills, the route guard, and an admin
-                // reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
+                // stack: register, log in, place a BUY that fills, the route guard, support
+                // suspending an account, and an admin reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
                 // project with no host ports, runs the suite in PLAYWRIGHT_IMAGE on its network,
                 // then removes it, so it can't clash with a stack already running on this host.
                 sh 'ci/e2e-tests.sh'
@@ -232,6 +250,7 @@ pipeline {
                     // (mirror.gcr.io) served a broken copy, failing the stage on every branch.
                     sh '''
                         docker build -q -t "$AUTH_IMAGE_NAME:$BUILD_NUMBER" shared/auth-service > /dev/null
+                        docker build -q -t "$STRATEGY_IMAGE_NAME:$BUILD_NUMBER" strategy-service > /dev/null
                         TRIVY="docker run --rm -v trivy-cache:/root/.cache/ \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -v $WORKSPACE:/src:ro -w /src $TRIVY_IMAGE"
@@ -245,6 +264,8 @@ pipeline {
                             --format sarif "$IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-image.sarif"
                         $TRIVY image $COMMON --severity HIGH,CRITICAL \
                             --format sarif "$AUTH_IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-auth-image.sarif"
+                        $TRIVY image $COMMON --severity HIGH,CRITICAL \
+                            --format sarif "$STRATEGY_IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-strategy-image.sarif"
 
                         GATE_FAILED=0
                         $TRIVY fs $COMMON --severity CRITICAL --ignore-unfixed \
@@ -253,6 +274,8 @@ pipeline {
                             --exit-code 1 "$IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
                         $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
                             --exit-code 1 "$AUTH_IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
+                        $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
+                            --exit-code 1 "$STRATEGY_IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
                         exit $GATE_FAILED
                     '''
                 }
@@ -268,7 +291,7 @@ pipeline {
 
             // Each build tags a ~300MB image that nothing uses afterwards; remove it so
             // the agent's disk doesn't fill up.
-            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} || true"
+            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} ${STRATEGY_IMAGE_NAME}:${BUILD_NUMBER} || true"
         }
         failure {
             // Notifies the team on build failure. Replace with your notification

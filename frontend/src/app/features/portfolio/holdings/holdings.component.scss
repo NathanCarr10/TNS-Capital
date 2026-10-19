@@ -36,6 +36,12 @@ $visible-rows: 6;
   }
 }
 
+.reserved {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .return-percent {
   display: block;
   font-size: 0.75rem;

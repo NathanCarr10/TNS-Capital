@@ -17,7 +17,7 @@ describe('OrderTicketComponent', () => {
   let fixture: ComponentFixture<OrderTicketComponent>;
   let component: OrderTicketComponent;
   let tradingService: jasmine.SpyObj<TradingService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
 
   const create = (livePrice: number | null = 150, instrument = INSTRUMENTS[0]): void => {
     TestBed.configureTestingModule({
@@ -26,7 +26,7 @@ describe('OrderTicketComponent', () => {
         AccountStore,
         OrderTrackerService,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(OrderTicketComponent);
@@ -55,7 +55,7 @@ describe('OrderTicketComponent', () => {
 
   beforeEach(() => {
     tradingService = tradingServiceStub();
-    isAdmin = false;
+    isSupport = false;
   });
 
   it('fills the limit price with the live quote', () => {
@@ -88,7 +88,6 @@ describe('OrderTicketComponent', () => {
       jasmine.objectContaining({ accountId: ACCOUNT.id, symbol: 'AAPL', side: 'BUY', quantity: 10, price: 150 })
     );
     expect(toastMessages()).toEqual(['Order filled: BUY 10 AAPL at 150.00.']);
-    expect(component.successMessage()).toBeNull();
     expect(component.errorMessage()).toBeNull();
     expect(component.isTracking()).toBeFalse();
     // The fill moves cash and holdings, so both are reloaded for every page
@@ -168,7 +167,6 @@ describe('OrderTicketComponent', () => {
     tick();
 
     expect(toastMessages()).toEqual(['BUY AAPL rejected: Insufficient funds (ORD-400).']);
-    expect(component.successMessage()).toBeNull();
     expect(component.isTracking()).toBeFalse();
     flush();
   }));
@@ -184,7 +182,7 @@ describe('OrderTicketComponent', () => {
 
     expect(component.isTracking()).toBeTrue();
     expect(submitButton().textContent).toContain('Tracking order...');
-    expect(fixture.nativeElement.querySelector('.note.success')?.textContent).toContain('Tracking order ord-open');
+    expect(fixture.nativeElement.querySelector('.note.success')).toBeNull();
 
     tradingService.getOrder.and.returnValue(of(order({ id: 'ord-open' })));
     tick(OrderTrackerService.POLL_INTERVAL_MS);
@@ -237,9 +235,35 @@ describe('OrderTicketComponent', () => {
     expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('more than your available cash');
   });
 
+  it('counts only the cash not reserved by open orders as available', () => {
+    tradingService.getAccount.and.returnValue(of({ ...ACCOUNT, reservedCash: 4000, availableCash: 1000 }));
+    create(100);
+    component.orderForm.patchValue({ quantity: 20 });
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('$1,000.00');
+    expect(text).toContain('$4,000.00 is held for your open orders.');
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain('more than your available cash');
+  });
+
+  it('warns when selling shares that open orders reserved', () => {
+    tradingService.getAccountPositions.and.returnValue(
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, reservedQuantity: 8, availableQuantity: 2, averageCost: 100, marketValue: null }])
+    );
+    create();
+    component.orderForm.patchValue({ side: 'SELL', quantity: 5 });
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.hint.warning')?.textContent).toContain(
+      'You can sell 2 AAPL; 8 are in open orders.'
+    );
+    expect(fixture.nativeElement.textContent).toContain('8 of your 10 AAPL are in open orders.');
+  });
+
   it('warns when selling more than is held', () => {
     tradingService.getAccountPositions.and.returnValue(
-      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 3, averageCost: 100, marketValue: null }])
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 3, reservedQuantity: 0, availableQuantity: 3, averageCost: 100, marketValue: null }])
     );
     create();
     component.orderForm.patchValue({ side: 'SELL', quantity: 5 });
@@ -267,7 +291,7 @@ describe('OrderTicketComponent', () => {
 
   it('warns that a sell limit above the market price will not fill', () => {
     tradingService.getAccountPositions.and.returnValue(
-      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null }])
+      of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 100, marketValue: null }])
     );
     create(150);
     component.orderForm.patchValue({ side: 'SELL', quantity: 1, price: 10000 });
@@ -311,9 +335,9 @@ describe('OrderTicketComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('OLD is not tradable');
   });
 
-  it('is read-only for an admin', () => {
-    isAdmin = true;
-    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+  it('is read-only for support', () => {
+    isSupport = true;
+    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
     tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
     create();
 
@@ -321,7 +345,7 @@ describe('OrderTicketComponent', () => {
 
     expect(tradingService.placeOrder).not.toHaveBeenCalled();
     expect(submitButton().disabled).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('Admin view: read-only');
+    expect(fixture.nativeElement.textContent).toContain('Support view: read-only');
   });
 });
 

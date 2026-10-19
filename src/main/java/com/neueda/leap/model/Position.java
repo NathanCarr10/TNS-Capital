@@ -2,6 +2,7 @@ package com.neueda.leap.model;
 
 import java.math.BigDecimal;
 
+import com.neueda.leap.exceptions.InsufficientHoldingsException;
 import com.neueda.leap.utils.InputNormalizer;
 import jakarta.persistence.*;
 
@@ -25,6 +26,10 @@ public class Position {
     
     @Column(nullable = false)
     private Integer quantity;
+
+    // Part of the quantity held for accepted SELL orders; never more than the quantity
+    @Column(nullable = false)
+    private Integer reservedQuantity = 0;
     
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal averageCost;
@@ -47,6 +52,7 @@ public class Position {
         this.accountId = other.accountId;
         this.symbol = other.symbol;
         this.quantity = other.quantity;
+        this.reservedQuantity = other.reservedQuantity;
         this.averageCost = new BigDecimal(other.averageCost.toPlainString());
     }
 
@@ -83,6 +89,12 @@ public class Position {
                     String.format("Quantity cannot go negative: current=%d, change=%d, result=%d",
                             this.quantity, quantity, newQuantity));
         }
+        // Shares reserved for accepted SELL orders cannot be sold by another one
+        if (newQuantity < reservedQuantity) {
+            throw new IllegalArgumentException(
+                    String.format("Quantity cannot go below the reserved quantity: reserved=%d, result=%d",
+                            reservedQuantity, newQuantity));
+        }
 
         if (quantity < 0) {
             // Selling realises part of the holding at the existing cost basis; only
@@ -100,6 +112,39 @@ public class Position {
             this.quantity += quantity;
             this.averageCost = totalCost.divide(BigDecimal.valueOf(this.quantity), 2, java.math.RoundingMode.HALF_UP);
         }
+    }
+
+    /**
+     * Holds shares for an accepted SELL order, so no other order can sell them
+     * until {@link #release} gives them back.
+     *
+     * @throws InsufficientHoldingsException if fewer shares are available than requested
+     */
+    public void reserve(int shares) {
+        if (shares <= 0) {
+            throw new IllegalArgumentException("Reserved quantity must be positive");
+        }
+        if (getAvailableQuantity() < shares) {
+            throw new InsufficientHoldingsException("Insufficient holdings for symbol: " + symbol);
+        }
+        this.reservedQuantity += shares;
+    }
+
+    /**
+     * Gives back shares held by {@link #reserve}, when the order is filled,
+     * cancelled or rejected.
+     *
+     * @throws IllegalStateException if more is released than is reserved
+     */
+    public void release(int shares) {
+        if (shares <= 0) {
+            throw new IllegalArgumentException("Released quantity must be positive");
+        }
+        if (reservedQuantity < shares) {
+            throw new IllegalStateException(String.format(
+                    "Cannot release %d shares of %s, only %d are reserved", shares, symbol, reservedQuantity));
+        }
+        this.reservedQuantity -= shares;
     }
 
     public BigDecimal marketValue(BigDecimal currentPrice) {
@@ -120,6 +165,17 @@ public class Position {
 
     public Integer getQuantity() {
         return quantity;
+    }
+
+    public Integer getReservedQuantity() {
+        return reservedQuantity;
+    }
+
+    /**
+     * @return the quantity less the shares reserved for accepted SELL orders
+     */
+    public int getAvailableQuantity() {
+        return quantity - reservedQuantity;
     }
 
     public BigDecimal getAverageCost() {
@@ -150,6 +206,7 @@ public class Position {
                 "accountId=" + accountId +
                 ", symbol='" + symbol + '\'' +
                 ", quantity=" + quantity +
+                ", reservedQuantity=" + reservedQuantity +
                 ", averageCost=" + averageCost +
                 '}';
     }

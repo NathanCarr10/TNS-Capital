@@ -24,9 +24,9 @@ export interface MoverNews {
 /**
  * The weekly market newsletter: the week's biggest gainers and losers and the
  * news about them. Opens the latest issue, or the one in the URL
- * (/newsletter/:id). Admins can preview the current week's issue; a preview
- * is not saved, so traders never see it. Where the API allows it (a demo),
- * admins can publish the preview before Friday.
+ * (/newsletter/:id). Support staff can preview the current week's issue; a
+ * preview is not saved, so traders never see it. Where the API allows it (a
+ * demo), support can publish the preview before Friday.
  */
 @Component({
   selector: 'app-newsletter',
@@ -38,13 +38,13 @@ export class NewsletterComponent {
   private readonly newsletterApi = inject(NewsletterControllerService);
   private readonly router = inject(Router);
 
-  readonly isAdmin = inject(AuthService).isAdmin();
+  readonly isSupport = inject(AuthService).isSupport();
 
   readonly issues = signal<NewsletterSummaryResponse[]>([]);
   readonly issue = signal<NewsletterResponse | null>(null);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
-  /** Admin only: this week's issue so far, shown instead of the published one until closed. */
+  /** Support only: this week's issue so far, shown instead of the published one until closed. */
   readonly preview = signal<NewsletterResponse | null>(null);
   readonly previewing = signal(false);
   readonly previewError = signal<string | null>(null);
@@ -98,9 +98,9 @@ export class NewsletterComponent {
     void this.router.navigate(['/newsletter', issueId]);
   }
 
-  /** Admin only: builds this week's issue so far from the latest prices. Nothing is published. */
+  /** Support only: builds this week's issue so far from the latest prices. Nothing is published. */
   showPreview(): void {
-    if (!this.isAdmin || this.previewing()) {
+    if (!this.isSupport || this.previewing()) {
       return;
     }
     this.previewing.set(true);
@@ -122,12 +122,12 @@ export class NewsletterComponent {
   }
 
   /**
-   * Admin only: publishes this week's issue now, for traders to read, and opens it.
+   * Support only: publishes this week's issue now, for traders to read, and opens it.
    * The API builds it again from the latest prices, and refuses (NWS-403) unless
    * early publishing is switched on.
    */
   publish(): void {
-    if (!this.isAdmin || this.publishing()) {
+    if (!this.isSupport || this.publishing()) {
       return;
     }
     this.publishing.set(true);

@@ -1,12 +1,12 @@
 """TNS Capital trading dashboard (Streamlit).
 
 It shows every user's trades, so it is for admins only: users sign in through
-the auth service and only a token with the ADMIN role opens the page.
+the auth service and only a token with the ADMIN role opens the page. Support
+staff (SUPPORT role) work in the Angular trading app instead; the two roles are
+kept apart (docs/DECISIONS.md, "Roles").
 
 Run with:  streamlit run app.py
 """
-
-import os
 
 import pandas as pd
 import plotly.express as px
@@ -19,10 +19,8 @@ import insights
 st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
 
 VALUE_LABEL = "Value ($)"
-# The Angular trading app; admins can view any account there, read-only. Relative, since
-# admins reach this page through the Angular app's origin (/analytics/)
-TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "/portfolio")
 ASSET_CLASS_LABEL = "Asset class"
+FILL_RATE_LABEL = "Fill rate"
 
 
 @st.cache_data(ttl=30)
@@ -64,6 +62,8 @@ def require_admin():
             if auth.is_admin(claims):
                 return claims
             st.error(f"Signed in as {claims['sub']}, but this dashboard is for admins only.")
+            if auth.is_support(claims):
+                st.info("Support staff look after traders' accounts in the trading app, not here.")
             st.button("Sign out", on_click=sign_out)
             st.stop()
 
@@ -88,8 +88,6 @@ def require_admin():
 admin = require_admin()
 with st.sidebar:
     st.write(f"Signed in as **{admin['sub']}**")
-    st.link_button("Trading dashboard", TRADING_DASHBOARD_URL,
-                   help="View any trader's account, read-only, in the trading app")
     st.button("Sign out", on_click=sign_out)
 
 try:
@@ -117,7 +115,7 @@ average = insights.average_trade_size(trades)
 gap = insights.not_yet_in_batch(frames["live"], frames["batch"])
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Orders", f"{len(trades):,}")
-col2.metric("Fill rate", percent(rate))
+col2.metric(FILL_RATE_LABEL, percent(rate))
 col3.metric("Average trade size", money(average))
 col4.metric("Orders not yet in batch", f"{len(gap):,}", help="Live orders the next ETL run will load")
 
@@ -232,6 +230,30 @@ with right:
                      column_config={"failure_type": "Failure type", "messages": "Messages",
                                     "pending": "Awaiting review", "retryable": "Retryable"})
 
+# Strategy Lab: orders the strategies placed, next to everyone's own
+st.subheader("Automated strategies")
+split = insights.strategy_vs_trader(trades)
+by_strategy = insights.strategy_trades(trades)
+if split.empty or "Strategy" not in set(split["placed_by"]):
+    st.info("No strategy has placed an order yet. Traders switch strategies on in Strategy Lab.")
+else:
+    share = split.set_index("placed_by")["orders"]
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Orders placed by strategies", f"{int(share.get('Strategy', 0)):,}")
+    col2.metric("Share of all orders", percent(share.get("Strategy", 0) / share.sum()))
+    col3.metric("Strategies that traded", f"{by_strategy['strategy_name'].nunique():,}")
+    st.dataframe(split, width="stretch", hide_index=True,
+                 column_config={"placed_by": "Placed by", "orders": "Orders", "filled": "Filled",
+                                "fill_rate": st.column_config.NumberColumn(FILL_RATE_LABEL, format="percent"),
+                                "traded_value": st.column_config.NumberColumn("Filled value ($)", format="dollar")})
+    st.dataframe(by_strategy, width="stretch", hide_index=True,
+                 column_config={"strategy_name": "Strategy", "username": "Owner", "symbol": "Instrument",
+                                "orders": "Orders", "filled": "Filled",
+                                "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
+                                "sell_value": st.column_config.NumberColumn("Sold ($)", format="dollar"),
+                                "last_order": st.column_config.DatetimeColumn("Last order",
+                                                                              format="D MMM YYYY, HH:mm")})
+
 # What each user has traded
 st.subheader("Trading by user")
 by_user = insights.trades_by_user(trades)
@@ -243,7 +265,7 @@ else:
         column_config={
             "username": "User", "holder_name": "Holder", "account_number": "Account",
             "orders": "Orders", "filled": "Filled", "rejected": "Rejected",
-            "fill_rate": st.column_config.NumberColumn("Fill rate", format="percent"),
+            "fill_rate": st.column_config.NumberColumn(FILL_RATE_LABEL, format="percent"),
             "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
             "sell_value": st.column_config.NumberColumn("Sold ($)", format="dollar"),
             "top_symbol": "Top instrument",

@@ -45,14 +45,14 @@ describe('NewsletterComponent', () => {
   let fixture: ComponentFixture<NewsletterComponent>;
   let newsletterApi: jasmine.SpyObj<NewsletterControllerService>;
 
-  const create = ({ id = null as string | null, isAdmin = false } = {}): HTMLElement => {
+  const create = ({ id = null as string | null, isSupport = false } = {}): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [NewsletterComponent],
       providers: [
         provideRouter([]),
         { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap(id ? { id } : {})) } },
         { provide: NewsletterControllerService, useValue: newsletterApi },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(NewsletterComponent);
@@ -164,7 +164,7 @@ describe('NewsletterComponent', () => {
     expect(element.querySelector('.header-actions .btn-primary')).toBeNull();
   });
 
-  it("lets admins preview this week's issue without publishing it", () => {
+  it("lets support preview this week's issue without publishing it", () => {
     const preview: NewsletterResponse = {
       ...ISSUE,
       id: null,
@@ -172,7 +172,7 @@ describe('NewsletterComponent', () => {
       gainers: [{ symbol: 'NVDA', name: 'NVIDIA Corp', startClose: 100, endClose: 110, changePct: 10 }],
     };
     newsletterApi.previewIssue.and.returnValue(of(preview) as never);
-    const element = create({ isAdmin: true });
+    const element = create({ isSupport: true });
     const router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);
 
@@ -188,7 +188,7 @@ describe('NewsletterComponent', () => {
 
   it('goes back to the published issue when the preview is closed', () => {
     newsletterApi.previewIssue.and.returnValue(of({ ...ISSUE, id: null, weekStart: '2026-10-19' }) as never);
-    const element = create({ isAdmin: true });
+    const element = create({ isSupport: true });
     element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
     fixture.detectChanges();
 
@@ -209,7 +209,7 @@ describe('NewsletterComponent', () => {
           })
       ) as never
     );
-    const element = create({ isAdmin: true });
+    const element = create({ isSupport: true });
 
     element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
     fixture.detectChanges();
@@ -218,10 +218,10 @@ describe('NewsletterComponent', () => {
     expect(element.querySelector('.preview-banner')).toBeNull();
   });
 
-  it('lets admins publish the preview and opens the published issue', () => {
+  it('lets support publish the preview and opens the published issue', () => {
     newsletterApi.previewIssue.and.returnValue(of({ ...ISSUE, id: null, weekStart: '2026-10-19' }) as never);
     newsletterApi.publishIssue.and.returnValue(of({ ...ISSUE, id: 3, weekStart: '2026-10-19' }) as never);
-    const element = create({ isAdmin: true });
+    const element = create({ isSupport: true });
     const router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);
     element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
@@ -246,7 +246,7 @@ describe('NewsletterComponent', () => {
           })
       ) as never
     );
-    const element = create({ isAdmin: true });
+    const element = create({ isSupport: true });
     element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
     fixture.detectChanges();
 

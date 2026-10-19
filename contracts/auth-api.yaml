@@ -130,6 +130,49 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /auth/token:
+    post:
+      summary: Issue a backend service's access token (client credentials)
+      description: |
+        For backend services, not users: the strategy service logs in with its
+        client id and secret (STRATEGY_CLIENT_SECRET) to place orders for
+        traders who switched a strategy on while they are not logged in.
+
+        The access token has the same seven claims as a user's, with sub
+        "service:<clientId>" (usernames cannot contain ":") and the client's
+        service roles, e.g. [STRATEGY]. The trading API accepts a STRATEGY token
+        only for placing and reading orders, and only on an account with an
+        ACTIVE strategy. No refresh token is issued: the service asks for a new
+        access token before the current one expires.
+
+        An unknown client and a wrong secret get the same 401.
+      operationId: clientToken
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientTokenRequest'
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceToken'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: AUTH-401 Unknown client or wrong secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
   /auth/refresh:
     post:
       summary: Exchange a refresh token for a new access token and refresh token
@@ -362,13 +405,14 @@ components:
       properties:
         sub:
           type: string
-          description: Username; the trading API resolves the user's account from it
+          description: Username; the trading API resolves the user's account from it. A backend service's token has "service:<clientId>"
           example: trader1
         roles:
           type: array
           items:
             type: string
-            enum: [USER, ADMIN]
+            enum: [USER, SUPPORT, ADMIN, STRATEGY]
+          description: USER, SUPPORT or ADMIN for a user; STRATEGY only for the strategy service's client-credentials token
           example: [USER]
         typ:
           type: string
@@ -387,6 +431,38 @@ components:
         exp:
           type: integer
           description: Expiry, 900 seconds (15 minutes) after iat
+      additionalProperties: false
+
+    ClientTokenRequest:
+      type: object
+      required: [clientId, clientSecret]
+      properties:
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: strategy-service
+        clientSecret:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 256
+      additionalProperties: false
+
+    ServiceToken:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: Access token (JWT), claims as AccessTokenClaims
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+          description: Seconds until the access token expires (900)
+          example: 900
       additionalProperties: false
 
     RefreshRequest:
@@ -412,12 +488,12 @@ components:
           type: array
           items:
             type: string
-            enum: [USER, ADMIN]
+            enum: [USER, SUPPORT, ADMIN]
           example: [USER]
         accountId:
           type: integer
           nullable: true
-          description: The user's trading account; null for admins
+          description: The user's trading account; null for support and admin users
           example: 11
       additionalProperties: false
 
@@ -536,6 +612,7 @@ x-internal-notes: |
      - Refresh tokens as SHA-256 hashes in `refresh_tokens` (db/tables/09_refresh_tokens.sql),
        one row per token, grouped into sessions by family_id
      - Admin: created at startup from ADMIN_PASSWORD (never seeded) -> Roles: [ADMIN]
+     - Support: created at startup from SUPPORT_PASSWORD (never seeded) -> Roles: [SUPPORT]
 
   3. **Token Validation (here and in the Main API):**
      - Algorithm: HS256 (HMAC-SHA256), pinned; never read from the token

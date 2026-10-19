@@ -4,6 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
+import { AccessibilityPreferencesService } from '../../core/accessibility/accessibility-preferences.service';
 import { ToastService } from '../../core/notifications/toast.service';
 import { AccountStore } from '../../core/trading/account.store';
 import { readErrorMessage } from '../../core/trading/api-error';
@@ -17,11 +18,12 @@ import { HOLDER_NAME_PATTERN } from '../../core/validation/input-patterns';
   styleUrl: './settings.component.scss',
 })
 export class SettingsComponent {
+  readonly accessibility = inject(AccessibilityPreferencesService);
   private readonly store = inject(AccountStore);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly isAdmin = this.store.isAdmin;
+  readonly isSupport = this.store.isSupport;
   readonly account = this.store.account;
   readonly accountLoading = this.store.accountLoading;
   readonly accountError = this.store.accountError;

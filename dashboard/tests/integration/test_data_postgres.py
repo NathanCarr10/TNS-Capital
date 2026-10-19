@@ -43,6 +43,10 @@ TEST_DATA = """
                 'NON_RETRYABLE_InsufficientFundsException', FALSE);
     INSERT INTO users (username, password_hash, role, account_id) VALUES
         ('john', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
+    INSERT INTO strategies (account_id, name, symbol, rule_type, rule_params, quantity, status) VALUES
+        ((SELECT id FROM accounts), 'MA 20/50', 'ACME', 'MA_CROSSOVER', '{}', 10, 'ACTIVE');
+    INSERT INTO strategy_signals (strategy_id, side, price, bar_time, source, order_id, outcome)
+        SELECT id, 'BUY', 25.00, NOW(), 'LIVE', '11111111-1111-1111-1111-111111111111', 'PLACED' FROM strategies;
 """
 
 
@@ -67,6 +71,9 @@ def test_live_source_loads_before_the_etl_has_run(db):
     assert frames["batch"].empty
     assert sorted(frames["live"]["status"]) == ["FILLED", "REJECTED"]
     assert set(frames["live"]["username"]) == {"john"}
+    by_order = frames["live"].set_index("order_id")["strategy_name"]
+    assert by_order["11111111-1111-1111-1111-111111111111"] == "MA 20/50"
+    assert by_order["22222222-2222-2222-2222-222222222222"] is None
     assert insights.rejection_reasons(frames["live"])["category"].tolist() == ["Insufficient funds"]
     assert insights.fill_time_summary(frames["live"])["median"] == pytest.approx(2.0)
     assert insights.dlq_summary(frames["dlq"]).to_dict("records") == [

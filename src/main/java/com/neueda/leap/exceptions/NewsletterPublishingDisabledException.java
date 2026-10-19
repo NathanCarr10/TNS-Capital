@@ -1,7 +1,7 @@
 package com.neueda.leap.exceptions;
 
 /**
- * Exception thrown when an admin publishes the week's newsletter early while
+ * Exception thrown when support publishes the week's newsletter early while
  * early publishing is switched off (newsletter.early-publish).
  */
 public class NewsletterPublishingDisabledException extends TradingException {

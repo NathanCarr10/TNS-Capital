@@ -16,6 +16,14 @@
   margin: 0 auto;
   text-align: left;
 
+  .home-logo {
+    display: block;
+    width: min(14rem, 41vw);
+    height: auto;
+    margin-bottom: 1.25rem;
+    mix-blend-mode: multiply;
+  }
+
   h1 {
     margin: 0;
     font-size: clamp(2rem, 5vw, 4rem);

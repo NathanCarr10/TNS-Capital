@@ -4,7 +4,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.security.authorization.AuthenticatedAuthorizationManager;
+import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
@@ -18,6 +23,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
@@ -30,13 +37,18 @@ import java.time.ZoneOffset;
  * Security Best Practices Implemented:
  * - JWT authentication with HMAC-SHA256 on every endpoint except the API docs
  *   and the health check
- * - Admin-only operations need the ADMIN role through @PreAuthorize: opening
- *   accounts, suspending or reactivating them, changing instruments and every
- *   dead-letter queue endpoint. Everything else is limited to the caller's own
- *   account by AccountAccessGuard (docs/DECISIONS.md, "Roles")
+ * - Staff operations need a role through @PreAuthorize, and the two staff
+ *   roles are kept apart (docs/DECISIONS.md, "Roles"):
+ *   - SUPPORT: opening accounts, suspending or reactivating them and changing
+ *     instruments; AccountAccessGuard lets support see every account
+ *   - ADMIN: every dead-letter queue endpoint and the actuator (operations)
+ *   Everything else is limited to the caller's own account by AccountAccessGuard
  * - /actuator/health is public so containers and load balancers can probe it;
  *   only admins see its details. Metrics and info need the ADMIN role
- * - Missing or invalid tokens get an AUTH-401 error body
+ * - The strategy service's token (role STRATEGY) may only place and read
+ *   orders and read prices; AccountAccessGuard limits it further to accounts
+ *   with an ACTIVE strategy (docs/DECISIONS.md #16)
+ * - Missing or invalid tokens get an AUTH-401 error body, refused ones AUTH-403
  * - Security headers to prevent common attacks
  * - CSRF disabled for stateless API (appropriate for REST)
  * - X-Frame-Options set to prevent clickjacking
@@ -46,6 +58,7 @@ import java.time.ZoneOffset;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+        private static final String STRATEGY_ROLE = "STRATEGY";
 
         @Value("${jwt.shared-secret}")
         private String sharedSecret;
@@ -111,6 +124,13 @@ public class SecurityConfig {
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
                 AuthenticationEntryPoint unauthorised = (request, response, e) -> writeError(response,
                                 HttpServletResponse.SC_UNAUTHORIZED, "AUTH-401", "Unauthorised or invalid token");
+                AccessDeniedHandler forbidden = (request, response, e) -> writeError(response,
+                                HttpServletResponse.SC_FORBIDDEN, "AUTH-403",
+                                "You do not have permission to access this resource");
+                // Any signed-in user, but not the strategy service
+                AuthorizationManager<RequestAuthorizationContext> userOnly = AuthorizationManagers.allOf(
+                                AuthenticatedAuthorizationManager.authenticated(),
+                                AuthorizationManagers.not(AuthorityAuthorizationManager.hasRole(STRATEGY_ROLE)));
 
                 http
                                 // Clients authenticate with a bearer token in the Authorization header,
@@ -147,11 +167,18 @@ public class SecurityConfig {
                                                 // Metrics and info describe the JVM, the database pool and
                                                 // every URL called: not for traders
                                                 .requestMatchers("/actuator/**").hasRole("ADMIN")
-                                                // Require authentication for all other requests
-                                                .anyRequest().authenticated())
+                                                // What the strategy service needs: place an order, follow
+                                                // it, and read prices. Users may use these too
+                                                .requestMatchers(HttpMethod.POST, "/api/v1/orders").authenticated()
+                                                .requestMatchers(HttpMethod.GET, "/api/v1/orders/*",
+                                                                "/api/v1/prices", "/api/v1/prices/**")
+                                                .authenticated()
+                                                // Everything else needs a user's token
+                                                .anyRequest().access(userOnly))
 
-                                // Return AUTH-401 JSON for missing or invalid tokens
-                                .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorised))
+                                // AUTH-401 JSON for missing or invalid tokens, AUTH-403 for refused ones
+                                .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorised)
+                                                .accessDeniedHandler(forbidden))
 
                                 // Configure OAuth2 resource server with JWT
                                 .oauth2ResourceServer(oauth2 -> oauth2

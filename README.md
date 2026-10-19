@@ -13,6 +13,7 @@ trading API trusts, and a scheduled ETL pipeline copies trade data into reportin
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
 - [Getting started](#getting-started)
+- [Strategy Lab](#strategy-lab)
 - [Using the API](#using-the-api)
 - [Developing locally](#developing-locally)
 - [Testing](#testing)
@@ -35,6 +36,7 @@ flowchart LR
         auth[auth-service<br/>NestJS · :4000]
         app[Trading API<br/>Spring Boot · :3000]
         broker[Broker Simulator<br/>Spring Boot · internal]
+        strat[Strategy service<br/>Spring Boot · :8087]
         kafka[(Kafka · :9092)]
         pg[(PostgreSQL 16 · :5432)]
         etl[ETL pipeline<br/>Python · daily]
@@ -45,6 +47,12 @@ flowchart LR
     client -- "browser" --> web
     web -- "/auth" --> auth
     web -- "/api" --> app
+    web -- "/api/v1/strategies" --> strat
+    app -- "market-data (live, replay)" --> kafka
+    kafka -- "market-data" --> strat
+    strat -- "STRATEGY token: POST /orders" --> app
+    strat -- "client credentials" --> auth
+    strat --> pg
     client -- "register / login" --> auth
     client -- "Bearer JWT" --> app
     auth --> pg
@@ -62,9 +70,10 @@ flowchart LR
 |---|---|
 | **Trading API** (`src/`) | REST API for accounts, instruments, orders, positions and the DLQ. Validates JWTs locally using a shared HMAC secret. |
 | **Broker Simulator** (`broker-simulator/`) | Stands in for a real broker: takes orders over a REST API and, after 0.5 to 2 seconds, fills each one at or better than its limit price and publishes the fill to the `executions` topic. Has its own README. |
+| **Strategy service** (`strategy-service/`) | Strategy Lab (the Sprint 10 extension): backtests moving-average crossover and Bollinger-band rules on five years of daily prices, and runs the strategies traders switch on against 1-minute bars from the `market-data` topic, placing their orders through the trading API with its own `STRATEGY` token. Has its own README; see docs/DECISIONS.md 16. |
 | **Auth service** (`shared/auth-service/`) | Registers users (opening a trading account for each), logs them in and issues access and refresh tokens. Passwords are hashed with Argon2id; refresh tokens are stored only as SHA-256 hashes in `refresh_tokens`. |
-| **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), and trade lifecycle events (`trade-events`), each with a `.dlq` topic. An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
-| **PostgreSQL** | System of record. The `db/` image creates the schema, views, the services' login roles and seed data on first start. Each service connects with its own least-privilege role (`tns_api`, `tns_auth`, `tns_etl`, `tns_reader`); the `DB_USER` owner is for administrators only. |
+| **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and prices (`market-data`: live prices and replayed days, read by the strategy service). An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
+| **PostgreSQL** | System of record. The `db/` image creates the schema, views, the services' login roles and seed data on first start. Each service connects with its own least-privilege role (`tns_api`, `tns_auth`, `tns_etl`, `tns_reader`, `tns_strategy`); the `DB_USER` owner is for administrators only. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
 | **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
 
@@ -76,18 +85,20 @@ flowchart LR
    (keyed by account ID, so orders for one account are processed in sequence) and returns
    **`202 Accepted`** with an `orderId`.
 2. **Trade Executor.** `OrderMessageListener` consumes the event and `OrderService` runs the
-   order through `OrderValidator` and checks the account can afford it at its limit price
-   (cash for a BUY, holdings for a SELL). Nothing moves yet. It then sends the order to the
+   order through `OrderValidator` and reserves what it needs at its limit price (cash for a
+   BUY, shares for a SELL; `ReservationService`), so no other order or withdrawal can use
+   them. Nothing is spent yet. It then sends the order to the
    **Broker Simulator** over HTTP (`BrokerSimulatorClient`). The order stays `NEW`.
 3. The broker works the order for 0.5 to 2 seconds and publishes the fill to the
    `executions` topic, at or better than the limit price.
 4. **Settlement.** `ExecutionListener` consumes the fill. In one transaction `OrderService`
-   re-checks the rules at the fill price (another order may have used the cash meanwhile),
-   updates the cash balance and position through the execution strategy
+   releases the reservation and updates the cash balance and position at the fill price
+   through the execution strategy
    (`BuyOrderStrategy` / `SellOrderStrategy`), records the fill in `executions` and marks the
    order `FILLED`. A trade event is published to `trade-events`.
 5. Until the fill is settled the order is `NEW` and can be cancelled with
-   `DELETE /api/v1/orders/{orderId}`; a fill that arrives later is ignored.
+   `DELETE /api/v1/orders/{orderId}`, which releases its reservation; a fill that arrives
+   later is ignored.
 6. A failed order (insufficient funds or holdings, inactive account, broker unreachable,
    etc.) is saved as `REJECTED` with a reason and captured in the dead-letter queue
    (`dlq_messages` table). Admins can inspect and replay these messages through
@@ -105,7 +116,7 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 |---|---|
 | Trading API | Java 21, Spring Boot 3.5, Spring Security (OAuth2 resource server), Spring Data JPA, MyBatis, Spring Kafka, springdoc-openapi |
 | Auth service | Node.js 22, NestJS 11, TypeScript, Argon2, `pg` |
-| Messaging | Apache Kafka 7.5 (Confluent) with ZooKeeper, Kafka UI |
+| Messaging | Apache Kafka 7.5 (Confluent) in KRaft mode, Kafka UI |
 | Database | PostgreSQL 16 |
 | ETL | Python 3.12, pandas, psycopg2, schedule |
 | Dashboard | Python 3.12, Streamlit, Plotly, pandas |
@@ -138,11 +149,12 @@ TNS-Capital/
 ├── frontend/                        Angular app, served by nginx; e2e/ holds the Playwright tests
 ├── shared/auth-service/             NestJS auth service (has its own README)
 ├── broker-simulator/                Spring Boot Broker Simulator: fills orders after a delay
+├── strategy-service/                Spring Boot Strategy Lab service: rules, backtests, live engine
 ├── db/                              PostgreSQL image: tables/, views/, roles/, seed data/
 ├── etl/                             Python ETL pipeline (has its own README)
 ├── dashboard/                       Streamlit analytics dashboard (has its own README)
 ├── bruno/                           Bruno API collection for manual testing
-├── contracts/                       OpenAPI contracts for the auth and trading APIs
+├── contracts/                       OpenAPI contracts for the auth, trading and strategy APIs
 ├── ci/                              Test scripts Jenkins runs (Python suites, e2e stack)
 ├── docs/                            Business logic, security guide, SonarQube, diagrams
 ├── docker-compose.yml               Full local stack
@@ -195,7 +207,8 @@ Edit `.env` and set:
 | `DB_USER` | PostgreSQL user. The default `tns-capital-db-user` is fine. |
 | `DB_PASSWORD` | Any password for the local database. |
 | `JWT_SECRET` | Shared secret used by the auth service to sign tokens and by the API and dashboard to verify them. At least 32 bytes; generate one with `openssl rand -hex 32`. All three refuse to start (or to sign anyone in) with the `change-me` placeholder. |
-| `ADMIN_PASSWORD` | Password of the `admin` account, which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
+| `ADMIN_PASSWORD` | Password of the `admin` account (role `ADMIN`: the analytics dashboard and operations), which the auth service creates when it starts (nothing is seeded). At least 12 characters. Change it and restart the auth service to rotate it. |
+| `SUPPORT_PASSWORD` | Password of the `support` account (role `SUPPORT`: the trading app's account viewer, suspending and reactivating accounts), created the same way. At least 12 characters, and not the `ADMIN_PASSWORD`. |
 
 Optional: `ETL_SCHEDULE_TIME` (default `02:00`), `KAFKA_UI_PORT` (default `8090`),
 `DASHBOARD_PORT` (default `8501`), `FRONTEND_PORT` (default `8086`) and
@@ -210,7 +223,7 @@ docker compose up -d --build
 ```
 
 The first build downloads base images and Maven/npm dependencies, so it takes a few
-minutes. Compose starts the services in order: ZooKeeper and Kafka, then PostgreSQL (which
+minutes. Compose starts the services in order: Kafka, then PostgreSQL (which
 creates the schema and seed data), then the auth service, then the trading API.
 
 Check that everything is up:
@@ -226,10 +239,11 @@ API's startup with `docker compose logs -f app`.
 
 | Service | URL | Notes |
 |---|---|---|
-| Web app | http://localhost:8086 | Angular frontend; nginx forwards `/api`, `/auth` and `/analytics/` to the services |
+| Web app | http://localhost:8086 | Angular frontend; nginx forwards `/api`, `/auth`, `/api/v1/strategies` and `/analytics/` to the services. Strategy Lab is at `/strategies` |
 | Trading API | http://localhost:3000 | All endpoints need a bearer token, except `/actuator/health` (details for admins only). This machine only: other machines use port 8086 |
 | Swagger UI | http://localhost:3000/swagger-ui.html | Public. Click **Authorize** and paste an access token |
 | OpenAPI spec | http://localhost:3000/v3/api-docs | Public |
+| Strategy service | http://localhost:8087 | Strategy Lab API; Swagger UI at `/swagger-ui.html`. This machine only: browsers use port 8086 |
 | Auth service | http://localhost:4000 | `GET /health` is public. This machine only |
 | Auth Swagger UI | http://localhost:4000/docs | Public. JSON at `/docs-json` |
 | Kafka UI | http://localhost:8090 | Browse topics and messages (read-only, this machine only) |
@@ -257,9 +271,14 @@ curl -s http://localhost:3000/actuator/health
 curl -s http://localhost:3000/actuator/health -H "Authorization: Bearer $TOKEN"
 # -> {"status":"UP","components":{"db":{"status":"UP", ...}, ...}}
 
-# Read a seeded account's balance
-curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $TOKEN"
-# -> {"balance":5000.00}
+# Traders' accounts are support's, not the admin's: log in as support to read one
+SUPPORT_TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"support\",\"password\":\"$SUPPORT_PASSWORD\"}" \
+  | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
+curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $SUPPORT_TOKEN"
+# -> {"balance":5000.00,"reservedCash":0.00,"availableCash":5000.00}
+#    reservedCash is held for open orders; only availableCash can be traded or withdrawn
 ```
 
 ### Stopping and resetting
@@ -277,7 +296,8 @@ locks the services out until you reset.
 
 The seed data is six weeks of sample trading on ten accounts (ACC-1001 to ACC-1010), dated back
 from the day the database is created, for the analytics. No logins are seeded: register a trader
-(it gets a new account to deposit into), and log in as `admin` with `ADMIN_PASSWORD`.
+(it gets a new account to deposit into), log in as `support` with `SUPPORT_PASSWORD` to look after
+accounts in the trading app, or as `admin` with `ADMIN_PASSWORD` for the analytics dashboard.
 
 ### ETL pipeline (optional)
 
@@ -309,11 +329,11 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
   same keys. Only `https://` links are kept, and the page shows headlines as text. Without news the
   issue is still published; without prices nothing is published and the API logs an error.
 - **One issue per week**, stored as a JSONB snapshot in `newsletter_issues` and never changed
-  afterwards ([DECISIONS.md](docs/DECISIONS.md) #16).
-- **Admins can preview** the week so far with **Preview this week's issue** on the page, or
+  afterwards ([DECISIONS.md](docs/DECISIONS.md) #17).
+- **Support staff can preview** the week so far with **Preview this week's issue** on the page, or
   `GET /api/v1/newsletters/preview`. A preview is never saved, so it cannot take the place of the
   Friday issue.
-- **Publishing early (demos):** with `NEWSLETTER_EARLY_PUBLISH=true` in `.env`, admins can also
+- **Publishing early (demos):** with `NEWSLETTER_EARLY_PUBLISH=true` in `.env`, support can also
   click **Publish this issue** on a preview (`POST /api/v1/newsletters/publish`). That issue is
   then the week's issue and the Friday run skips the week. It is off by default (`403 NWS-403`);
   keep it off in production. To undo a demo locally, delete the row from `newsletter_issues` as the
@@ -325,11 +345,29 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
 
   ```bash
   source .env
-  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital < db/tables/11_newsletter_issues.sql
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital < db/tables/13_newsletter_issues.sql
   docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "GRANT SELECT, INSERT ON newsletter_issues TO tns_api;"
   ```
 
 ---
+
+## Strategy Lab
+
+Strategy Lab (http://localhost:8086/strategies) is the platform's Sprint 10 extension: automated
+strategy execution (docs/DECISIONS.md 16).
+
+1. Set `STRATEGY_CLIENT_SECRET` in `.env` (`openssl rand -hex 32`): the strategy service logs in with
+   it to place orders. Without it, strategies cannot trade.
+2. Run the ETL once (`docker compose run --rm etl python pipeline.py`) so there are five years of daily
+   prices to backtest on.
+3. Pick a rule and **Run backtest**: the strategy's return against buying and holding, its largest
+   drawdown and its trades.
+4. **Save strategy**, then **Switch on**. It trades on each 1-minute bar of its symbol while the market is
+   open. Outside market hours, **Replay** a past day (needs the Alpaca keys): its bars stream at up to 50 a
+   second and the strategy places real orders, priced at the live market price.
+5. The strategy's signals, with each order's status, show under it; a toast announces every trade on any
+   page. Support staff see every strategy read-only, and the admins' analytics dashboard shows strategy
+   orders next to everyone else's.
 
 ## Using the API
 
@@ -350,7 +388,8 @@ and logout.
 
 | User | Password | Role | Access |
 |---|---|---|---|
-| `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | Every account, opening accounts, adding and changing instruments, the DLQ |
+| `support` | `SUPPORT_PASSWORD` from `.env` | `SUPPORT` | The trading app's account viewer: every account read-only, suspending and reactivating them, opening accounts, adding and changing instruments |
+| `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | The analytics dashboard, the DLQ and the actuator's metrics; no traders' accounts (see [decision 10](docs/DECISIONS.md#10-roles)) |
 | A user you register | your own | `USER` | Only the account opened at registration |
 
 The seeded users `alice` and `bob` have placeholder password hashes and cannot log in.
@@ -398,11 +437,13 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 
 | Resource | Endpoints |
 |---|---|
-| Accounts | `GET /accounts` · `POST /accounts` (ADMIN) · `GET/PATCH/DELETE /accounts/{id}` · `PUT /accounts/{id}/status` (ADMIN: suspend or reactivate) · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
+| Accounts | `GET /accounts` · `POST /accounts` (SUPPORT) · `GET/PATCH/DELETE /accounts/{id}` · `PUT /accounts/{id}/status` (SUPPORT: suspend or reactivate) · `GET /accounts/{id}/balance` · `POST /accounts/{id}/deposit` · `POST /accounts/{id}/withdraw` · `GET /accounts/{id}/positions` · `GET /accounts/{id}/orders` |
 | Orders | `POST /orders` · `GET /orders` · `GET /orders/{orderId}` · `DELETE /orders/{orderId}` (cancel) · `GET /orders/{orderId}/events` (status history) · `GET /orders/history/{orderId}` · `GET /orders/{accountId}/history` |
 | Positions | `GET /positions/{accountId}` · `GET /positions/{accountId}/{symbol}` |
-| Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (ADMIN) · `PUT /instruments/{symbol}` (ADMIN) |
-| Newsletter | `GET /newsletters` · `GET /newsletters/{id}` · `GET /newsletters/preview` (ADMIN) · `POST /newsletters/publish` (ADMIN, demos only) |
+| Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (SUPPORT) · `PUT /instruments/{symbol}` (SUPPORT) |
+| Market replay | `POST /market-data/replays` (replay a past day's 1-minute bars on `market-data`) · `GET /market-data/replays/current` · `DELETE /market-data/replays/current` |
+| Strategies (strategy service) | `GET/POST /strategies` · `GET/DELETE /strategies/{id}` · `PUT /strategies/{id}/status` (ACTIVE or PAUSED) · `GET /strategies/{id}/signals` · `GET /strategies/activity?since=` · `GET /strategies/performance` · `POST /strategies/backtests` |
+| Newsletter | `GET /newsletters` · `GET /newsletters/{id}` · `GET /newsletters/preview` (SUPPORT) · `POST /newsletters/publish` (SUPPORT, demos only) |
 | Dead-letter queue (ADMIN) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:
@@ -494,6 +535,7 @@ See [etl/README.md](etl/README.md) for settings and the reporting schema.
 |---|---|---|
 | API unit tests | `mvn test` | No external services needed |
 | API unit and integration tests | `mvn verify` | `*IT` tests start PostgreSQL and Kafka with Testcontainers, so Docker must be running. JaCoCo writes a coverage report to `target/site/jacoco/` |
+| Strategy service | `cd strategy-service && mvn verify` | Unit tests, then `StrategyServiceIT` against Postgres (built from `db/`) and Kafka with Testcontainers; Docker must be running |
 | Auth service | `cd shared/auth-service && npm ci && npm test` | `users.service.spec.ts` also runs against a real database when `DB_HOST` is set |
 | Auth service, with its database tests | `ci/auth-tests.sh` | Needs only Docker: starts a throwaway Postgres from `db/` and removes it afterwards. Writes `coverage/lcov.info` |
 | ETL | `cd etl && pip install -r requirements-dev.txt && python -m pytest` | Database integration tests run only with `ETL_IT=1`; see [etl/README.md](etl/README.md) |
@@ -515,13 +557,14 @@ Jenkins runs the [`Jenkinsfile`](Jenkinsfile) on every branch and pull request:
 | SAST | Semgrep with the Java and OWASP Top 10 rule packs. Fails on ERROR-severity findings |
 | Build Image | Packages the jar and builds the Docker image, tagged with the build number |
 | Test | `mvn verify` (unit and integration tests); results published as JUnit reports |
+| Strategy Service Tests | `mvn verify` in `strategy-service/` (unit tests and the Testcontainers IT), with JaCoCo coverage for SonarQube |
 | ETL Tests | The ETL pytest suite, including its Postgres integration tests against a throwaway database, with coverage (`ci/python-tests.sh etl`) |
 | Dashboard Tests | The dashboard's tests (insights, the headless Streamlit page, `data.py` against a throwaway database), with coverage |
 | Auth Service Tests | The auth service's Jest suite in a `node:22-alpine` container, including its database tests against a throwaway Postgres, with coverage (`ci/auth-tests.sh`) |
 | Frontend Tests | The Angular unit tests in headless Chromium with coverage, then a production build |
 | E2E Tests | The Playwright journeys against a throwaway copy of the whole stack (`ci/e2e-tests.sh`); the report and traces of failed tests are archived |
-| SonarQube Analysis | Analyses every component (the Java API, the Python ETL and dashboard, the Angular frontend and the NestJS auth service), uploads their coverage and waits for the quality gate |
-| Dependency Scan | Trivy scans the manifests and the built image. Fails on fixable CRITICAL CVEs. Accepted risks go in `.trivyignore` |
+| SonarQube Analysis | Analyses every component (the Java API and strategy service, the Python ETL and dashboard, the Angular frontend and the NestJS auth service), uploads their coverage and waits for the quality gate |
+| Dependency Scan | Trivy scans the manifests and the built images (API, auth service, strategy service). Fails on fixable CRITICAL CVEs. Accepted risks go in `.trivyignore` |
 
 Security reports (SARIF) are archived with every build. See [docs/SONARQUBE.md](docs/SONARQUBE.md)
 for the quality gate.
@@ -532,14 +575,14 @@ for the quality gate.
 
 | Problem | Fix |
 |---|---|
-| `required variable DB_PASSWORD is missing`, `set JWT_SECRET in .env` or `set ADMIN_PASSWORD in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
-| Auth service or API exits on startup | `JWT_SECRET` must be at least 32 bytes and not the `change-me` placeholder; `ADMIN_PASSWORD` at least 12 characters. Check `docker compose logs auth-service`. |
+| `required variable DB_PASSWORD is missing`, `set JWT_SECRET in .env`, `set ADMIN_PASSWORD in .env` or `set SUPPORT_PASSWORD in .env` | Create `.env` from `.env.example` and fill in the values ([step 2](#2-create-your-env-file)). |
+| Auth service or API exits on startup | `JWT_SECRET` must be at least 32 bytes and not the `change-me` placeholder; `ADMIN_PASSWORD` and `SUPPORT_PASSWORD` at least 12 characters and different. Check `docker compose logs auth-service`. |
 | `admin` / `adminPassword` no longer logs in | Nothing is seeded any more: log in as `admin` with the `ADMIN_PASSWORD` from `.env` (the auth service sets it at startup). |
 | `401 AUTH-401` from the API | The token is missing, expired, signed with a different secret, or not an access token from the auth service (`iss`, `typ`). Log in again, and make sure the API and auth service use the same `JWT_SECRET`. |
 | `403 AUTH-403` | You are accessing an account that is not yours, or an ADMIN-only endpoint. |
 | Hibernate `Schema-validation` errors, or missing tables/columns | The database volume predates a schema change. Run `docker compose down -v` and start again. |
 | `password authentication failed for user "tns_api"` (or `tns_auth`, `tns_etl`, `tns_reader`), or `role ... does not exist` | The database volume predates the services' roles, or a `DB_*_PASSWORD` changed after it was created. Run `docker compose down -v` and start again. |
-| Port already in use (3000, 4000, 8086, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
+| Port already in use (3000, 4000, 8086, 8087, 5432, 8090, 8501, 9092, 2181) | Stop the program using the port, or change the host port in `docker-compose.yml` (`KAFKA_UI_PORT` for Kafka UI, `DASHBOARD_PORT` for the dashboard, `FRONTEND_PORT` for the web app). |
 | API running on the host cannot reach Kafka | Add `127.0.0.1 kafka` to your hosts file ([Developing locally](#trading-api)). |
 | Containers killed or restarting | Docker needs at least 4 GB of memory for the full stack. |
 | Order stays `NEW` | Check the consumer with `docker compose logs app`, and the `orders` topic in Kafka UI. |
@@ -556,6 +599,8 @@ for the quality gate.
 | [docs/diagrams/ER-DIAGRAM.md](docs/diagrams/ER-DIAGRAM.md) | Database ER diagram |
 | [docs/diagrams/CLASS-DIAGRAM.md](docs/diagrams/CLASS-DIAGRAM.md) | Domain model, services and strategies, exceptions (UML class diagrams) |
 | [docs/diagrams/ORDER-FLOW.md](docs/diagrams/ORDER-FLOW.md) | Order flow sequence diagrams: a BUY that fills, a rejection and the DLQ, cancelling |
+| [docs/diagrams/STRATEGY-LAB.md](docs/diagrams/STRATEGY-LAB.md) | Strategy Lab: how a strategy trades (sequence) and its rules and engine (classes) |
+| [strategy-service/README.md](strategy-service/README.md) | The Strategy Lab service: rules, configuration, tests |
 | [docs/SECURITY_GUIDE.md](docs/SECURITY_GUIDE.md) | API security measures |
 | [docs/SONARQUBE.md](docs/SONARQUBE.md) | SonarQube quality gate |
 | [shared/auth-service/README.md](shared/auth-service/README.md) | Auth endpoints, tokens, guards and error codes |

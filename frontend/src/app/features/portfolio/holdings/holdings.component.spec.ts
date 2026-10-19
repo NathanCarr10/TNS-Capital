@@ -13,9 +13,9 @@ describe('HoldingsComponent', () => {
   let store: Pick<MarketQuotesStore, 'quotes' | 'lastUpdated' | 'errorMessage'>;
 
   const positions: PositionResponse[] = [
-    { accountId: 11, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null },
-    { accountId: 11, symbol: 'MSFT', quantity: 5, averageCost: 200, marketValue: null },
-    { accountId: 11, symbol: 'TSLA', quantity: 2, averageCost: 250, marketValue: null },
+    { accountId: 11, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 100, marketValue: null },
+    { accountId: 11, symbol: 'MSFT', quantity: 5, reservedQuantity: 0, availableQuantity: 5, averageCost: 200, marketValue: null },
+    { accountId: 11, symbol: 'TSLA', quantity: 2, reservedQuantity: 0, availableQuantity: 2, averageCost: 250, marketValue: null },
   ];
 
   const quote = (symbol: string, price: number | null): MarketQuote => ({
@@ -80,6 +80,14 @@ describe('HoldingsComponent', () => {
     expect(rowFor('MSFT').querySelector('td.return')!.classList).toContain('pnl-down');
 
     expect(rowFor('TSLA').querySelector('td.return')!.classList).toContain('pnl-flat');
+  });
+
+  it('shows the shares held for open sell orders', () => {
+    render({ positions: [{ ...positions[0], reservedQuantity: 4, availableQuantity: 6 }, positions[1]] });
+    setQuotes(quote('AAPL', 120), quote('MSFT', 190));
+
+    expect(rowFor('AAPL').querySelector('.reserved')?.textContent).toContain('4 in open orders');
+    expect(rowFor('MSFT').querySelector('.reserved')).toBeNull();
   });
 
   it('orders holdings by value, largest first, with unpriced ones last', () => {

@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { Router, UrlTree } from '@angular/router';
 import { Observable, firstValueFrom, of, throwError } from 'rxjs';
 
-import { authGuard } from './auth.guard';
+import { AnalyticsDashboardService } from '../analytics/analytics-dashboard.service';
+import { authGuard, notAdminGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
 describe('authGuard', () => {
@@ -66,5 +67,35 @@ describe('authGuard', () => {
 
     expect(await firstValueFrom(result as Observable<boolean | UrlTree>)).toBe(loginTree);
     expect(routerSpy.createUrlTree).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/orders' } });
+  });
+});
+
+describe('notAdminGuard', () => {
+  let isAdmin: boolean;
+  let analyticsSpy: jasmine.SpyObj<AnalyticsDashboardService>;
+
+  const run = () => TestBed.runInInjectionContext(() => notAdminGuard({} as never, {} as never));
+
+  beforeEach(() => {
+    isAdmin = false;
+    analyticsSpy = jasmine.createSpyObj<AnalyticsDashboardService>('AnalyticsDashboardService', ['open']);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AnalyticsDashboardService, useValue: analyticsSpy },
+      ],
+    });
+  });
+
+  it('lets traders and support in', () => {
+    expect(run()).toBeTrue();
+    expect(analyticsSpy.open).not.toHaveBeenCalled();
+  });
+
+  it('sends an admin to the analytics dashboard instead', () => {
+    isAdmin = true;
+
+    expect(run()).toBeFalse();
+    expect(analyticsSpy.open).toHaveBeenCalled();
   });
 });

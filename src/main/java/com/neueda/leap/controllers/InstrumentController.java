@@ -49,13 +49,13 @@ public class InstrumentController {
                 .orElseThrow(() -> new com.neueda.leap.exceptions.InstrumentNotFoundException("Instrument not found: " + symbol));
         return ResponseEntity.ok(mapToResponse(instrument));
     }
-    /** Adding instruments is an admin task, like opening accounts. */
-    @Operation(summary = "Add an instrument", description = "Admins only.")
+    /** Adding instruments is a support task, like opening accounts. */
+    @Operation(summary = "Add an instrument", description = "Support only.")
     @ApiResponse(responseCode = "201", description = "Instrument added")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Support only")
     @ApiResponse(responseCode = "409", description = "INS-409 The symbol is taken")
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPPORT')")
     public ResponseEntity<InstrumentResponse> createInstrument(@Valid @RequestBody CreateInstrumentRequest request) {
         // symbol is the primary key, so save() would overwrite an existing instrument;
         // reject duplicates explicitly instead
@@ -75,13 +75,13 @@ public class InstrumentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(instrument));
     }
 
-    /** Only admins may change an instrument, e.g. stop it being tradable. */
-    @Operation(summary = "Change an instrument", description = "Admins only, e.g. to stop trading it (tradable false).")
+    /** Only support may change an instrument, e.g. stop it being tradable. */
+    @Operation(summary = "Change an instrument", description = "Support only, e.g. to stop trading it (tradable false).")
     @ApiResponse(responseCode = "200", description = "OK")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Support only")
     @ApiResponse(responseCode = "404", description = "INS-404 Instrument not found")
     @PutMapping("/{symbol}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPPORT')")
     public ResponseEntity<InstrumentResponse> updateInstrument(@PathVariable String symbol,
                                                             @Valid @RequestBody CreateInstrumentRequest request) {
         // Updates existing instrument; throws 404 if not found to maintain REST semantics

@@ -70,7 +70,7 @@ export class OrderTrackerService {
         error: (error: unknown) =>
           finish({
             status: 'UNKNOWN',
-            message: readErrorMessage(error, `Failed to retrieve the final status of order ${orderId}.`),
+            message: readErrorMessage(error, 'Failed to retrieve the final status of the order.'),
           }),
         // Also runs after a settled order (finish ignores it then) and on sign-out (nothing to announce)
         complete: () => {
@@ -79,7 +79,7 @@ export class OrderTrackerService {
           }
           finish({
             status: 'UNKNOWN',
-            message: `Order ${orderId} was accepted but is still processing. Check the order history.`,
+            message: 'The order is still processing. Check the order history for its status.',
           });
         },
       });
@@ -90,11 +90,14 @@ export class OrderTrackerService {
   private announce(result: OrderOutcome): void {
     if (result.status === 'FILLED') {
       this.toast.success(result.message);
-      this.store.refresh();
     } else if (result.status === 'REJECTED') {
       this.toast.error(result.message);
     } else if (result.status === 'UNKNOWN') {
       this.toast.info(result.message);
+    }
+    // Filling moves cash and shares; every outcome releases what the order reserved
+    if (result.status !== 'UNKNOWN') {
+      this.store.refresh();
     }
   }
 }

@@ -14,14 +14,14 @@ describe('OrderHistoryComponent', () => {
   let fixture: ComponentFixture<OrderHistoryComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
 
-  const create = (isAdmin = false): HTMLElement => {
+  const create = (isSupport = false): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [OrderHistoryComponent],
       providers: [
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(OrderHistoryComponent);
@@ -162,11 +162,15 @@ describe('OrderHistoryComponent', () => {
              status: 'CANCELLED', createdOn: '2026-01-01T12:00:00Z' })
       );
       create();
+      const store = TestBed.inject(AccountStore);
+      spyOn(store, 'refresh');
 
       cancelButtons()[0].click();
       fixture.detectChanges();
 
       expect(tradingService.cancelOrder).toHaveBeenCalledWith('open-1');
+      // The cash or shares the order reserved are released
+      expect(store.refresh).toHaveBeenCalled();
       expect(statusOf('AAPL')).toBe('CANCELLED');
       expect(cancelButtons()).toHaveSize(0);
     });
@@ -190,7 +194,7 @@ describe('OrderHistoryComponent', () => {
       expect(statusOf('AAPL')).toBe('FILLED');
     });
 
-    it('gives admins, who view accounts read-only, no Cancel button', () => {
+    it('gives support, who view accounts read-only, no Cancel button', () => {
       tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
       create(true);
 

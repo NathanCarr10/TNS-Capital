@@ -134,7 +134,7 @@ def build_dim_date(fact_trades):
         "month_name": days.dt.month_name(),
         "day": days.dt.day,
         "day_name": days.dt.day_name(),
-        "is_weekend": days.dt.dayofweek >= 5,  # Saturday = 5, Sunday = 6
+        "is_weekend": days.dt.dayofweek >= 5,
     }).reset_index(drop=True)
 
 

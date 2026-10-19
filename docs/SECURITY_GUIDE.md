@@ -41,12 +41,18 @@ jwt:
 
 - `POST /register` on the auth service creates the user **and** opens their trading account
   (ACTIVE, cash balance 0), linked by `users.account_id`. The token's `roles` claim comes from
-  `users.role`: `["USER"]` for registered users, `["ADMIN"]` for the seeded `admin` user.
+  `users.role`: `["USER"]` for registered users, `["SUPPORT"]` for `support` and `["ADMIN"]` for
+  `admin`, both created by the auth service at startup.
 - **USER**: may only use the account linked to their username (the token's `sub`) — read it,
   move cash, place/cancel orders on it, see its positions and orders. Anything else is
   `403 AUTH-403`, including account IDs that do not exist (no probing for valid IDs).
   `GET /api/v1/accounts` and `GET /api/v1/orders` return only the user's own rows.
-- **ADMIN**: may use every account, open accounts (`POST /api/v1/accounts`) and use the DLQ.
+- **SUPPORT**: may use every account (the trading app shows it read-only), suspend or reactivate
+  accounts (`PUT /api/v1/accounts/{id}/status`), open accounts (`POST /api/v1/accounts`) and add
+  or change instruments.
+- **ADMIN**: the DLQ and the actuator's metrics, info and health details, plus the analytics
+  dashboard. No access to traders' accounts: an admin is not support
+  ([decision 10](DECISIONS.md#10-roles)).
 - Enforced by [AccountAccessGuard.java](../src/main/java/com/neueda/leap/security/AccountAccessGuard.java).
 
 ---
@@ -523,8 +529,8 @@ GET    /api/v1/positions/{id}  - List positions (owner or ADMIN)
 *      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
 GET    /api/v1/newsletters     - List newsletter issues (any signed-in user)
 GET    /api/v1/newsletters/{id} - Get a newsletter issue (any signed-in user)
-GET    /api/v1/newsletters/preview - Preview this week's issue, not saved (ADMIN)
-POST   /api/v1/newsletters/publish - Publish this week's issue early, if NEWSLETTER_EARLY_PUBLISH is on (ADMIN)
+GET    /api/v1/newsletters/preview - Preview this week's issue, not saved (SUPPORT)
+POST   /api/v1/newsletters/publish - Publish this week's issue early, if NEWSLETTER_EARLY_PUBLISH is on (SUPPORT)
 ```
 
 ### Public Endpoints (No Auth Required)

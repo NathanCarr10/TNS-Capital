@@ -95,7 +95,7 @@
           "instrument-controller"
         ],
         "summary": "Change an instrument",
-        "description": "Admins only, e.g. to stop trading it (tradable false).",
+        "description": "Support only, e.g. to stop trading it (tradable false).",
         "operationId": "updateInstrument",
         "parameters": [
           {
@@ -139,7 +139,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -187,7 +187,7 @@
           "account-controller"
         ],
         "summary": "Suspend or reactivate an account",
-        "description": "Admins only. Closing goes through DELETE.",
+        "description": "Support only. Closing goes through DELETE.",
         "operationId": "updateAccountStatus",
         "parameters": [
           {
@@ -232,7 +232,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -280,7 +280,7 @@
           "order-controller"
         ],
         "summary": "List orders",
-        "description": "Admins get every order; other users get the orders on their own account.",
+        "description": "Support gets every order; other users get the orders on their own account.",
         "operationId": "getAllOrders",
         "responses": {
           "200": {
@@ -357,7 +357,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 The account is not the caller's; ACC-403 the account is not ACTIVE",
+            "description": "AUTH-403 The account is not the caller's (for the strategy service: the account has no ACTIVE strategy); ACC-403 the account is not ACTIVE",
             "content": {
               "application/json": {
                 "schema": {
@@ -425,7 +425,7 @@
           "newsletter-controller"
         ],
         "summary": "Publish this week's newsletter early",
-        "description": "Admins only, where newsletter.early-publish is on (e.g. a demo). Publishes the week so far; the weekly run then skips this week. If this week's issue was published already, returns it.",
+        "description": "Support only, where newsletter.early-publish is on (e.g. a demo). Publishes the week so far; the weekly run then skips this week. If this week's issue was published already, returns it.",
         "operationId": "publishIssue",
         "responses": {
           "200": {
@@ -449,7 +449,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only; NWS-403 Early publishing is switched off",
+            "description": "AUTH-403 Support only; NWS-403 Early publishing is switched off",
             "content": {
               "application/json": {
                 "schema": {
@@ -470,6 +470,98 @@
           },
           "503": {
             "description": "MKT-503 No prices to rank the week's movers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market-data/replays": {
+      "post": {
+        "tags": [
+          "market-replay-controller"
+        ],
+        "summary": "Replay a past trading day",
+        "description": "Publishes the day's regular-session 1-minute bars of the symbol on the market-data topic as REPLAY prices, barsPerSecond at a time (default 10), so active strategies on it trade. Orders are still priced at the live market price. One replay at a time.",
+        "operationId": "startReplay",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartReplayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Replay started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "INS-404 Instrument not found or not tradable; MKT-404 no bars that day (weekend or market holiday)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "MKT-409 Another replay is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VAL-422 Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "MKT-503 No market data keys are configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -529,7 +621,7 @@
           "instrument-controller"
         ],
         "summary": "Add an instrument",
-        "description": "Admins only.",
+        "description": "Support only.",
         "operationId": "createInstrument",
         "requestBody": {
           "content": {
@@ -563,7 +655,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -687,7 +779,7 @@
           "account-controller"
         ],
         "summary": "List accounts",
-        "description": "Admins get every account; other users get a list holding only their own.",
+        "description": "Support gets every account; other users get a list holding only their own.",
         "operationId": "getAllAccounts",
         "responses": {
           "200": {
@@ -730,7 +822,7 @@
           "account-controller"
         ],
         "summary": "Open an account",
-        "description": "Admins only: users get their account when they register.",
+        "description": "Support only: users get their account when they register.",
         "operationId": "createAccount",
         "requestBody": {
           "content": {
@@ -764,7 +856,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -846,7 +938,7 @@
             }
           },
           "400": {
-            "description": "ORD-400 Insufficient funds",
+            "description": "ORD-400 Insufficient available funds (cash reserved for open orders cannot be withdrawn)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2255,7 +2347,7 @@
           "newsletter-controller"
         ],
         "summary": "Preview this week's newsletter",
-        "description": "Admins only. Builds the week so far from the latest prices and news without publishing it; the preview has no id.",
+        "description": "Support only. Builds the week so far from the latest prices and news without publishing it; the preview has no id.",
         "operationId": "previewIssue",
         "responses": {
           "200": {
@@ -2279,7 +2371,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2300,6 +2392,106 @@
           },
           "503": {
             "description": "MKT-503 No prices to rank the week's movers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market-data/replays/current": {
+      "get": {
+        "tags": [
+          "market-replay-controller"
+        ],
+        "summary": "The running or last replay",
+        "operationId": "currentReplay",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No replay was started since the API started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "market-replay-controller"
+        ],
+        "summary": "Stop the running replay",
+        "operationId": "stopReplay",
+        "responses": {
+          "200": {
+            "description": "Stopped; the bars published so far stay on the topic",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MKT-404 No replay is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
             "content": {
               "application/json": {
                 "schema": {
@@ -2917,11 +3109,13 @@
       "AccountResponse": {
         "required": [
           "accountNumber",
+          "availableCash",
           "cashBalance",
           "holderName",
           "id",
           "lastUpdated",
           "openedOn",
+          "reservedCash",
           "status"
         ],
         "type": "object",
@@ -2937,6 +3131,12 @@
             "type": "string"
           },
           "cashBalance": {
+            "type": "number"
+          },
+          "reservedCash": {
+            "type": "number"
+          },
+          "availableCash": {
             "type": "number"
           },
           "status": {
@@ -3133,6 +3333,66 @@
           }
         }
       },
+      "StartReplayRequest": {
+        "required": [
+          "date",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "pattern": "^[A-Z]{1,10}$",
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "barsPerSecond": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReplayStatus": {
+        "type": "object",
+        "properties": {
+          "replayId": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "barsPublished": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalBars": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "barsPerSecond": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedBy": {
+            "type": "string"
+          }
+        }
+      },
       "DeadLetterMessageDTO": {
         "type": "object",
         "properties": {
@@ -3301,9 +3561,11 @@
       "PositionResponse": {
         "required": [
           "accountId",
+          "availableQuantity",
           "averageCost",
           "marketValue",
           "quantity",
+          "reservedQuantity",
           "symbol"
         ],
         "type": "object",
@@ -3316,6 +3578,14 @@
             "type": "string"
           },
           "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reservedQuantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "availableQuantity": {
             "type": "integer",
             "format": "int32"
           },
@@ -3508,9 +3778,20 @@
         }
       },
       "BalanceResponse": {
+        "required": [
+          "availableCash",
+          "balance",
+          "reservedCash"
+        ],
         "type": "object",
         "properties": {
           "balance": {
+            "type": "number"
+          },
+          "reservedCash": {
+            "type": "number"
+          },
+          "availableCash": {
             "type": "number"
           }
         }

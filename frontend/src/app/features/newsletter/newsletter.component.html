@@ -22,7 +22,7 @@
         </select>
       </label>
     }
-    @if (isAdmin && !preview()) {
+    @if (isSupport && !preview()) {
       <button type="button" class="btn btn-primary" [disabled]="previewing()" (click)="showPreview()">
         {{ previewing() ? 'Building preview...' : "Preview this week's issue" }}
       </button>

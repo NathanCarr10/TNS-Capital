@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
+import { StrategyLabService } from '../../core/strategy/strategy-lab.service';
 import { ThemeService } from '../../core/theme/theme.service';
 import { tradingServiceStub } from '../../core/trading/testing/trading-fixtures';
 import { TradingService } from '../../core/trading/trading.service';
@@ -13,21 +14,24 @@ import { ShellComponent } from './shell.component';
 describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
   let authServiceSpy: jasmine.SpyObj<AuthService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
+  let strategyLab: jasmine.SpyObj<StrategyLabService>;
 
   const create = (): HTMLElement => {
-    authServiceSpy.isAdmin.and.returnValue(isAdmin);
+    authServiceSpy.isSupport.and.returnValue(isSupport);
     fixture = TestBed.createComponent(ShellComponent);
     fixture.detectChanges();
     return fixture.nativeElement;
   };
 
   beforeEach(async () => {
-    authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['logout', 'isAdmin']);
+    authServiceSpy = jasmine.createSpyObj<AuthService>('AuthService', ['logout', 'isSupport']);
     authServiceSpy.logout.and.returnValue(of(undefined));
-    isAdmin = false;
+    isSupport = false;
     const tradingService = tradingServiceStub();
     tradingService.getAccounts.and.returnValue(of([]));
+    strategyLab = jasmine.createSpyObj<StrategyLabService>('StrategyLabService', ['activity']);
+    strategyLab.activity.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
@@ -35,6 +39,7 @@ describe('ShellComponent', () => {
         provideRouter([]),
         { provide: AuthService, useValue: authServiceSpy },
         { provide: TradingService, useValue: tradingService },
+        { provide: StrategyLabService, useValue: strategyLab },
       ],
     }).compileComponents();
   });
@@ -49,24 +54,26 @@ describe('ShellComponent', () => {
   const navLinks = (element: HTMLElement): (string | null | undefined)[][] =>
     Array.from(element.querySelectorAll('nav a')).map((link) => [link.textContent?.trim(), link.getAttribute('href')]);
 
-  it('links to Portfolio, Trade, Order History, Newsletter and Settings', () => {
+  it('links to Portfolio, Trade, Order History, Strategy Lab, Newsletter and Settings', () => {
     const element = create();
 
     expect(navLinks(element)).toEqual([
       ['Portfolio', '/portfolio'],
       ['Trade', '/trade'],
       ['Order History', '/orders'],
+      ['Strategy Lab', '/strategies'],
       ['Newsletter', '/newsletter'],
       ['Settings', '/settings'],
     ]);
   });
 
-  it('gives admins no Settings link, as they have no account of their own', () => {
-    isAdmin = true;
+  it('gives support no Settings link, as they have no account of their own', () => {
+    isSupport = true;
 
     const element = create();
 
     expect(navLinks(element).map(([label]) => label)).not.toContain('Settings');
+    expect(navLinks(element).map(([label]) => label)).toContain('Strategy Lab');
   });
 
   it("shows the account holder's name, initials and account number", () => {
@@ -78,13 +85,13 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.user .badge')?.textContent).toContain('Trader');
   });
 
-  it('shows an admin by username', () => {
-    isAdmin = true;
+  it('shows support by username', () => {
+    isSupport = true;
 
     const element = create();
 
     expect(element.querySelector('.user-name')?.textContent).toContain('trader1');
-    expect(element.querySelector('.user .badge')?.textContent).toContain('Admin');
+    expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
   });
 
   it('shows whether the NYSE is open', () => {

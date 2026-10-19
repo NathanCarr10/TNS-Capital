@@ -124,12 +124,18 @@ def test_a_forged_token_is_rejected(monkeypatch):
     assert not app.metric
 
 
-def test_links_back_to_the_trading_dashboard(monkeypatch):
+def test_support_is_turned_away_and_pointed_to_the_trading_app(monkeypatch):
+    app = run_app(monkeypatch, FRAMES, signed_in_with=token(roles=["SUPPORT"], sub="support"))
+
+    assert "this dashboard is for admins only" in app.error[0].value
+    assert "trading app" in app.info[0].value
+    assert not app.metric
+
+
+def test_has_no_link_to_the_trading_apps_account_viewer(monkeypatch):
     app = run_app(monkeypatch, FRAMES)
 
-    [link] = app.sidebar.get("link_button")
-    assert link.proto.label == "Trading dashboard"
-    assert link.proto.url == "/portfolio"  # same origin as the Angular app, see docs/DECISIONS.md 13
+    assert not app.sidebar.get("link_button")  # traders' accounts are support's, not admins'
 
 
 def test_sign_out_returns_to_the_form(monkeypatch):
@@ -239,3 +245,19 @@ def test_operations_sections_with_no_rejections_or_dead_letters(monkeypatch):
     assert not app.exception
     assert "No orders have been rejected." in [info.value for info in app.info]
     assert {metric.label: metric.value for metric in app.metric}["Dead letters awaiting review"] == "0"
+
+
+def test_shows_strategy_orders_next_to_the_traders_own(monkeypatch):
+    live = TRADES.assign(strategy_name=["MA 20/50", None])
+    app = run_app(monkeypatch, {**FRAMES, "live": live})
+
+    assert not app.exception
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Orders placed by strategies"] == "1"
+    assert metrics["Strategies that traded"] == "1"
+
+
+def test_says_when_no_strategy_has_traded(monkeypatch):
+    app = run_app(monkeypatch, FRAMES)
+
+    assert any("No strategy has placed an order yet" in info.value for info in app.info)
