@@ -31,4 +31,12 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Query(value = "SELECT account_id FROM users WHERE username = :username AND account_id IS NOT NULL",
             nativeQuery = true)
     Optional<Long> findAccountIdByUsername(@Param("username") String username);
+
+    /**
+     * Whether the account's owner has switched a strategy on. The strategy
+     * service may only place orders on such an account (AccountAccessGuard).
+     */
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM strategies WHERE account_id = :accountId AND status = 'ACTIVE')",
+            nativeQuery = true)
+    boolean hasActiveStrategy(@Param("accountId") Long accountId);
 }

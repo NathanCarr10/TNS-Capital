@@ -81,6 +81,12 @@ public class KafkaConfig {
     public static final String TRADE_EVENTS_DLQ_TOPIC = "trade-events.dlq";
 
     /**
+     * Price updates from the pricing feed (spec §10.3), keyed by symbol.
+     * Consumed by the strategy service.
+     */
+    public static final String MARKET_DATA_TOPIC = "market-data";
+
+    /**
      * Creates the main orders topic.
      * 
      * Partitioned by Account ID (3 partitions) to ensure all orders for one
@@ -137,6 +143,22 @@ public class KafkaConfig {
         return TopicBuilder.name(TRADE_EVENTS_DLQ_TOPIC)
                 .partitions(1)
                 .replicas(1)
+                .build();
+    }
+
+    /**
+     * Creates the market-data topic: live prices and replayed bars, keyed by
+     * symbol so each symbol's prices stay in order. Prices are only useful
+     * while fresh, so they are kept for a day.
+     *
+     * @return NewTopic bean for the market-data topic
+     */
+    @Bean
+    public NewTopic marketDataTopic() {
+        return TopicBuilder.name(MARKET_DATA_TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .config("retention.ms", String.valueOf(24L * 60 * 60 * 1000))
                 .build();
     }
 
