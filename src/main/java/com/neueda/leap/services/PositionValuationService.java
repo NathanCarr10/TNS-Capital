@@ -51,6 +51,8 @@ public class PositionValuationService {
                 position.getAccountId(),
                 position.getSymbol(),
                 position.getQuantity(),
+                position.getReservedQuantity(),
+                position.getAvailableQuantity(),
                 position.getAverageCost(),
                 marketValue);
     }
