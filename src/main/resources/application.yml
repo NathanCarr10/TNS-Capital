@@ -114,6 +114,12 @@ management:
     db:
       enabled: true
 
+# The metrics in Prometheus format, served at /metrics on their own port for the monitoring
+# stack (MetricsServer). 0 turns it off; Docker Compose sets 9464, which only the Compose
+# network can reach. The actuator on the API port stays admin-only.
+metrics:
+  port: ${METRICS_PORT:0}
+
 springdoc:
   swagger-ui:
     enabled: true
