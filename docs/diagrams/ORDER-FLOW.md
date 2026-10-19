@@ -36,7 +36,7 @@ sequenceDiagram
     K->>OL: OrderEvent
     OL->>OS: processOrderEvent(event)
     OS->>OS: OrderValidator: account ACTIVE, instrument tradable
-    OS->>OS: checkAffordable: cash >= 2 x $100
+    OS->>DB: lock the account, reserve 2 x $100 of its available cash
     OS->>B: POST /api/v1/orders (limit $100, live market price)
     B-->>OS: 202 Accepted
     Note over B: simulated market delay (0.5 to 2 s)
@@ -47,6 +47,7 @@ sequenceDiagram
     rect rgba(127, 127, 127, 0.12)
         Note over OS,DB: one transaction, the order row locked
         OS->>DB: order still NEW?
+        OS->>OS: release the reserved 2 x $100
         OS->>OS: BuyOrderStrategy: Account.debit(cost)
         OS->>OS: Position.apply(+2, fill price)
         OS->>DB: save account, position, execution, order FILLED, order history
@@ -87,7 +88,7 @@ sequenceDiagram
 
     K->>OL: OrderEvent (SELL 5 MSFT, 3 held)
     OL->>OS: processOrderEvent(event)
-    OS->>OS: checkAffordable: held 3 < 5
+    OS->>OS: reserve 5 shares: 3 available < 5
     OS->>DB: order REJECTED, statusReason "Insufficient holdings"
     OS->>K: TradeEvent REJECTED to "trade-events"
     OS-->>OL: InsufficientHoldingsException
@@ -104,9 +105,10 @@ sequenceDiagram
 - **Retryable or not:** a missing account or instrument is `NonRetryableOrderException`, so its
   DLQ entry is marked non-retryable; a broker outage (`BrokerUnavailableException`) can be
   replayed once the broker is back.
-- **At settlement:** the funds or holdings are checked again inside the settlement transaction.
-  If they changed while the broker worked (for example, the trader withdrew cash), the fill is
-  recorded as `REJECTED` instead of overdrawing the account.
+- **Reservations:** an accepted order holds its cash or shares until it is filled, cancelled or
+  rejected, so a second order (or a withdrawal) only sees what is left and is the one refused;
+  the fill of the first one always settles. A rejection releases the hold, and a DLQ replay
+  reserves it again.
 
 ## 3. Cancelling an open order
 
@@ -125,6 +127,7 @@ sequenceDiagram
     API->>OS: cancelOrder(id)
     OS->>DB: lock the order row: still NEW?
     alt still NEW
+        OS->>DB: release its reserved cash or shares
         OS->>DB: order CANCELLED, order history
         OS-->>API: CANCELLED
         API-->>UI: 200, status CANCELLED
@@ -141,4 +144,5 @@ sequenceDiagram
 
 Both `cancelOrder` and `settleExecution` lock the order row, so a cancel and a fill can never
 both win: whichever takes the lock first decides, and the other sees the order is no longer
-`NEW`. Cash is only moved at settlement, so a cancelled order never spends anything.
+`NEW`. Cash is only moved at settlement, so a cancelled order never spends anything, and
+cancelling gives back what it reserved.
