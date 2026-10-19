@@ -35,6 +35,16 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
       throw new Error('ADMIN_PASSWORD is a published placeholder or default. Choose your own.');
     }
   }
+  // Optional: without it the strategy service cannot log in (POST /auth/token refuses it)
+  const strategySecret = config.STRATEGY_CLIENT_SECRET;
+  if (strategySecret !== undefined && strategySecret !== '') {
+    if (typeof strategySecret !== 'string' || strategySecret.length < 32) {
+      throw new Error('STRATEGY_CLIENT_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32');
+    }
+    if (isPlaceholder(strategySecret)) {
+      throw new Error('STRATEGY_CLIENT_SECRET is the placeholder from .env.example. Generate one with: openssl rand -hex 32');
+    }
+  }
   const rateLimit = config.AUTH_RATE_LIMIT;
   if (rateLimit !== undefined && !(Number.isInteger(Number(rateLimit)) && Number(rateLimit) > 0)) {
     throw new Error('AUTH_RATE_LIMIT must be a positive whole number.');
