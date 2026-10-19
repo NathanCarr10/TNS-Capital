@@ -16,7 +16,9 @@
 
   <div class="main">
     <header class="topbar">
-      <app-symbol-search />
+      @if (!isSupport) {
+        <app-symbol-search />
+      }
 
       <div class="topbar-actions">
         <span
