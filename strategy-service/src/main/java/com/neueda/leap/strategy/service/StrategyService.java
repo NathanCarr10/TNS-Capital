@@ -111,8 +111,9 @@ public class StrategyService {
         Map<String, Number> params = RuleFactory.withDefaults(request.ruleType(), request.params());
         Strategy strategy = strategies.save(new Strategy(accountId, request.name().trim(), request.symbol(),
                 request.ruleType(), params, request.quantity()));
+        String rule = strategy.rule().describe();
         log.info("Strategy {} created by {} on account {}: {} {}", strategy.getId(), caller.username(), accountId,
-                request.symbol(), strategy.rule().describe());
+                request.symbol(), rule);
         return toResponse(strategy);
     }
 

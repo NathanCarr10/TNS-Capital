@@ -55,9 +55,11 @@ describe('StrategyLabService', () => {
   });
 
   it("reads the strategies against the trader's own trading", () => {
-    service.performance().subscribe();
+    let accountId: number | undefined;
+    service.performance().subscribe((performance) => (accountId = performance.accountId));
 
     httpMock.expectOne({ method: 'GET', url: '/api/v1/strategies/performance' }).flush({ accountId: 11 });
+    expect(accountId).toBe(11);
   });
 
   it('runs a backtest', () => {

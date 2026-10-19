@@ -10,7 +10,6 @@ import org.springframework.security.authorization.AuthorityAuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -88,8 +87,10 @@ public class SecurityConfig {
                 AuthenticatedAuthorizationManager.authenticated(),
                 AuthorizationManagers.not(AuthorityAuthorizationManager.hasRole("STRATEGY")));
         http
-                // Bearer tokens in a header, never cookies: nothing for CSRF to forge
-                .csrf(AbstractHttpConfigurer::disable)
+                // Clients authenticate with a bearer token in the Authorization header, never a
+                // cookie, and no session is created. A browser cannot attach the token to a forged
+                // cross-site request, so CSRF protection adds nothing here (as the trading API)
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::deny))
                 .authorizeHttpRequests(auth -> auth

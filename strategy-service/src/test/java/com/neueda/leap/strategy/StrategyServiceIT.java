@@ -56,6 +56,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -255,21 +256,14 @@ class StrategyServiceIT {
         }
     }
 
-    private List<StrategySignal> awaitSignals(int count) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
-        List<StrategySignal> found = signals.findAll();
-        while (found.size() < count && System.nanoTime() < deadline) {
-            Thread.sleep(200);
-            found = signals.findAll();
-        }
-        return found;
+    private List<StrategySignal> awaitSignals(int count) {
+        await().atMost(Duration.ofSeconds(60)).until(() -> signals.count() >= count);
+        return signals.findAll();
     }
 
-    private void awaitPosition(long id, Position expected) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
-        while (strategies.findById(id).orElseThrow().getPosition() != expected && System.nanoTime() < deadline) {
-            Thread.sleep(100);
-        }
+    private void awaitPosition(long id, Position expected) {
+        await().atMost(Duration.ofSeconds(10))
+                .until(() -> strategies.findById(id).orElseThrow().getPosition() == expected);
     }
 
     @Test

@@ -166,7 +166,7 @@ describe('StrategyLabComponent', () => {
       quantity: 3,
     });
     expect(fixture.componentInstance.selectedId()).toBe(9);
-    expect(fixture.componentInstance.strategies().length).toBe(2);
+    expect(fixture.componentInstance.strategies()).toHaveSize(2);
   });
 
   it('refuses a name with characters used by scripts', () => {

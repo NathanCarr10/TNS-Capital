@@ -14,7 +14,7 @@ describe('layoutEquityCurve', () => {
 
     expect(layout.points.map((p) => p.x)).toEqual([50, 220, 390]);
     expect(layout.strategyLine.startsWith('M50.0,')).toBeTrue();
-    expect(layout.buyAndHoldLine.split('L').length).toBe(3);
+    expect(layout.buyAndHoldLine.split('L')).toHaveSize(3);
     // Higher values sit higher on the chart
     expect(layout.points[2].strategyY).toBeLessThan(layout.points[0].strategyY);
     expect(layout.points[1].buyAndHoldY).toBeGreaterThan(layout.points[1].strategyY);

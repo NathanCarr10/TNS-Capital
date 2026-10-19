@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Replays a past trading day on the market-data topic at high speed, so the
@@ -108,8 +109,8 @@ public class MarketReplayService {
 
         Replay replay = new Replay(UUID.randomUUID().toString(), symbol, date, bars, barsPerSecond, clock.now(),
                 startedBy);
-        replay.task = scheduler.scheduleAtFixedRate(() -> publishNext(replay), 0,
-                MICROS_PER_SECOND / barsPerSecond, TimeUnit.MICROSECONDS);
+        replay.task.set(scheduler.scheduleAtFixedRate(() -> publishNext(replay), 0,
+                MICROS_PER_SECOND / barsPerSecond, TimeUnit.MICROSECONDS));
         current = replay;
         log.info("Replay {} started by {}: {} on {}, {} bars at {} a second", replay.id, startedBy, symbol, date,
                 bars.size(), barsPerSecond);
@@ -132,7 +133,7 @@ public class MarketReplayService {
         if (current == null || !current.isRunning()) {
             throw new ReplayNotFoundException("No replay is running");
         }
-        current.task.cancel(false);
+        current.task.get().cancel(false);
         log.info("Replay {} stopped after {} of {} bars", current.id, current.published.get(), current.bars.size());
         return current.status();
     }
@@ -140,7 +141,7 @@ public class MarketReplayService {
     private void publishNext(Replay replay) {
         int index = replay.published.get();
         if (index >= replay.bars.size()) {
-            replay.task.cancel(false);
+            replay.task.get().cancel(false);
             log.info("Replay {} finished: {} bars published", replay.id, index);
             return;
         }
@@ -161,7 +162,7 @@ public class MarketReplayService {
         private final Instant startedAt;
         private final String startedBy;
         private final AtomicInteger published = new AtomicInteger();
-        private volatile ScheduledFuture<?> task;
+        private final AtomicReference<ScheduledFuture<?>> task = new AtomicReference<>();
 
         private Replay(String id, String symbol, LocalDate date, List<PriceBar> bars, int barsPerSecond,
                 Instant startedAt, String startedBy) {
@@ -175,7 +176,8 @@ public class MarketReplayService {
         }
 
         boolean isRunning() {
-            return task != null && !task.isDone();
+            ScheduledFuture<?> scheduled = task.get();
+            return scheduled != null && !scheduled.isDone();
         }
 
         ReplayStatus status() {

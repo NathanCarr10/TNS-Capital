@@ -12,6 +12,12 @@ public final class RuleFactory {
     public static final int DEFAULT_BOLLINGER_WINDOW = 20;
     public static final double DEFAULT_BOLLINGER_WIDTH = 2.0;
 
+    // The settings' names in strategies.rule_params and the API
+    static final String SHORT_WINDOW = "shortWindow";
+    static final String LONG_WINDOW = "longWindow";
+    static final String WINDOW = "window";
+    static final String WIDTH = "width";
+
     private RuleFactory() {
     }
 
@@ -22,11 +28,11 @@ public final class RuleFactory {
         Map<String, ? extends Number> settings = params == null ? Map.of() : params;
         return switch (type) {
             case MA_CROSSOVER -> new MovingAverageCrossoverRule(
-                    whole(settings, "shortWindow", DEFAULT_SHORT_WINDOW),
-                    whole(settings, "longWindow", DEFAULT_LONG_WINDOW));
+                    whole(settings, SHORT_WINDOW, DEFAULT_SHORT_WINDOW),
+                    whole(settings, LONG_WINDOW, DEFAULT_LONG_WINDOW));
             case BOLLINGER -> new BollingerBandRule(
-                    whole(settings, "window", DEFAULT_BOLLINGER_WINDOW),
-                    number(settings, "width", DEFAULT_BOLLINGER_WIDTH));
+                    whole(settings, WINDOW, DEFAULT_BOLLINGER_WINDOW),
+                    number(settings, WIDTH, DEFAULT_BOLLINGER_WIDTH));
         };
     }
 
@@ -38,11 +44,11 @@ public final class RuleFactory {
         create(type, settings);
         return switch (type) {
             case MA_CROSSOVER -> Map.of(
-                    "shortWindow", whole(settings, "shortWindow", DEFAULT_SHORT_WINDOW),
-                    "longWindow", whole(settings, "longWindow", DEFAULT_LONG_WINDOW));
+                    SHORT_WINDOW, whole(settings, SHORT_WINDOW, DEFAULT_SHORT_WINDOW),
+                    LONG_WINDOW, whole(settings, LONG_WINDOW, DEFAULT_LONG_WINDOW));
             case BOLLINGER -> Map.of(
-                    "window", whole(settings, "window", DEFAULT_BOLLINGER_WINDOW),
-                    "width", number(settings, "width", DEFAULT_BOLLINGER_WIDTH));
+                    WINDOW, whole(settings, WINDOW, DEFAULT_BOLLINGER_WINDOW),
+                    WIDTH, number(settings, WIDTH, DEFAULT_BOLLINGER_WIDTH));
         };
     }
 

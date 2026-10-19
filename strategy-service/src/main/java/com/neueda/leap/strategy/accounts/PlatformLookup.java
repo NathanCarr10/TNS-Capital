@@ -1,6 +1,7 @@
 package com.neueda.leap.strategy.accounts;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -53,9 +54,7 @@ public class PlatformLookup {
             return statuses;
         }
         named.query("SELECT id, status FROM orders WHERE id IN (:ids)", new MapSqlParameterSource("ids", orderIds),
-                row -> {
-                    statuses.put(row.getObject("id", UUID.class), row.getString("status"));
-                });
+                (RowCallbackHandler) row -> statuses.put(row.getObject("id", UUID.class), row.getString("status")));
         return statuses;
     }
 

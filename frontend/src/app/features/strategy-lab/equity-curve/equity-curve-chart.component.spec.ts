@@ -21,7 +21,7 @@ describe('EquityCurveChartComponent', () => {
   it('draws the strategy and buy-and-hold lines, described for screen readers', () => {
     const svg: SVGElement = fixture.nativeElement.querySelector('svg');
 
-    expect(svg.querySelectorAll('path.line').length).toBe(2);
+    expect(svg.querySelectorAll('path.line')).toHaveSize(2);
     expect(svg.getAttribute('role')).toBe('img');
     expect(svg.getAttribute('aria-label')).toBe(
       'Backtest from 2024-01-02 to 2024-12-31: the strategy ends at $12.5K, buying and holding at $11K.'

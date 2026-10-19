@@ -23,6 +23,7 @@ VALUE_LABEL = "Value ($)"
 # admins reach this page through the Angular app's origin (/analytics/)
 TRADING_DASHBOARD_URL = os.getenv("DASHBOARD_TRADING_URL", "/portfolio")
 ASSET_CLASS_LABEL = "Asset class"
+FILL_RATE_LABEL = "Fill rate"
 
 
 @st.cache_data(ttl=30)
@@ -117,7 +118,7 @@ average = insights.average_trade_size(trades)
 gap = insights.not_yet_in_batch(frames["live"], frames["batch"])
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Orders", f"{len(trades):,}")
-col2.metric("Fill rate", percent(rate))
+col2.metric(FILL_RATE_LABEL, percent(rate))
 col3.metric("Average trade size", money(average))
 col4.metric("Orders not yet in batch", f"{len(gap):,}", help="Live orders the next ETL run will load")
 
@@ -246,7 +247,7 @@ else:
     col3.metric("Strategies that traded", f"{by_strategy['strategy_name'].nunique():,}")
     st.dataframe(split, width="stretch", hide_index=True,
                  column_config={"placed_by": "Placed by", "orders": "Orders", "filled": "Filled",
-                                "fill_rate": st.column_config.NumberColumn("Fill rate", format="percent"),
+                                "fill_rate": st.column_config.NumberColumn(FILL_RATE_LABEL, format="percent"),
                                 "traded_value": st.column_config.NumberColumn("Filled value ($)", format="dollar")})
     st.dataframe(by_strategy, width="stretch", hide_index=True,
                  column_config={"strategy_name": "Strategy", "username": "Owner", "symbol": "Instrument",
@@ -267,7 +268,7 @@ else:
         column_config={
             "username": "User", "holder_name": "Holder", "account_number": "Account",
             "orders": "Orders", "filled": "Filled", "rejected": "Rejected",
-            "fill_rate": st.column_config.NumberColumn("Fill rate", format="percent"),
+            "fill_rate": st.column_config.NumberColumn(FILL_RATE_LABEL, format="percent"),
             "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
             "sell_value": st.column_config.NumberColumn("Sold ($)", format="dollar"),
             "top_symbol": "Top instrument",

@@ -15,7 +15,15 @@ export function isPlaceholder(value: string): boolean {
 }
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
-  const secret = config.JWT_SECRET;
+  checkJwtSecret(config.JWT_SECRET);
+  checkAdminPassword(config.ADMIN_PASSWORD);
+  checkStrategyClientSecret(config.STRATEGY_CLIENT_SECRET);
+  checkRateLimit(config.AUTH_RATE_LIMIT);
+  checkTrustProxy(config.AUTH_TRUST_PROXY);
+  return config;
+}
+
+function checkJwtSecret(secret: unknown): void {
   if (typeof secret !== 'string' || secret.length === 0) {
     throw new Error('JWT_SECRET is not set. Add it to .env or the environment.');
   }
@@ -26,35 +34,45 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   if (isPlaceholder(secret)) {
     throw new Error('JWT_SECRET is the placeholder from .env.example. Generate one with: openssl rand -hex 32');
   }
-  const adminPassword = config.ADMIN_PASSWORD;
-  if (adminPassword !== undefined && adminPassword !== '') {
-    if (typeof adminPassword !== 'string' || adminPassword.length < 12) {
-      throw new Error('ADMIN_PASSWORD must be at least 12 characters.');
-    }
-    if (isPlaceholder(adminPassword)) {
-      throw new Error('ADMIN_PASSWORD is a published placeholder or default. Choose your own.');
-    }
+}
+
+function checkAdminPassword(adminPassword: unknown): void {
+  if (adminPassword === undefined || adminPassword === '') {
+    return;
   }
-  // Optional: without it the strategy service cannot log in (POST /auth/token refuses it)
-  const strategySecret = config.STRATEGY_CLIENT_SECRET;
-  if (strategySecret !== undefined && strategySecret !== '') {
-    if (typeof strategySecret !== 'string' || strategySecret.length < 32) {
-      throw new Error('STRATEGY_CLIENT_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32');
-    }
-    if (isPlaceholder(strategySecret)) {
-      throw new Error('STRATEGY_CLIENT_SECRET is the placeholder from .env.example. Generate one with: openssl rand -hex 32');
-    }
+  if (typeof adminPassword !== 'string' || adminPassword.length < 12) {
+    throw new Error('ADMIN_PASSWORD must be at least 12 characters.');
   }
-  const rateLimit = config.AUTH_RATE_LIMIT;
+  if (isPlaceholder(adminPassword)) {
+    throw new Error('ADMIN_PASSWORD is a published placeholder or default. Choose your own.');
+  }
+}
+
+/** Optional: without it the strategy service cannot log in (POST /auth/token refuses it) */
+function checkStrategyClientSecret(strategySecret: unknown): void {
+  if (strategySecret === undefined || strategySecret === '') {
+    return;
+  }
+  if (typeof strategySecret !== 'string' || strategySecret.length < 32) {
+    throw new Error('STRATEGY_CLIENT_SECRET must be at least 32 characters. Generate one with: openssl rand -hex 32');
+  }
+  if (isPlaceholder(strategySecret)) {
+    throw new Error('STRATEGY_CLIENT_SECRET is the placeholder from .env.example. Generate one with: openssl rand -hex 32');
+  }
+}
+
+function checkRateLimit(rateLimit: unknown): void {
   if (rateLimit !== undefined && !(Number.isInteger(Number(rateLimit)) && Number(rateLimit) > 0)) {
     throw new Error('AUTH_RATE_LIMIT must be a positive whole number.');
   }
-  const trustProxy = config.AUTH_TRUST_PROXY;
-  if (trustProxy !== undefined) {
-    if (typeof trustProxy !== 'string') {
-      throw new TypeError('AUTH_TRUST_PROXY must be text: true, false, a number of hops or a list of addresses.');
-    }
-    parseTrustProxy(trustProxy);
+}
+
+function checkTrustProxy(trustProxy: unknown): void {
+  if (trustProxy === undefined) {
+    return;
   }
-  return config;
+  if (typeof trustProxy !== 'string') {
+    throw new TypeError('AUTH_TRUST_PROXY must be text: true, false, a number of hops or a list of addresses.');
+  }
+  parseTrustProxy(trustProxy);
 }

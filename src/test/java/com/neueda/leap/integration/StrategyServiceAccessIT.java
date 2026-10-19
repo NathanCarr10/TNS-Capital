@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -183,7 +183,7 @@ class StrategyServiceAccessIT extends AbstractIntegrationTest {
                 }
             }
 
-            assertTrue(received != null, "no ITMD price on market-data");
+            assertNotNull(received, "no ITMD price on market-data");
             JsonNode payload = objectMapper.readTree(received.value()).get("payload");
             assertEquals("LIVE", payload.get("source").asText());
             assertEquals(new BigDecimal("123.45"), payload.get("price").decimalValue());
