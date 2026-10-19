@@ -27,6 +27,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 
 /**
@@ -43,6 +44,9 @@ import java.util.function.Consumer;
  * The free plan allows one stream connection per account, so only one
  * instance of the app can stream at a time; another instance gets error 406
  * and keeps retrying, pricing orders over REST in the meantime.
+ *
+ * Its {@link State} and the trades received are published as metrics
+ * (OperationsMetrics) for the admin dashboard's Monitoring view.
  */
 @Component
 @Slf4j
@@ -64,7 +68,12 @@ public class AlpacaPriceStream {
         return thread;
     });
 
+    /** OFF: no API keys. CONNECTING: until the subscription is confirmed, and while reconnecting. FAILED: refused for good. */
+    public enum State { OFF, CONNECTING, STREAMING, FAILED }
+
     private volatile boolean running;
+    private volatile State state = State.OFF;
+    private final LongAdder tradesReceived = new LongAdder();
     private final AtomicReference<WebSocket> webSocket = new AtomicReference<>();
     private Duration reconnectDelay = MIN_RECONNECT_DELAY;
 
@@ -87,6 +96,7 @@ public class AlpacaPriceStream {
             return;
         }
         running = true;
+        state = State.CONNECTING;
         // Off the startup thread: fill the pool over REST first, so orders can be
         // priced straight away, then open the stream
         scheduler.execute(() -> {
@@ -98,6 +108,7 @@ public class AlpacaPriceStream {
     @PreDestroy
     public void stop() {
         running = false;
+        state = State.OFF;
         scheduler.shutdownNow();
         WebSocket current = webSocket.get();
         if (current != null) {
@@ -146,6 +157,7 @@ public class AlpacaPriceStream {
         if (!running) {
             return;
         }
+        state = State.CONNECTING;
         Duration delay = reconnectDelay;
         reconnectDelay = delay.multipliedBy(2).compareTo(MAX_RECONNECT_DELAY) > 0
                 ? MAX_RECONNECT_DELAY
@@ -183,6 +195,7 @@ public class AlpacaPriceStream {
                 case "success" -> onSuccess(event.path("msg").asText(), send);
                 case "subscription" -> {
                     log.info("Streaming Alpaca trades for {}", event.path("trades"));
+                    state = State.STREAMING;
                     resetReconnectDelay();
                 }
                 case "error" -> onError(event.path("code").asInt(), event.path("msg").asText());
@@ -218,6 +231,7 @@ public class AlpacaPriceStream {
             BigDecimal value = price.decimalValue();
             if (value.signum() > 0) {
                 prices.update(new PriceQuote(symbol, value, Instant.parse(tradedAt)));
+                tradesReceived.increment();
             }
         } catch (DateTimeParseException e) {
             log.debug("Ignoring trade with unreadable timestamp: {}", trade);
@@ -227,11 +241,20 @@ public class AlpacaPriceStream {
     private void onError(int code, String message) {
         if (FATAL_ERROR_CODES.contains(code)) {
             running = false;
+            state = State.FAILED;
             log.error("Alpaca price stream refused the connection ({} {}); live prices are off. "
                     + "Check ALPACA_API_KEY_ID, ALPACA_API_SECRET_KEY and ALPACA_FEED", code, message);
         } else {
             log.warn("Alpaca price stream error {}: {}", code, message);
         }
+    }
+
+    public State state() {
+        return state;
+    }
+
+    public long tradesReceived() {
+        return tradesReceived.sum();
     }
 
     private String toJson(Map<String, Object> message) {

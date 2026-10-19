@@ -3,7 +3,7 @@ import { Router, UrlTree } from '@angular/router';
 import { Observable, firstValueFrom, of, throwError } from 'rxjs';
 
 import { AnalyticsDashboardService } from '../analytics/analytics-dashboard.service';
-import { authGuard, notAdminGuard } from './auth.guard';
+import { authGuard, notAdminGuard, supportGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 
 describe('authGuard', () => {
@@ -97,5 +97,34 @@ describe('notAdminGuard', () => {
 
     expect(run()).toBeFalse();
     expect(analyticsSpy.open).toHaveBeenCalled();
+  });
+});
+
+describe('supportGuard', () => {
+  let isSupport: boolean;
+  const portfolioTree = {} as UrlTree;
+
+  const run = () => TestBed.runInInjectionContext(() => supportGuard({} as never, {} as never));
+
+  beforeEach(() => {
+    isSupport = false;
+    const routerSpy = jasmine.createSpyObj<Router>('Router', ['createUrlTree']);
+    routerSpy.createUrlTree.and.returnValue(portfolioTree);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
+        { provide: Router, useValue: routerSpy },
+      ],
+    });
+  });
+
+  it('lets support in', () => {
+    isSupport = true;
+
+    expect(run()).toBeTrue();
+  });
+
+  it('sends a trader to their portfolio', () => {
+    expect(run()).toBe(portfolioTree);
   });
 });

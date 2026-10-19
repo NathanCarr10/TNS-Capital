@@ -19,6 +19,7 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   checkStaffPasswords(config);
   checkStrategyClientSecret(config.STRATEGY_CLIENT_SECRET);
   checkRateLimit(config.AUTH_RATE_LIMIT);
+  checkMetricsPort(config.METRICS_PORT);
   checkTrustProxy(config.AUTH_TRUST_PROXY);
   return config;
 }
@@ -61,6 +62,12 @@ function checkStrategyClientSecret(strategySecret: unknown): void {
 function checkRateLimit(rateLimit: unknown): void {
   if (rateLimit !== undefined && !(Number.isInteger(Number(rateLimit)) && Number(rateLimit) > 0)) {
     throw new Error('AUTH_RATE_LIMIT must be a positive whole number.');
+  }
+}
+
+function checkMetricsPort(metricsPort: unknown): void {
+  if (metricsPort !== undefined && metricsPort !== '' && !(Number.isInteger(Number(metricsPort)) && Number(metricsPort) > 0)) {
+    throw new Error('METRICS_PORT must be a port number.');
   }
 }
 

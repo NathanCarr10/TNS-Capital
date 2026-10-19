@@ -23,6 +23,7 @@ be explained at the showcase and revisited later.
 | 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
 | 16 | Strategy Lab: automated strategy execution in its own service | §13.2 | Team decision |
 | 17 | Newsletter issues stored as JSONB snapshots, not child tables | — (newsletter story) | Team decision |
+| 18 | Monitoring on VictoriaMetrics, VictoriaLogs and the Streamlit dashboard; no Grafana or tracing | §22 (observability) | In place |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -279,3 +280,23 @@ place of that week's real issue. Demos before a Friday still need a published is
 `POST /api/v1/newsletters/publish` lets support publish the week so far, but only where
 `NEWSLETTER_EARLY_PUBLISH=true` (a demo environment); elsewhere it answers `403 NWS-403`.
 
+## 18. A small monitoring stack, shown in the dashboard
+
+The monitoring stack ([observability/README.md](../observability/README.md)) has to fit next to
+the rest of the stack on a developer machine with little free memory. The usual stack would
+need 0.8–1.5 GB: Prometheus (~300 MB), Grafana (~200 MB), Loki (300–500 MB) and Tempo or Jaeger
+(300–500 MB). Instead:
+
+- **VictoriaMetrics, not Prometheus.** It scrapes the same `/metrics` endpoints and answers the
+  same PromQL in about 40 MB. vmalert evaluates the alert rules in about 20 MB.
+- **VictoriaLogs and Fluent Bit, not Loki and Promtail.** About 30 MB together. Promtail is end of
+  life. Fluent Bit reads Docker's log files read-only rather than through the Docker socket.
+- **No Grafana.** Admins see alerts, metrics and logs in the analytics dashboard's Monitoring view,
+  behind the admin sign-in it already has. No second UI with its own users or published port.
+- **No tracing.** A tracing backend and a tracer in each JVM would cost more than the rest of the
+  stack together. The fill time histogram and the consumer lag show where an order is waiting.
+- **Off by default** (Compose profile `observability`), as it costs ~90 MB measured, 400 MB at
+  its limits.
+
+The stack closes OWASP A09-5: alerts on reused refresh tokens (A09-1), failed login spikes
+(A09-2), refused and failing API requests, and dead letters waiting for review (A09-4).

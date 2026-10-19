@@ -31,7 +31,13 @@
         } @else {
           @for (row of rows(); track row.symbol) {
             <tr>
-              <td class="symbol"><a class="symbol-link" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a></td>
+              <td class="symbol">
+                @if (linkSymbols()) {
+                  <a class="symbol-link" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a>
+                } @else {
+                  {{ row.symbol }}
+                }
+              </td>
               <td class="numeric">
                 {{ row.quantity | number }}
                 @if (row.reservedQuantity > 0) {

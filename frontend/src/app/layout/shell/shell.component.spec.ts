@@ -67,13 +67,19 @@ describe('ShellComponent', () => {
     ]);
   });
 
-  it('gives support no Settings link, as they have no account of their own', () => {
+  it('gives support Dead Letters instead of Trade and Settings, and no symbol search', () => {
     isSupport = true;
 
     const element = create();
 
-    expect(navLinks(element).map(([label]) => label)).not.toContain('Settings');
-    expect(navLinks(element).map(([label]) => label)).toContain('Strategy Lab');
+    expect(navLinks(element)).toEqual([
+      ['Portfolio', '/portfolio'],
+      ['Order History', '/orders'],
+      ['Strategy Lab', '/strategies'],
+      ['Newsletter', '/newsletter'],
+      ['Dead Letters', '/dead-letters'],
+    ]);
+    expect(element.querySelector('app-symbol-search')).toBeNull();
   });
 
   it("shows the account holder's name, initials and account number", () => {

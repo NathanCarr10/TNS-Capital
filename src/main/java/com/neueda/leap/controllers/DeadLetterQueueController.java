@@ -25,7 +25,8 @@ import java.util.UUID;
  * Provides administrative endpoints for reviewing, replaying, and dismissing
  * failed order messages that were routed to the DLQ.
  * 
- * All endpoints require ADMIN role for access.
+ * All endpoints require the ADMIN or SUPPORT role: admins run operations,
+ * and support staff close the tickets of the traders they look after.
  */
 @RestController
 @RequestMapping("/api/v1/dlq")
@@ -50,12 +51,12 @@ public class DeadLetterQueueController {
      * @param failureType optional failure type filter
      * @return ResponseEntity with list of DLQ message DTOs
      */
-    @Operation(summary = "List dead-letter messages", description = "Admins only. Filter by status and failure type.")
+    @Operation(summary = "List dead-letter messages", description = "Admins and support. Filter by status and failure type.")
     @ApiResponse(responseCode = "200", description = "OK")
     @ApiResponse(responseCode = "400", description = "Unknown status or failure type (empty body)")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins and support only")
     @GetMapping("/messages")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT')")
     public ResponseEntity<List<DeadLetterMessageDTO>> getDLQMessages(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String failureType) {
@@ -99,12 +100,12 @@ public class DeadLetterQueueController {
      * @param id the UUID of the DLQ message
      * @return ResponseEntity with the DLQ message DTO, or 404 if not found
      */
-    @Operation(summary = "Get a dead-letter message", description = "Admins only.")
+    @Operation(summary = "Get a dead-letter message", description = "Admins and support.")
     @ApiResponse(responseCode = "200", description = "OK")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins and support only")
     @ApiResponse(responseCode = "404", description = "No such message (empty body)")
     @GetMapping("/messages/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT')")
     public ResponseEntity<DeadLetterMessageDTO> getDLQMessage(@PathVariable UUID id) {
         return dlqRepository.findById(id)
                 .map(message -> {
@@ -129,12 +130,12 @@ public class DeadLetterQueueController {
      * @param id the UUID of the DLQ message to replay
      * @return 200 with the updated DLQ message, or 404 if it does not exist
      */
-    @Operation(summary = "Replay a dead-letter message", description = "Admins only. Sends the order through the Trade Executor again.")
+    @Operation(summary = "Replay a dead-letter message", description = "Admins and support. Sends the order through the Trade Executor again.")
     @ApiResponse(responseCode = "200", description = "OK")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins and support only")
     @ApiResponse(responseCode = "404", description = "No such message (empty body)")
     @PostMapping("/messages/{id}/replay")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT')")
     public ResponseEntity<DeadLetterMessageDTO> replayMessage(@PathVariable UUID id) {
         if (!dlqRepository.existsById(id)) {
             log.warn("DLQ message not found for replay: id={}", id);
@@ -163,12 +164,12 @@ public class DeadLetterQueueController {
      * @param adminNotes optional notes from the admin
      * @return ResponseEntity with 204 No Content on success
      */
-    @Operation(summary = "Dismiss a dead-letter message", description = "Admins only. The order stays REJECTED.")
+    @Operation(summary = "Dismiss a dead-letter message", description = "Admins and support. The order stays REJECTED.")
     @ApiResponse(responseCode = "204", description = "Dismissed")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins and support only")
     @ApiResponse(responseCode = "500", description = "The message could not be dismissed (empty body)")
     @DeleteMapping("/messages/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT')")
     public ResponseEntity<Void> dismissMessage(
             @PathVariable UUID id,
             @RequestParam(required = false) String adminNotes) {
@@ -192,12 +193,12 @@ public class DeadLetterQueueController {
      * 
      * @return ResponseEntity with DLQ statistics
      */
-    @Operation(summary = "Dead-letter queue statistics", description = "Admins only.")
+    @Operation(summary = "Dead-letter queue statistics", description = "Admins and support.")
     @ApiResponse(responseCode = "200", description = "OK")
-    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
+    @ApiResponse(responseCode = "403", description = "AUTH-403 Admins and support only")
     @ApiResponse(responseCode = "500", description = "The statistics could not be read (empty body)")
     @GetMapping("/statistics")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT')")
     public ResponseEntity<DLQStatistics> getDLQStatistics() {
         try {
             long pendingCount = dlqRepository.countByStatus(DLQStatus.PENDING);

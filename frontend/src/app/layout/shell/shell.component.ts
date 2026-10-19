@@ -34,15 +34,24 @@ export class ShellComponent {
 
   readonly isSupport = this.store.isSupport;
 
-  // Support staff have no account of their own, so there are no settings to show them
-  readonly nav: NavItem[] = [
-    { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
-    { label: 'Trade', link: '/trade', icon: 'trade' },
-    { label: 'Order History', link: '/orders', icon: 'history' },
-    { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
-    { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
-    ...(this.isSupport ? [] : [{ label: 'Settings', link: '/settings', icon: 'settings' as const }]),
-  ];
+  // Support staff neither trade nor have an account of their own, so they get no trade page or
+  // settings; they watch strategies read-only, read the newsletter and close dead letters instead
+  readonly nav: NavItem[] = this.isSupport
+    ? [
+        { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
+        { label: 'Order History', link: '/orders', icon: 'history' },
+        { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
+        { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
+        { label: 'Dead Letters', link: '/dead-letters', icon: 'inbox' },
+      ]
+    : [
+        { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
+        { label: 'Trade', link: '/trade', icon: 'trade' },
+        { label: 'Order History', link: '/orders', icon: 'history' },
+        { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
+        { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
+        { label: 'Settings', link: '/settings', icon: 'settings' },
+      ];
 
   private readonly now = signal(new Date());
   readonly market = computed(() => nyseStatus(this.now()));

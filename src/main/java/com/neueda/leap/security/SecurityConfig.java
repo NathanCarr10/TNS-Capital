@@ -41,7 +41,8 @@ import java.time.ZoneOffset;
  *   roles are kept apart (docs/DECISIONS.md, "Roles"):
  *   - SUPPORT: opening accounts, suspending or reactivating them and changing
  *     instruments; AccountAccessGuard lets support see every account
- *   - ADMIN: every dead-letter queue endpoint and the actuator (operations)
+ *   - ADMIN: the actuator (operations)
+ *   - Both: every dead-letter queue endpoint
  *   Everything else is limited to the caller's own account by AccountAccessGuard
  * - /actuator/health is public so containers and load balancers can probe it;
  *   only admins see its details. Metrics and info need the ADMIN role

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.DisplayName;
@@ -12,11 +13,14 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.kafka.core.KafkaTemplate;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.neueda.leap.enums.OrderSide;
 import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.TradeEvent;
+import com.neueda.leap.metrics.TradingMetrics;
 import com.neueda.leap.model.Order;
 import com.neueda.leap.services.TradeEventAuditService;
 import com.neueda.leap.time.FixedClock;
@@ -33,7 +37,8 @@ class TradeEventAuditListenerTest {
         when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(new CompletableFuture<>());
         Order order = new Order(11L, "ACME", OrderSide.BUY, 10, new BigDecimal("30.00"), "key-1", new FixedClock());
         order.setStatus(OrderStatus.REJECTED);
-        new TradeEventPublisher(kafkaTemplate, objectMapper, "trade-events").publish(order, OrderStatus.NEW,
+        new TradeEventPublisher(kafkaTemplate, objectMapper, "trade-events",
+                new TradingMetrics(new SimpleMeterRegistry(), Instant::now)).publish(order, OrderStatus.NEW,
                 "Insufficient funds");
         ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
         verify(kafkaTemplate).send(eq("trade-events"), eq("11"), json.capture());

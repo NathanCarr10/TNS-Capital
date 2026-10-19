@@ -22,11 +22,28 @@ or support user who signs in is turned away, and no data is loaded until an admi
 Support staff work in the Angular trading app instead (decision 10 in
 [docs/DECISIONS.md](../docs/DECISIONS.md)).
 
+The sidebar switches between the trading insights below and the [Monitoring](#monitoring) view.
+
 Admins who sign in through the Angular trading app are sent here. The admin signs in here
 separately, as Streamlit cannot read the Angular app's token; see decision 12.
 
-The token is checked again on every interaction, so when it expires (15 minutes) the page
-goes back to the sign-in form. The admin is `admin`, with the `ADMIN_PASSWORD` from `.env`.
+The admin is `admin`, with the `ADMIN_PASSWORD` from `.env`.
+
+### Staying signed in
+
+A page reload keeps the admin signed in, for up to 8 hours from sign-in
+(`DASHBOARD_SESSION_HOURS`). [sessions.py](sessions.py) keeps the access and refresh tokens
+on the server, under a random session id. The browser only gets that id, in the
+`tns_dashboard_session` cookie: path `/analytics`, `SameSite=Strict`, and `Secure` over
+HTTPS. Streamlit cannot send `Set-Cookie` headers, so the page sets the cookie from a
+script. It is therefore not `HttpOnly`, which is why it carries no token.
+
+The token is still checked on every interaction. When the access token expires (15 minutes),
+the dashboard swaps it for a new one through `POST /auth/refresh`, once per session even with
+several tabs open, as presenting a refresh token twice looks like theft (OWASP A09-1). The admin
+goes back to the sign-in form only when the 8 hours are up, the refresh is refused or the
+dashboard restarts, which forgets every session. **Sign out** ends the session here and at the
+auth service (`POST /auth/logout`) and clears the cookie.
 
 ## Insights
 
@@ -69,14 +86,41 @@ schema has no rejection reasons or execution times:
   (`dlq_messages`) is summarised by failure type. It is read-only here: retrying and
   dismissing messages stays with the DLQ admin API.
 
+## Monitoring
+
+The **Monitoring** view (sidebar) shows the monitoring stack: alerts, metrics and every
+service's logs ([observability/README.md](../observability/README.md)). It needs the stack
+running (`docker compose --profile observability up -d`); otherwise it says how to start it.
+While alerts are firing, the sidebar says so on every view.
+
+| Section | Shows | Source |
+|---|---|---|
+| Alerts | Firing and pending alerts, most severe first: what happened, what to do, OWASP finding | vmalert |
+| Services | Whether the API, auth service and broker can be scraped; the Alpaca price stream's state | `up`, `marketdata_stream_state` |
+| Order pipeline | Orders accepted; 95th percentile time to fill; dead letters awaiting review; largest consumer lag. Charts: orders accepted by side, finished by outcome, median and 95th percentile fill time, consumer lag by group, dead letters | `trading_*`, `kafka_consumer_group_lag` |
+| Security events | Failed logins, reused refresh tokens, API 401/403 and 5xx over the period. Charts: logins by outcome, refused or failed API requests by status | `auth_*`, `http_server_requests_seconds_count` |
+| Resources | Heap in use by service | `jvm_memory_used_bytes`, `nodejs_heap_used_bytes` |
+| Logs | Search by text, service and level, newest first; saved searches for failed logins, refresh token reuse, access denied and errors | VictoriaLogs |
+
+The period (15 minutes to 7 days) applies to every number and chart. With **Live** on (the
+default) the panels refresh every 10 s, the scrape interval, without reloading the page; turn
+it off to read a chart without it moving. Rates have no fixed window: each point covers its
+own step (10 s over 15 minutes), so a burst of orders shows straight away rather than being
+smoothed over five minutes. The log search text is sent as a quoted phrase, so it cannot change the
+query. `monitoring.py` holds the queries and turns the answers into DataFrames;
+`monitoring_page.py` draws the view.
+
 ## Files
 
 | File | What it does |
 |---|---|
 | [auth.py](auth.py) | Signs in through the auth service and checks the token is a valid admin one |
+| [sessions.py](sessions.py) | Keeps signed-in admins' tokens on the server, so a reload stays signed in |
 | [data.py](data.py) | Loads the live and batch data from PostgreSQL into DataFrames |
 | [insights.py](insights.py) | Pure pandas functions, one per insight; no database or UI code |
 | [app.py](app.py) | The Streamlit page: headline numbers, insight sentences and Plotly charts |
+| [monitoring.py](monitoring.py) | Queries the monitoring stack: PromQL, alerts, LogsQL |
+| [monitoring_page.py](monitoring_page.py) | The Monitoring view |
 | [tests/](tests/) | pytest unit tests for every insight function |
 
 ## Running it
@@ -101,6 +145,7 @@ streamlit run app.py         # reads DB_USER and DB_PASSWORD from the repo's .en
 | `DB_USER`, `DB_PASSWORD` | from `.env` |
 | `DASHBOARD_AUTH_URL` | `http://localhost:4000` (compose: `http://auth-service:4000`) |
 | `JWT_SECRET` | from `.env`; must be the auth service's secret |
+| `MONITORING_METRICS_URL`, `MONITORING_ALERTS_URL`, `MONITORING_LOGS_URL` | unset, so Monitoring is off (compose: the `observability` services) |
 
 The auth service has to be running to sign in: `docker compose up -d auth-service`.
 
@@ -118,7 +163,11 @@ python -m pytest
 - `tests/test_auth.py`: token checks with real signed JWTs (expired, wrong signature,
   issuer, type or algorithm, no roles) and the sign-in call with a fake HTTP client
 - `tests/test_app.py`: the Streamlit page rendered headlessly (`AppTest`) with fake data:
-  sign-in, traders turned away, expired and forged sessions, sign-out, and the per-user view
+  sign-in, traders turned away, expired and forged sessions, sign-out, the per-user view, and
+  the Monitoring view with the stack running, down and not configured
+- `tests/test_sessions.py`: the session store: expiry, token rotation, one refresh for many tabs
+- `tests/test_monitoring.py`: the monitoring stack's answers parsed into DataFrames, and the
+  LogsQL the log search sends, with a fake HTTP client
 - `tests/integration/test_data_postgres.py`: `data.py` against a real database. Skipped
   unless `DASHBOARD_IT=1`; it drops and recreates tables, so only point it at a throwaway
   database (see the file for a one-line setup)

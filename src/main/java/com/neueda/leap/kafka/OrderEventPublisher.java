@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
+import com.neueda.leap.metrics.TradingMetrics;
 import com.neueda.leap.model.Order;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,16 +36,19 @@ public class OrderEventPublisher {
     private final ObjectMapper objectMapper;
     private final String ordersTopic;
     private final long sendTimeoutMs;
+    private final TradingMetrics metrics;
 
     public OrderEventPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
             @Value("${trading.kafka.topics.orders:orders}") String ordersTopic,
-            @Value("${trading.kafka.send-timeout-ms:5000}") long sendTimeoutMs) {
+            @Value("${trading.kafka.send-timeout-ms:5000}") long sendTimeoutMs,
+            TradingMetrics metrics) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.ordersTopic = ordersTopic;
         this.sendTimeoutMs = sendTimeoutMs;
+        this.metrics = metrics;
     }
 
     /**
@@ -68,6 +72,7 @@ public class OrderEventPublisher {
                     order.getId(), ordersTopic,
                     result.getRecordMetadata().partition(),
                     result.getRecordMetadata().offset());
+            metrics.orderAccepted(order);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new OrderPublishException("Interrupted while queuing order " + order.getId(), ex);
