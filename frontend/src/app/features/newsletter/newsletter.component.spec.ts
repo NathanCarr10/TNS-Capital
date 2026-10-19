@@ -67,7 +67,7 @@ describe('NewsletterComponent', () => {
     newsletterApi = jasmine.createSpyObj<NewsletterControllerService>('NewsletterControllerService', [
       'listIssues',
       'getIssue',
-      'generateIssue',
+      'previewIssue',
     ]);
     newsletterApi.listIssues.and.returnValue(of(SUMMARIES) as never);
     newsletterApi.getIssue.and.returnValue(of(ISSUE) as never);
@@ -157,26 +157,49 @@ describe('NewsletterComponent', () => {
     expect(texts(element, '.note.error')).toEqual(['The requested newsletter issue could not be found']);
   });
 
-  it('shows traders no publish button', () => {
+  it('shows traders no preview button', () => {
     const element = create();
 
     expect(element.querySelector('.header-actions .btn-primary')).toBeNull();
   });
 
-  it("lets admins publish this week's issue and opens it", () => {
-    newsletterApi.generateIssue.and.returnValue(of({ ...ISSUE, id: 3 }) as never);
+  it("lets admins preview this week's issue without publishing it", () => {
+    const preview: NewsletterResponse = {
+      ...ISSUE,
+      id: null,
+      weekStart: '2026-10-19',
+      gainers: [{ symbol: 'NVDA', name: 'NVIDIA Corp', startClose: 100, endClose: 110, changePct: 10 }],
+    };
+    newsletterApi.previewIssue.and.returnValue(of(preview) as never);
     const element = create({ isAdmin: true });
     const router = TestBed.inject(Router);
     spyOn(router, 'navigate').and.resolveTo(true);
 
     element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
+    fixture.detectChanges();
 
-    expect(newsletterApi.generateIssue).toHaveBeenCalled();
-    expect(router.navigate).toHaveBeenCalledWith(['/newsletter', 3]);
+    expect(texts(element, '.preview-banner strong')).toEqual(['Preview, not published.']);
+    expect(texts(element, 'header p.muted')[0]).toContain('Week of Oct 19, 2026 · built');
+    expect(texts(element, 'tbody .symbol')[0]).toBe('NVDA');
+    expect(element.querySelector('.issue-picker')).toBeNull();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
-  it('shows why publishing failed', () => {
-    newsletterApi.generateIssue.and.returnValue(
+  it('goes back to the published issue when the preview is closed', () => {
+    newsletterApi.previewIssue.and.returnValue(of({ ...ISSUE, id: null, weekStart: '2026-10-19' }) as never);
+    const element = create({ isAdmin: true });
+    element.querySelector<HTMLButtonElement>('.header-actions .btn-primary')!.click();
+    fixture.detectChanges();
+
+    element.querySelector<HTMLButtonElement>('.preview-banner button')!.click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.preview-banner')).toBeNull();
+    expect(texts(element, 'header p.muted')[0]).toContain('Week of Oct 12, 2026 · published');
+  });
+
+  it('shows why the preview failed', () => {
+    newsletterApi.previewIssue.and.returnValue(
       throwError(
         () =>
           new HttpErrorResponse({
@@ -191,5 +214,6 @@ describe('NewsletterComponent', () => {
     fixture.detectChanges();
 
     expect(texts(element, '[role="alert"]')).toEqual(['Market data is unavailable right now; try again later']);
+    expect(element.querySelector('.preview-banner')).toBeNull();
   });
 });

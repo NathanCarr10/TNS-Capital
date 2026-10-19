@@ -218,6 +218,39 @@ class NewsletterServiceTest {
     }
 
     @Test
+    @DisplayName("Previews the week so far without saving it")
+    void previewsWithoutSaving() {
+        clock.setNow(Instant.parse("2026-10-14T15:00:00Z"));
+        instrument("AAPL", "100", "110");
+
+        NewsletterIssue preview = service.previewWeeklyIssue();
+
+        assertNull(preview.getId());
+        assertEquals(WEEK_START, preview.getWeekStart());
+        assertEquals(List.of("AAPL"), symbols(preview.getGainers()));
+        verify(issueRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Previews from the latest prices even when the week's issue was published")
+    void previewIgnoresPublishedIssue() {
+        when(issueRepository.findByWeekStart(WEEK_START)).thenReturn(Optional.of(
+                new NewsletterIssue(WEEK_START, NOW, List.of(), List.of(), List.of())));
+        instrument("AAPL", "100", "90");
+
+        NewsletterIssue preview = service.previewWeeklyIssue();
+
+        assertEquals(List.of("AAPL"), symbols(preview.getLosers()));
+        verify(issueRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A preview without prices fails like publishing does")
+    void previewWithoutPrices() {
+        assertThrows(MarketDataUnavailableException.class, service::previewWeeklyIssue);
+    }
+
+    @Test
     @DisplayName("Asks for news about the movers since the start of the week")
     void asksForMoverNews() {
         instrument("AAPL", "100", "110");

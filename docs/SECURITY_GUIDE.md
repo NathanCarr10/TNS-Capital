@@ -522,7 +522,7 @@ GET    /api/v1/positions/{id}  - List positions (owner or ADMIN)
 *      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
 GET    /api/v1/newsletters     - List newsletter issues (any signed-in user)
 GET    /api/v1/newsletters/{id} - Get a newsletter issue (any signed-in user)
-POST   /api/v1/newsletters/generate - Publish this week's issue now (ADMIN)
+GET    /api/v1/newsletters/preview - Preview this week's issue, not saved (ADMIN)
 ```
 
 ### Public Endpoints (No Auth Required)

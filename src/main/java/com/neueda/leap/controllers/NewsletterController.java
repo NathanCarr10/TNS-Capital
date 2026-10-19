@@ -14,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,8 +22,8 @@ import java.util.Objects;
 
 /**
  * The weekly market newsletter. Every signed-in trader reads the same issues;
- * a scheduled job publishes one each Friday, and admins can publish the
- * current week's early, e.g. for a demo.
+ * a scheduled job publishes one each Friday. Admins can preview the current
+ * week's, e.g. for a demo; a preview is not saved.
  */
 @RestController
 @RequestMapping("/api/v1/newsletters")
@@ -52,16 +51,20 @@ public class NewsletterController {
         return ResponseEntity.ok(toResponse(newsletterService.issue(id)));
     }
 
-    /** Publishing early is an admin task; traders wait for the weekly job. */
-    @Operation(summary = "Publish this week's newsletter",
-            description = "Admins only. Covers the week so far; if this week's issue was published already, returns it.")
-    @ApiResponse(responseCode = "200", description = "This week's issue")
+    /**
+     * Previews are for admins (they cost an Alpaca call per instrument). Nothing
+     * is saved, so a preview never replaces the issue the weekly job publishes.
+     */
+    @Operation(summary = "Preview this week's newsletter",
+            description = "Admins only. Builds the week so far from the latest prices and news without publishing it; "
+                    + "the preview has no id.")
+    @ApiResponse(responseCode = "200", description = "This week's issue so far, not saved")
     @ApiResponse(responseCode = "403", description = "AUTH-403 Admins only")
     @ApiResponse(responseCode = "503", description = "MKT-503 No prices to rank the week's movers")
-    @PostMapping("/generate")
+    @GetMapping("/preview")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<NewsletterResponse> generateIssue() {
-        return ResponseEntity.ok(toResponse(newsletterService.publishWeeklyIssue()));
+    public ResponseEntity<NewsletterResponse> previewIssue() {
+        return ResponseEntity.ok(toResponse(newsletterService.previewWeeklyIssue()));
     }
 
     private static NewsletterResponse toResponse(NewsletterIssue issue) {

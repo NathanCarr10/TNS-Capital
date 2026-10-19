@@ -1,8 +1,8 @@
 package com.neueda.leap.integration;
 
 import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import java.math.BigDecimal;
@@ -24,9 +24,9 @@ import com.neueda.leap.repositories.NewsletterIssueRepository;
 
 /**
  * The newsletter endpoints: every signed-in trader reads the issues, only
- * admins publish one early. Alpaca is switched off in tests, so publishing
+ * admins preview this week's. Alpaca is switched off in tests, so a preview
  * here can only show the no-prices failure; NewsletterServiceTest covers
- * publishing with prices.
+ * previews with prices.
  */
 @DisplayName("Newsletter API")
 @WithMockUser(username = "trader", roles = "USER")
@@ -101,19 +101,20 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Refuses to let traders publish an issue")
-    void tradersCannotPublish() throws Exception {
-        mockMvc.perform(post("/api/v1/newsletters/generate"))
+    @DisplayName("Refuses traders a preview")
+    void tradersCannotPreview() throws Exception {
+        mockMvc.perform(get("/api/v1/newsletters/preview"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode", equalTo("AUTH-403")));
     }
 
     @Test
     @WithMockUser(username = "admin", roles = "ADMIN")
-    @DisplayName("Answers 503 MKT-503 when an admin publishes without prices")
-    void publishWithoutPrices() throws Exception {
-        mockMvc.perform(post("/api/v1/newsletters/generate"))
+    @DisplayName("Answers 503 MKT-503 for an admin's preview without prices, and saves nothing")
+    void previewWithoutPrices() throws Exception {
+        mockMvc.perform(get("/api/v1/newsletters/preview"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.errorCode", equalTo("MKT-503")));
+        assertEquals(0, repository.count());
     }
 }

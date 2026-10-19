@@ -41,8 +41,9 @@ import java.util.stream.Stream;
  * and fell the most this week, with the latest news about each of them.
  *
  * A week's change runs from the close of the last trading day before its
- * Monday to the latest close since, so an issue published mid-week covers the
- * week so far. There is one issue per week; publishing again returns it.
+ * Monday to the latest close since. Only the weekly job publishes, one issue
+ * per week; a preview (for admins, e.g. a demo) covers the week so far and is
+ * never saved, so it cannot take the place of the week's real issue.
  * News is optional: without it the issue is still published, without
  * headlines. Without prices there is nothing to rank and nothing is published.
  */
@@ -88,15 +89,41 @@ public class NewsletterService {
      * @throws MarketDataUnavailableException if no instrument has prices for the week
      */
     public NewsletterIssue publishWeeklyIssue() {
-        LocalDate weekStart = clock.now().atZone(properties.zone()).toLocalDate()
-                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-
+        LocalDate weekStart = currentWeekStart();
         Optional<NewsletterIssue> published = issueRepository.findByWeekStart(weekStart);
         if (published.isPresent()) {
             log.info("Newsletter for the week of {} was already published", weekStart);
             return published.get();
         }
 
+        NewsletterIssue issue = buildIssue(weekStart);
+        try {
+            NewsletterIssue saved = issueRepository.save(issue);
+            log.info("Published the newsletter for the week of {}: {} gainers, {} losers, {} headlines",
+                    weekStart, issue.getGainers().size(), issue.getLosers().size(), issue.getNews().size());
+            return saved;
+        } catch (DataIntegrityViolationException e) {
+            // Published by another run in the meantime (week_start is unique)
+            return issueRepository.findByWeekStart(weekStart).orElseThrow(() -> e);
+        }
+    }
+
+    /**
+     * Builds this week's issue from the latest prices and news without saving
+     * it, so it has no ID. The week's published issue is not affected.
+     *
+     * @throws MarketDataUnavailableException if no instrument has prices for the week
+     */
+    public NewsletterIssue previewWeeklyIssue() {
+        return buildIssue(currentWeekStart());
+    }
+
+    private LocalDate currentWeekStart() {
+        return clock.now().atZone(properties.zone()).toLocalDate()
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+    }
+
+    private NewsletterIssue buildIssue(LocalDate weekStart) {
         List<NewsletterMover> movers = weeklyMovers(weekStart);
         if (movers.isEmpty()) {
             throw new MarketDataUnavailableException("No prices to rank the movers of the week of " + weekStart);
@@ -116,16 +143,7 @@ public class NewsletterService {
         List<NewsletterNewsItem> news = newsAbout(Stream.concat(gainers.stream(), losers.stream()).toList(),
                 weekStart.atStartOfDay(properties.zone()).toInstant());
 
-        try {
-            NewsletterIssue issue = issueRepository.save(
-                    new NewsletterIssue(weekStart, clock.now(), gainers, losers, news));
-            log.info("Published the newsletter for the week of {}: {} gainers, {} losers, {} headlines",
-                    weekStart, gainers.size(), losers.size(), news.size());
-            return issue;
-        } catch (DataIntegrityViolationException e) {
-            // Published by another run in the meantime (week_start is unique)
-            return issueRepository.findByWeekStart(weekStart).orElseThrow(() -> e);
-        }
+        return new NewsletterIssue(weekStart, clock.now(), gainers, losers, news);
     }
 
     /**

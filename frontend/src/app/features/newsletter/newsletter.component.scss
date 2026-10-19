@@ -28,6 +28,16 @@
   gap: 0.75rem;
 }
 
+.preview-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0;
+  border: 1px dashed var(--border-strong);
+}
+
 .issue-picker {
   margin: 0;
 }

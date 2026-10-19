@@ -208,3 +208,7 @@ alter or block past issues. Nothing queries individual movers; if the dashboard 
 `jsonb_array_elements` or the ETL can flatten them. Postgres only checks that each column is
 an array, so `NewsletterService` validates the contents. `tns_api` has `SELECT` and `INSERT`
 only, so the database itself keeps issues immutable.
+
+Only the Friday job publishes. Admins get `GET /api/v1/newsletters/preview`, which builds the
+week so far and saves nothing: with one immutable issue per week, an early "publish" for a demo
+would have taken the place of that week's real issue.

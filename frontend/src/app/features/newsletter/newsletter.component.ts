@@ -24,7 +24,8 @@ export interface MoverNews {
 /**
  * The weekly market newsletter: the week's biggest gainers and losers and the
  * news about them. Opens the latest issue, or the one in the URL
- * (/newsletter/:id). Admins can publish the current week's issue early.
+ * (/newsletter/:id). Admins can preview the current week's issue; a preview
+ * is not saved, so traders never see it.
  */
 @Component({
   selector: 'app-newsletter',
@@ -42,12 +43,17 @@ export class NewsletterComponent {
   readonly issue = signal<NewsletterResponse | null>(null);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
-  readonly publishing = signal(false);
-  readonly publishError = signal<string | null>(null);
+  /** Admin only: this week's issue so far, shown instead of the published one until closed. */
+  readonly preview = signal<NewsletterResponse | null>(null);
+  readonly previewing = signal(false);
+  readonly previewError = signal<string | null>(null);
+
+  /** The preview while there is one, otherwise the published issue. */
+  readonly shown = computed(() => this.preview() ?? this.issue());
 
   /** Movers that have headlines, gainers first, each with its own headlines. */
   readonly news = computed<MoverNews[]>(() => {
-    const issue = this.issue();
+    const issue = this.shown();
     if (!issue) {
       return [];
     }
@@ -90,22 +96,26 @@ export class NewsletterComponent {
     void this.router.navigate(['/newsletter', issueId]);
   }
 
-  /** Admin only: publishes this week's issue now (or opens it if it exists already). */
-  publish(): void {
-    if (!this.isAdmin || this.publishing()) {
+  /** Admin only: builds this week's issue so far from the latest prices. Nothing is published. */
+  showPreview(): void {
+    if (!this.isAdmin || this.previewing()) {
       return;
     }
-    this.publishing.set(true);
-    this.publishError.set(null);
-    this.newsletterApi.generateIssue().subscribe({
-      next: (issue) => {
-        this.publishing.set(false);
-        void this.router.navigate(['/newsletter', issue.id]);
+    this.previewing.set(true);
+    this.previewError.set(null);
+    this.newsletterApi.previewIssue().subscribe({
+      next: (preview) => {
+        this.previewing.set(false);
+        this.preview.set(preview);
       },
       error: (error: unknown) => {
-        this.publishing.set(false);
-        this.publishError.set(readErrorMessage(error, "This week's newsletter could not be published."));
+        this.previewing.set(false);
+        this.previewError.set(readErrorMessage(error, "This week's newsletter could not be previewed."));
       },
     });
+  }
+
+  closePreview(): void {
+    this.preview.set(null);
   }
 }

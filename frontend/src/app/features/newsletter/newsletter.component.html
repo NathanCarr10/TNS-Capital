@@ -2,17 +2,17 @@
   <div>
     <p class="eyebrow">Newsletter</p>
     <h1>Weekly market movers</h1>
-    @if (issue(); as current) {
+    @if (shown(); as current) {
       <!-- weekStart is a date without a time; UTC keeps it on the same day in every time zone -->
       <p class="muted">
-        Week of {{ current.weekStart | date: 'MMM d, y' : 'UTC' }} &middot; published
+        Week of {{ current.weekStart | date: 'MMM d, y' : 'UTC' }} &middot; {{ preview() ? 'built' : 'published' }}
         {{ current.generatedAt | date: 'MMM d, y, HH:mm' }}
       </p>
     }
   </div>
 
   <div class="header-actions">
-    @if (issues().length > 1 && issue(); as current) {
+    @if (!preview() && issues().length > 1 && issue(); as current) {
       <label class="field issue-picker">
         <span class="visually-hidden">Choose an issue</span>
         <select class="input" [value]="'' + current.id" (change)="open($any($event.target).value)">
@@ -22,24 +22,34 @@
         </select>
       </label>
     }
-    @if (isAdmin) {
-      <button type="button" class="btn btn-primary" [disabled]="publishing()" (click)="publish()">
-        {{ publishing() ? 'Publishing...' : "Publish this week's issue" }}
+    @if (isAdmin && !preview()) {
+      <button type="button" class="btn btn-primary" [disabled]="previewing()" (click)="showPreview()">
+        {{ previewing() ? 'Building preview...' : "Preview this week's issue" }}
       </button>
     }
   </div>
 </header>
 
-@if (publishError()) {
-  <p class="note error" role="alert">{{ publishError() }}</p>
+@if (previewError()) {
+  <p class="note error" role="alert">{{ previewError() }}</p>
 }
 
-@if (loading()) {
+@if (preview()) {
+  <div class="note preview-banner" role="status">
+    <span>
+      <strong>Preview, not published.</strong> This is the week so far. Traders see the issue the weekly job
+      publishes on Friday after the close.
+    </span>
+    <button type="button" class="btn btn-small" (click)="closePreview()">Close preview</button>
+  </div>
+}
+
+@if (loading() && !preview()) {
   <section class="card"><p class="note">Loading the newsletter...</p></section>
-} @else if (error()) {
+} @else if (error() && !preview()) {
   <section class="card"><p class="note error">{{ error() }}</p></section>
-} @else if (issue()) {
-  @let current = issue()!;
+} @else if (shown()) {
+  @let current = shown()!;
   <div class="movers">
     <section class="card" aria-labelledby="gainers-title">
       <div class="card-header">
