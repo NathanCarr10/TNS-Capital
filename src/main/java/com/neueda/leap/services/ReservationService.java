@@ -77,6 +77,12 @@ public class ReservationService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void release(Order order) {
+        releaseHeld(order);
+    }
+
+    // Called by release and, inside its own transaction, by rejectIfNew (not through
+    // this class's proxy, so Spring would not apply release's annotation there)
+    private void releaseHeld(Order order) {
         if (!order.isReserved()) {
             return;
         }
@@ -106,7 +112,7 @@ public class ReservationService {
             return Optional.empty();
         }
         Order order = stored.get();
-        release(order);
+        releaseHeld(order);
         order.setStatus(OrderStatus.REJECTED);
         order.setStatusReason(reason);
         return Optional.of(orderRepository.save(order));
