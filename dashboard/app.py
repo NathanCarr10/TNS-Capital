@@ -243,7 +243,7 @@ else:
 
 st.subheader("Order pipeline health")
 st.caption("From the live trading tables. Dead letters are read-only here: "
-           "retry or dismiss them through the DLQ admin API.")
+           "support retries or dismisses them on the trading app's Dead Letters page.")
 timing = insights.fill_time_summary(live) or {"median": None, "p95": None}
 stuck = insights.stuck_orders(live, utc_now())
 dlq = frames["dlq"]
