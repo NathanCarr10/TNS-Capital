@@ -1,0 +1,28 @@
+# What VictoriaMetrics scrapes, every 15 s. Every target is on the Compose network only:
+# none of these ports is published or proxied by nginx.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # Trading API: MetricsServer on METRICS_PORT, not the admin-only actuator on :3000
+  - job_name: api
+    static_configs:
+      - targets: ["app:9464"]
+    metric_relabel_configs: &drop_unused
+      # Series nothing reads (no panel, no alert): fewer series, less memory and disk
+      - source_labels: [__name__]
+        regex: "(jvm_(buffer|classes|compilation|info)|executor|tomcat|disk|application_(ready|started)|spring_security|spring_data|tasks_scheduled|jdbc_connections_(active|idle|min|max)|hikaricp_connections_(acquire|creation|usage|timeout|pending|min|max|idle)|logback_events|process_(files|start)|spring_kafka_(listener|template)_active).*"
+        action: drop
+
+  # Broker simulator: no authentication anywhere, and no host port
+  - job_name: broker
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["broker-simulator:8085"]
+    metric_relabel_configs: *drop_unused
+
+  # Auth service: the login and token reuse counters (OWASP A09-1, A09-2)
+  - job_name: auth
+    static_configs:
+      - targets: ["auth-service:9464"]
