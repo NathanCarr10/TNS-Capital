@@ -69,6 +69,8 @@ services:
       # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env (at least 12 characters)}
       SUPPORT_PASSWORD: ${SUPPORT_PASSWORD:?set SUPPORT_PASSWORD in .env (at least 12 characters, not the ADMIN_PASSWORD)}
+      # Optional local demo trader; the password is hashed at startup and never stored in the image
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: tns_capital
