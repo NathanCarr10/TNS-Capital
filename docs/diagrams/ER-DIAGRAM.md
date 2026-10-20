@@ -113,7 +113,7 @@ erDiagram
 
     USERS {
         BIGINT id PK
-        VARCHAR(255) username UK
+        VARCHAR(320) email UK "sign-in identity and the token's sub; lower case"
         VARCHAR(255) password_hash "Argon2id; plaintext never stored"
         VARCHAR(20) role "USER | SUPPORT | ADMIN"
         BIGINT account_id FK, UK "opened at registration; NULL for support and admins"

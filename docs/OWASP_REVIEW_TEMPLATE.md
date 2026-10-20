@@ -138,7 +138,7 @@ not fail the build are triaged.
 
 Check:
 
-- Login errors do not reveal whether a username exists.
+- Login errors do not reveal whether an email is registered.
 - Brute-force and credential-stuffing protection on `/auth/login` (rate limiting, lockout).
 - Password rules on registration.
 - Access and refresh token lifetimes.

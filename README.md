@@ -264,7 +264,7 @@ curl http://localhost:4000/health
 source .env
 TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" \
+  -d "{\"email\":\"${ADMIN_EMAIL:-admin@tns-capital.local}\",\"password\":\"$ADMIN_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 
 # Trading API health: public; an admin token adds the details (database, disk)
@@ -276,7 +276,7 @@ curl -s http://localhost:3000/actuator/health -H "Authorization: Bearer $TOKEN"
 # Traders' accounts are support's, not the admin's: log in as support to read one
 SUPPORT_TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d "{\"username\":\"support\",\"password\":\"$SUPPORT_PASSWORD\"}" \
+  -d "{\"email\":\"${SUPPORT_EMAIL:-support@tns-capital.local}\",\"password\":\"$SUPPORT_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $SUPPORT_TOKEN"
 # -> {"balance":5000.00,"reservedCash":0.00,"availableCash":5000.00}
@@ -403,13 +403,13 @@ Register your own user instead.
 # 1. Register a user; this also opens a trading account with a zero balance
 curl -s -X POST http://localhost:4000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123","holderName":"Ada Lovelace"}'
-# -> {"id":4,"username":"trader1",...,"accountId":11,"accountNumber":"ACC-U000004"}
+  -d '{"email":"trader1@example.com","password":"password123","holderName":"Ada Lovelace"}'
+# -> {"id":4,"email":"trader1@example.com",...,"accountId":11,"accountNumber":"ACC-U000004"}
 
 # 2. Log in
 TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123"}' \
+  -d '{"email":"trader1@example.com","password":"password123"}' \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 
 # 3. Deposit cash (use the accountId from step 1)
