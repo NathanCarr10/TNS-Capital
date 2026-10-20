@@ -11,8 +11,6 @@
     <p class="note error">No instrument with the symbol {{ symbol() }} exists.</p>
   </section>
 } @else {
-  <app-news-ticker [symbol]="symbol()" />
-
   <nav class="breadcrumb" aria-label="Breadcrumb">
     <a routerLink="/portfolio">Portfolio</a> / <span>Trade</span> / <span aria-current="page">{{ symbol() }}</span>
   </nav>
@@ -205,4 +203,6 @@
       [livePrice]="quote()?.price ?? null"
     />
   </div>
+
+  <app-news-ticker [symbol]="symbol()" />
 }
