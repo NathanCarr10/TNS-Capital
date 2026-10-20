@@ -11,6 +11,7 @@ import plotly.express as px
 import streamlit as st
 
 import monitoring
+import theme
 
 RANGES = {"Last 15 minutes": 15, "Last hour": 60, "Last 6 hours": 360, "Last 24 hours": 1440, "Last 7 days": 10080}
 REFRESH_SECONDS = monitoring.SCRAPE_SECONDS
@@ -72,10 +73,11 @@ def line(column, query, minutes, label, title, y_label):
     figure.update_traces(line_width=2)
     # One series: the title names it, so no legend
     figure.update_layout(showlegend=frame[label].nunique() > 1)
-    column.plotly_chart(figure, width="stretch")
+    theme.plot(column, figure)
 
 
 def render():
+    theme.eyebrow("Observability")
     st.title("Monitoring")
     if not monitoring.configured():
         st.info("The monitoring stack is not running. Start it with "

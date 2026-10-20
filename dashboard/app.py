@@ -23,8 +23,10 @@ import data
 import insights
 import monitoring_page
 import sessions
+import theme
 
-st.set_page_config(page_title="TNS Capital Dashboard", layout="wide")
+st.set_page_config(page_title="TNS Capital Dashboard", page_icon=str(theme.LOGO), layout="wide")
+theme.apply()
 
 VALUE_LABEL = "Value ($)"
 ASSET_CLASS_LABEL = "Asset class"
@@ -113,19 +115,24 @@ def require_admin():
             st.button("Sign out", on_click=sign_out)
             st.stop()
 
-    st.title("TNS Capital trading dashboard")
-    st.caption("Admins only. Sign in with your TNS Capital account.")
-    if message := st.session_state.pop("auth_message", None):
-        st.warning(message)
-    with st.form("sign_in"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Sign in")
+    # One centred card, like the trading app's login page
+    theme.sign_in_page()
+    _, card, _ = st.columns([1, 1, 1])
+    with card:
+        theme.logo(width=260)
+        st.title("Analytics sign in")
+        st.caption("Admins only. Sign in with your TNS Capital account.")
+        if message := st.session_state.pop("auth_message", None):
+            st.warning(message)
+        with st.form("sign_in"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in", type="primary", width="stretch")
     if submitted:
         try:
             access_token, refresh_token = auth.login(username, password)
         except auth.AuthError as error:
-            st.error(str(error))
+            card.error(str(error))
         else:
             session_id = sessions.STORE.create(access_token, refresh_token)
             st.session_state.update(token=access_token, session_id=session_id, cookie=session_id)
@@ -135,10 +142,13 @@ def require_admin():
 
 admin = require_admin()
 with st.sidebar:
-    st.write(f"Signed in as **{admin['sub']}**")
-    st.button("Sign out", on_click=sign_out)
-    view = st.segmented_control("View", ["Trading", "Monitoring"], default="Trading", key="view")
+    theme.logo()
+    view = st.segmented_control("View", ["Trading", "Monitoring"], default="Trading", key="view",
+                                width="stretch")
     monitoring_page.alert_badge()
+    st.divider()
+    st.write(f"Signed in as **{admin['sub']}**")
+    st.button("Sign out", on_click=sign_out, icon=":material/logout:", width="stretch")
 
 if view == "Monitoring":
     monitoring_page.render()
@@ -150,7 +160,8 @@ except Exception as error:  # the database is the only thing that can fail here
     st.error(f"Could not reach the database: {error}")
     st.stop()
 
-st.title("TNS Capital trading dashboard")
+theme.eyebrow("Admin analytics")
+st.title("Trading insights")
 
 source = st.radio(
     "Data source",
@@ -195,29 +206,24 @@ st.markdown("\n".join(f"- {point}" for point in points) or "No trades yet.")
 # Charts
 left, right = st.columns(2)
 volume = insights.trade_volume_by_date(trades)
-left.plotly_chart(px.bar(volume, x="date", y="value", hover_data=["trades"],
-                         title="Filled trade value by day", labels={"value": VALUE_LABEL, "date": "Day"}),
-                  width="stretch")
+theme.plot(left, px.bar(volume, x="date", y="value", hover_data=["trades"],
+                        title="Filled trade value by day", labels={"value": VALUE_LABEL, "date": "Day"}))
 statuses = insights.status_breakdown(trades)
-right.plotly_chart(px.pie(statuses, names="status", values="orders", title="Orders by status", hole=0.4),
-                   width="stretch")
+theme.plot(right, px.pie(statuses, names="status", values="orders", title="Orders by status", hole=0.4))
 
 left, right = st.columns(2)
 top_accounts = insights.most_active_accounts(trades)
-left.plotly_chart(px.bar(top_accounts, x="orders", y="holder_name", orientation="h",
-                         hover_data=["account_number", "filled_value"], title="Most active accounts",
-                         labels={"orders": "Orders", "holder_name": ""}),
-                  width="stretch")
-right.plotly_chart(px.bar(exposure, x="symbol", y="exposure", color="asset_class",
-                          title="Exposure by instrument (cost basis)",
-                          labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": ASSET_CLASS_LABEL}),
-                   width="stretch")
+theme.plot(left, px.bar(top_accounts, x="orders", y="holder_name", orientation="h",
+                        hover_data=["account_number", "filled_value"], title="Most active accounts",
+                        labels={"orders": "Orders", "holder_name": ""}))
+theme.plot(right, px.bar(exposure, x="symbol", y="exposure", color="asset_class",
+                         title="Exposure by instrument (cost basis)",
+                         labels={"exposure": VALUE_LABEL, "symbol": "Instrument", "asset_class": ASSET_CLASS_LABEL}))
 
 mix = insights.value_by_asset_class(trades)
-st.plotly_chart(px.bar(mix, x="asset_class", y="value", color="side", barmode="group",
-                       title="Buy and sell value by asset class",
-                       labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}),
-                width="stretch")
+theme.plot(st, px.bar(mix, x="asset_class", y="value", color="side", barmode="group",
+                      title="Buy and sell value by asset class",
+                      labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}))
 
 with st.expander("Orders not yet loaded by the ETL"):
     st.dataframe(gap, width="stretch")
@@ -231,9 +237,8 @@ if reasons.empty:
     st.info("No orders have been rejected.")
 else:
     left, right = st.columns(2)
-    left.plotly_chart(px.bar(reasons, x="orders", y="category", orientation="h", hover_data=["share"],
-                             title="Rejected orders by reason", labels={"orders": "Orders", "category": ""}),
-                      width="stretch")
+    theme.plot(left, px.bar(reasons, x="orders", y="category", orientation="h", hover_data=["share"],
+                            title="Rejected orders by reason", labels={"orders": "Orders", "category": ""}))
     right.dataframe(
         insights.rejected_orders(live)[["created_on", "username", "symbol", "side", "quantity", "category",
                                         "status_reason"]],
@@ -339,10 +344,9 @@ else:
         col1.metric("Their orders", f"{len(theirs):,}")
         col2.metric("Their fill rate", percent(insights.fill_rate(theirs)))
         col3.metric("Their average trade size", money(insights.average_trade_size(theirs)))
-        st.plotly_chart(px.bar(insights.value_by_asset_class(theirs), x="asset_class", y="value", color="side",
-                               barmode="group", title=f"What {chosen} has bought and sold",
-                               labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}),
-                        width="stretch")
+        theme.plot(st, px.bar(insights.value_by_asset_class(theirs), x="asset_class", y="value", color="side",
+                              barmode="group", title=f"What {chosen} has bought and sold",
+                              labels={"value": VALUE_LABEL, "asset_class": ASSET_CLASS_LABEL, "side": "Side"}))
         st.dataframe(theirs.sort_values("created_on", ascending=False)
                      [["created_on", "symbol", "side", "quantity", "price", "notional", "status"]],
                      width="stretch", hide_index=True)

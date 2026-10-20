@@ -330,7 +330,8 @@ def test_monitoring_reports_a_stack_that_does_not_answer(monkeypatch):
 
 
 def cookie_scripts(app):
-    return [element.proto.body for element in app.get("html")]
+    # The other html elements are theme.py's styles
+    return [element.proto.body for element in app.get("html") if "<script>" in element.proto.body]
 
 
 def test_sign_in_keeps_the_tokens_on_the_server_and_only_a_session_id_in_the_cookie(monkeypatch):

@@ -2,3 +2,85 @@
 # that path here: admins reach the dashboard on the app's own origin, not on a second port.
 [server]
 baseUrlPath = "analytics"
+
+[client]
+# No Deploy button or developer options: admins only use the dashboard
+toolbarMode = "minimal"
+
+# The trading app's look (frontend/src/styles.scss): brand palette sage #CAD2C5, green #84A98C,
+# teal #52796F, slate #354F52, charcoal #2F3E46, on a light or dark scheme (Settings menu, or
+# the browser's preference). theme.py adds the card styling config can't express.
+[theme]
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+baseRadius = "8px"
+showWidgetBorder = true
+showSidebarBorder = false
+
+[theme.light]
+primaryColor = "#52796f"
+backgroundColor = "#e9ede8"
+secondaryBackgroundColor = "#f3f5f2"
+textColor = "#2f3e46"
+linkColor = "#3f6a5f"
+borderColor = "#dde3dc"
+dataframeBorderColor = "#dde3dc"
+dataframeHeaderBackgroundColor = "#f3f5f2"
+dataframeHeaderTextColor = "#5d6d68"
+greenColor = "#3a7553"
+greenBackgroundColor = "#e2ebe4"
+greenTextColor = "#3a7553"
+blueColor = "#52796f"
+blueBackgroundColor = "#e2ebe4"
+blueTextColor = "#3f6a5f"
+redColor = "#b0503a"
+redBackgroundColor = "#f8e9e4"
+redTextColor = "#b0503a"
+chartCategoricalColors = ["#52796f", "#2f3e46", "#84a98c", "#c0634a", "#b5c8b9", "#5d6d68", "#354f52"]
+chartSequentialColors = ["#e2ebe4", "#cad2c5", "#b5c8b9", "#9fbca4", "#84a98c", "#6a917e", "#52796f",
+                         "#43645f", "#354f52", "#2f3e46"]
+chartDivergingColors = ["#b0503a", "#c0634a", "#d79a87", "#ecc9bd", "#e9ede8", "#cad2c5", "#84a98c",
+                        "#52796f", "#2f3e46"]
+
+[theme.light.sidebar]
+backgroundColor = "#354f52"
+secondaryBackgroundColor = "#415a5c"
+textColor = "#d5ddd3"
+primaryColor = "#84a98c"
+borderColor = "#4a6466"
+linkColor = "#cad2c5"
+redTextColor = "#f0b3a3"
+redBackgroundColor = "#5c4440"
+
+[theme.dark]
+primaryColor = "#52796f"
+backgroundColor = "#1c2529"
+secondaryBackgroundColor = "#2c3b42"
+textColor = "#e4eae3"
+linkColor = "#9fc3a6"
+borderColor = "#36474e"
+dataframeBorderColor = "#36474e"
+dataframeHeaderBackgroundColor = "#2c3b42"
+dataframeHeaderTextColor = "#a3b2ad"
+greenColor = "#8fc39c"
+greenBackgroundColor = "#304a47"
+greenTextColor = "#8fc39c"
+blueColor = "#84a98c"
+blueBackgroundColor = "#304a47"
+blueTextColor = "#9fc3a6"
+redColor = "#e7907a"
+redBackgroundColor = "#46302b"
+redTextColor = "#e7907a"
+chartCategoricalColors = ["#84a98c", "#cad2c5", "#52796f", "#d77b62", "#9fc3a6", "#a3b2ad", "#3d5a5c"]
+chartSequentialColors = ["#2c3b42", "#304a47", "#3d5a5c", "#47695f", "#52796f", "#6a917e", "#84a98c",
+                         "#a3bfa9", "#cad2c5", "#e4eae3"]
+chartDivergingColors = ["#e7907a", "#d77b62", "#9b5a4a", "#5c4440", "#2c3b42", "#3d5a5c", "#52796f",
+                        "#84a98c", "#cad2c5"]
+
+[theme.dark.sidebar]
+backgroundColor = "#172024"
+secondaryBackgroundColor = "#252d31"
+textColor = "#c3cdc2"
+primaryColor = "#84a98c"
+borderColor = "#2c3b42"
+linkColor = "#cad2c5"
