@@ -30,9 +30,9 @@ SERIES = {
 }
 MEANING = {
     "light": {"FILLED": "#52796f", "BUY": "#52796f", "REJECTED": "#c0634a", "SELL": "#2f3e46",
-              "CANCELLED": "#b5c8b9", "NEW": "#84a98c", "PARTIALLY_FILLED": "#84a98c"},
+              "CANCELLED": "#b5c8b9", "NEW": "#84a98c", "PARTIALLY_FILLED": "#84a98c", "Market close": "#5d6d68"},
     "dark": {"FILLED": "#84a98c", "BUY": "#84a98c", "REJECTED": "#d77b62", "SELL": "#cad2c5",
-             "CANCELLED": "#5b6b70", "NEW": "#52796f", "PARTIALLY_FILLED": "#52796f"},
+             "CANCELLED": "#5b6b70", "NEW": "#52796f", "PARTIALLY_FILLED": "#52796f", "Market close": "#a3b2ad"},
 }
 
 CSS = """
@@ -171,7 +171,7 @@ def plot(where, figure):
             trace.marker.colors = [meaning.get(label, series[i % len(series)]) for i, label in enumerate(trace.labels)]
             continue
         color = meaning.get(trace.name, series[index % len(series)])
-        if trace.type == "bar":
+        if trace.type == "bar" or trace.mode == "markers":
             trace.marker.color = color
         else:
             trace.line.color = color

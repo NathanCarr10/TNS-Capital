@@ -32,11 +32,63 @@ def trades():
     ])
 
 
-def test_trade_volume_counts_only_filled_trades_per_day(trades):
-    volume = insights.trade_volume_by_date(trades)
+def test_trend_counts_orders_and_filled_value_per_day(trades):
+    days = insights.trend(trades, "D")
 
-    assert volume["trades"].tolist() == [1, 2]
-    assert volume["value"].tolist() == [50.0, 120.0]
+    assert days["period"].tolist() == [pd.Timestamp("2026-10-01"), pd.Timestamp("2026-10-02")]
+    assert days["orders"].tolist() == [4, 2]
+    assert days["filled"].tolist() == [1, 2]
+    assert days["value"].tolist() == [50.0, 120.0]  # only filled trades count
+    # 1 filled of 3 finished on the 1st (the NEW order is left out); 2 of 2 on the 2nd
+    assert days["fill_rate"].tolist() == pytest.approx([1 / 3, 1.0])
+
+
+def test_trend_groups_by_week_from_monday(trades):
+    weeks = insights.trend(trades, "W")
+
+    assert weeks["period"].tolist() == [pd.Timestamp("2026-09-28")]  # 1 and 2 October 2026 share a week
+    assert weeks["orders"].tolist() == [6]
+
+
+def test_trend_splits_strategy_and_trader_orders(trades):
+    trades = trades.assign(strategy_name=["MA 20/50", None, None, None, None, None])
+
+    days = insights.trend(trades, "D")
+
+    assert days["strategy_orders"].tolist() == [1, 0]
+    assert days["trader_orders"].tolist() == [3, 2]
+
+
+def test_trend_leaves_the_fill_rate_empty_when_nothing_finished():
+    days = insights.trend(pd.DataFrame([trade("o1", status="NEW")]), "D")
+
+    assert days["fill_rate"].isna().all()
+
+
+def test_in_period_keeps_only_recent_orders(trades):
+    now = pd.Timestamp("2026-10-02 12:00")
+
+    recent = insights.in_period(trades, now, timedelta(hours=6))
+
+    assert recent["order_id"].tolist() == ["o2", "o3"]
+
+
+def test_value_by_instrument_ranks_filled_value(trades):
+    top = insights.value_by_instrument(trades)
+
+    assert top.to_dict("records") == [
+        {"symbol": "ACME", "asset_class": "Equity", "trades": 2, "value": 150.0},
+        {"symbol": "BOND1", "asset_class": "Bond", "trades": 1, "value": 20.0},
+    ]
+    assert insights.value_by_instrument(trades, top=1)["symbol"].tolist() == ["ACME"]
+
+
+def test_etl_reject_reasons_counts_each_rule():
+    rejects = pd.DataFrame({"reject_reason": ["unknown symbol", "invalid side", "unknown symbol"]})
+
+    assert insights.etl_reject_reasons(rejects).to_dict("records") == [
+        {"reject_reason": "unknown symbol", "orders": 2}, {"reject_reason": "invalid side", "orders": 1}]
+    assert insights.etl_reject_reasons(pd.DataFrame(columns=["reject_reason"])).empty
 
 
 def test_most_active_accounts_ranks_by_order_count(trades):
@@ -64,13 +116,6 @@ def test_fill_rate_is_none_when_nothing_finished():
 
 def test_average_trade_size_uses_filled_trades(trades):
     assert insights.average_trade_size(trades) == pytest.approx(170.0 / 3)
-
-
-def test_status_breakdown_counts_each_status(trades):
-    breakdown = insights.status_breakdown(trades)
-
-    assert dict(zip(breakdown["status"], breakdown["orders"])) == {
-        "CANCELLED": 1, "FILLED": 3, "NEW": 1, "REJECTED": 1}
 
 
 def test_exposure_by_instrument_sums_positions_and_shares():
@@ -105,7 +150,7 @@ def test_not_yet_in_batch_finds_orders_the_etl_has_not_loaded(trades):
 
 
 @pytest.mark.parametrize("function", [
-    insights.trade_volume_by_date, insights.most_active_accounts, insights.value_by_asset_class])
+    insights.trend, insights.most_active_accounts, insights.value_by_asset_class, insights.value_by_instrument])
 def test_tables_are_empty_without_trades(function):
     empty = pd.DataFrame(columns=list(trade("x")))
 

@@ -75,7 +75,7 @@ flowchart LR
 | **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and prices (`market-data`: live prices and replayed days, read by the strategy service). An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
 | **PostgreSQL** | System of record. The `db/` image creates the schema, views, the services' login roles and seed data on first start. Each service connects with its own least-privilege role (`tns_api`, `tns_auth`, `tns_etl`, `tns_reader`, `tns_strategy`); the `DB_USER` owner is for administrators only. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
-| **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
+| **Dashboard** (`dashboard/`) | Streamlit admin dashboard: a Live view of the trading tables (what is happening now, what needs attention), a Batch view of the ETL's `analytics` schema (trends, per-user and strategy reports, data quality) and a Monitoring view. |
 
 ### Order lifecycle
 
