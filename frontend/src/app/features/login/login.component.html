@@ -5,13 +5,13 @@
     <p>Sign in to access your account and trading tools.</p>
 
     <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate>
-      <label for="username">Username</label>
+      <label for="email">Email</label>
       <input
-        id="username"
-        type="text"
-        formControlName="username"
-        autocomplete="username"
-        placeholder="Enter username"
+        id="email"
+        type="email"
+        formControlName="email"
+        autocomplete="email"
+        placeholder="Enter email"
       />
 
       <label for="password">Password</label>
@@ -24,7 +24,7 @@
       />
 
       <p class="field-error" [class.visible]="loginForm.invalid && loginForm.touched">
-        Username and password are required.
+        Email and password are required.
       </p>
 
       <p class="server-error" [class.visible]="!!errorMessage()">{{ errorMessage() }}</p>

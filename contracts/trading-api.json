@@ -3111,6 +3111,7 @@
           "accountNumber",
           "availableCash",
           "cashBalance",
+          "email",
           "holderName",
           "id",
           "lastUpdated",
@@ -3126,6 +3127,10 @@
           },
           "accountNumber": {
             "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
           },
           "holderName": {
             "type": "string"

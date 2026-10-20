@@ -57,18 +57,20 @@ describeWithDb('UsersService.create', () => {
 
   it('opens an ACTIVE account with a zero cash balance and links it to the user', async () => {
     const username = uniqueName('newtrader');
-    const user = await service.create(username, passwordHash, 'Ada Lovelace');
+    const email = `${username}@example.com`;
+    const user = await service.create(username, passwordHash, email, 'Ada Lovelace');
 
     expect(user.accountNumber).toBe(accountNumberFor(user.id));
 
     const account = (
-      await pool.query('SELECT account_number, holder_name, cash_balance, status FROM accounts WHERE id = $1', [
+      await pool.query('SELECT account_number, holder_name, email, cash_balance, status FROM accounts WHERE id = $1', [
         user.accountId,
       ])
     ).rows[0];
     expect(account).toEqual({
       account_number: user.accountNumber,
       holder_name: 'Ada Lovelace',
+      email,
       cash_balance: '0.00',
       status: 'ACTIVE',
     });
@@ -112,7 +114,14 @@ describeWithDb('UsersService.findByUsername', () => {
     const username = uniqueName('findtest');
     const { id, accountId } = await service.create(username, passwordHash);
 
-    expect(await service.findByUsername(username)).toEqual({ id, username, passwordHash, roles: ['USER'], accountId });
+    expect(await service.findByUsername(username)).toEqual({
+      id,
+      username,
+      email: `${username}@example.invalid`,
+      passwordHash,
+      roles: ['USER'],
+      accountId,
+    });
   });
 
   it('returns null for an unknown user', async () => {

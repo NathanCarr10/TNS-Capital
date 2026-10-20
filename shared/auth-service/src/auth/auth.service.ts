@@ -7,13 +7,14 @@ import { RefreshTokensService } from '../users/refresh-tokens.service';
 import {
   AuthenticatedUser,
   RegisteredUser,
+  EmailTakenError,
   UserRecord,
   UsernameTakenError,
   UsersService,
 } from '../users/users.service';
 import { AccessTokenPayload, INVALID_ACCESS_TOKEN, REFRESH_TOKEN_TTL_SECONDS, TokenService } from './token.service';
 
-export const INVALID_CREDENTIALS = 'invalid username or password';
+export const INVALID_CREDENTIALS = 'invalid email or password';
 export const INVALID_REFRESH_TOKEN = 'invalid or expired refresh token';
 
 export interface LoginResult {
@@ -37,16 +38,20 @@ export class AuthService {
    * Satisfies AC#1: Plaintext never stored, only the Argon2id hash
    * Satisfies AC#4: Duplicate username returns 409
    */
-  async register(username: string, password: string, holderName?: string): Promise<RegisteredUser> {
+  async register(username: string, password: string, email = `${username}@example.invalid`, holderName?: string): Promise<RegisteredUser> {
+    if (!email.includes('@')) {
+      holderName = email;
+      email = `${username}@example.invalid`;
+    }
     // Checked before hashing, so a taken username doesn't cost an Argon2 hash
     if (await this.users.findByUsername(username)) {
       throw usernameTaken();
     }
     const passwordHash = await hashPassword(password);
     try {
-      return await this.users.create(username, passwordHash, holderName);
+      return await this.users.create(username, passwordHash, email.trim().toLowerCase(), holderName);
     } catch (error) {
-      if (error instanceof UsernameTakenError) {
+      if (error instanceof UsernameTakenError || error instanceof EmailTakenError) {
         throw usernameTaken();
       }
       throw error;
@@ -54,13 +59,13 @@ export class AuthService {
   }
 
   /**
-   * Checks a username and password.
+  * Checks an email address and password.
    *
    * @returns the user, or null if the username is unknown or the password is
    *          wrong (callers must not reveal which)
    */
-  async validate(username: string, password: string): Promise<UserRecord | null> {
-    const user = await this.users.findByUsername(username);
+  async validate(email: string, password: string): Promise<UserRecord | null> {
+    const user = await this.users.findByEmail(email.trim().toLowerCase());
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return null;
     }
@@ -72,14 +77,14 @@ export class AuthService {
    * Each login starts a new session (refresh token family), so a user can be
    * signed in on several devices.
    *
-   * Wrong username and wrong password get the same 401, so usernames cannot be probed.
+  * Wrong email and wrong password get the same 401, so accounts cannot be probed.
    */
-  async login(username: string, password: string, clientIp = 'unknown'): Promise<LoginResult> {
-    const user = await this.validate(username, password);
+  async login(email: string, password: string, clientIp = 'unknown'): Promise<LoginResult> {
+    const user = await this.validate(email, password);
     // Every attempt is logged, so password guessing leaves a trace (OWASP A09-2). Never the
-    // password or tokens; the username is quoted so a crafted one cannot forge log lines.
+    // password or tokens; the email is quoted so a crafted value cannot forge log lines.
     if (!user) {
-      this.logger.warn(`Login failed: username=${JSON.stringify(username)} ip=${clientIp}`);
+      this.logger.warn(`Login failed: email=${JSON.stringify(email)} ip=${clientIp}`);
       metrics.loginFailed();
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
@@ -158,6 +163,6 @@ function usernameTaken(): ApiException {
 }
 
 // Satisfies AC#5: the password hash never leaves the service
-function withoutPasswordHash({ id, username, roles, accountId }: UserRecord): AuthenticatedUser {
-  return { id, username, roles, accountId };
+function withoutPasswordHash({ id, username, email, roles, accountId }: UserRecord): AuthenticatedUser {
+  return { id, username, email, roles, accountId };
 }
