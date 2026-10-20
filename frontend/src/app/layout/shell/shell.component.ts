@@ -5,6 +5,7 @@ import { interval } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { StrategyActivityService } from '../../core/strategy/strategy-activity.service';
+import { DeadLetterCountService } from '../../core/support/dead-letter-count.service';
 import { SupportService } from '../../core/support/support.service';
 import { ThemeService } from '../../core/theme/theme.service';
 import { AccountStore } from '../../core/trading/account.store';
@@ -33,10 +34,12 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly store = inject(AccountStore);
   private readonly supportService = inject(SupportService);
+  private readonly deadLetterCount = inject(DeadLetterCountService);
   readonly theme = inject(ThemeService);
 
   readonly isSupport = this.store.isSupport;
   readonly supportUnreadCount = signal(0);
+  readonly pendingDeadLetters = this.deadLetterCount.pending;
 
   // Support staff neither trade nor have an account of their own, so they get no trade page or
   // settings; they watch strategies read-only, read the newsletter and close dead letters instead
@@ -93,6 +96,7 @@ export class ShellComponent {
   }
 
   private refreshSupportNotifications(): void {
+    this.deadLetterCount.refresh();
     this.supportService.getUnreadNotificationCount().subscribe({
       next: ({ unreadCount }) => this.supportUnreadCount.set(unreadCount),
     });
