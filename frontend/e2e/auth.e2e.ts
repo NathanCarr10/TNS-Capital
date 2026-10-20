@@ -12,7 +12,7 @@ test.describe('Signing in', () => {
     await expect(page).toHaveURL(/\/login\?returnUrl=%2Fportfolio$/);
     await expect(page.getByRole('heading', { name: 'Welcome Back' })).toBeVisible();
 
-    await submitLogin(page, trader.username, trader.password);
+    await submitLogin(page, trader.email, trader.password);
 
     await expect(page).toHaveURL(/\/portfolio$/);
     await expect(page.locator('.account-card')).toContainText(trader.holderName);
@@ -25,7 +25,7 @@ test.describe('Signing in', () => {
     await page.getByRole('link', { name: /Sign In to Trade/ }).click();
     await page.getByRole('link', { name: 'Create an account' }).click();
 
-    await page.getByLabel('Username').fill(trader.username);
+    await page.getByLabel('Email').fill(trader.email);
     await page.getByLabel(/Account holder name/).fill(trader.holderName);
     await page.getByLabel('Password', { exact: true }).fill(trader.password);
     await page.getByLabel('Confirm password').fill(trader.password);
@@ -33,7 +33,7 @@ test.describe('Signing in', () => {
 
     // Registering returns to login rather than signing in
     await expect(page).toHaveURL(/\/login$/);
-    await submitLogin(page, trader.username, trader.password);
+    await submitLogin(page, trader.email, trader.password);
 
     await expect(page).toHaveURL(/\/portfolio$/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome, E2E');

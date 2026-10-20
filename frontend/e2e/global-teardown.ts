@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 
-/** Matches the usernames newTrader() hands out (support.ts), and nothing seeded. */
-const E2E_USERNAME = '^e2e[0-9]+$';
+/** Matches the emails newTrader() hands out (support.ts), and nothing seeded. */
+const E2E_EMAIL = '^e2e[0-9]+@example\\.com$';
 
 /**
  * Deletes every trader the journeys registered, with their account and trading activity.
@@ -11,12 +11,12 @@ const E2E_USERNAME = '^e2e[0-9]+$';
 const CLEANUP_SQL = `
 BEGIN;
 CREATE TEMP TABLE e2e_accounts ON COMMIT DROP AS
-    SELECT account_id AS id FROM users WHERE username ~ '${E2E_USERNAME}' AND account_id IS NOT NULL;
+    SELECT account_id AS id FROM users WHERE email ~ '${E2E_EMAIL}' AND account_id IS NOT NULL;
 CREATE TEMP TABLE e2e_orders ON COMMIT DROP AS
     SELECT id FROM orders WHERE account_id IN (SELECT id FROM e2e_accounts)
     UNION SELECT order_id FROM order_history WHERE account_id IN (SELECT id FROM e2e_accounts);
 -- refresh_tokens go with their user (ON DELETE CASCADE)
-DELETE FROM users WHERE username ~ '${E2E_USERNAME}';
+DELETE FROM users WHERE email ~ '${E2E_EMAIL}';
 DELETE FROM executions WHERE order_id IN (SELECT id FROM e2e_orders);
 DELETE FROM dlq_messages WHERE original_order_id IN (SELECT id FROM e2e_orders);
 DELETE FROM orders WHERE id IN (SELECT id FROM e2e_orders);
