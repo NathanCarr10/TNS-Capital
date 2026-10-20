@@ -1894,6 +1894,81 @@
         }
       }
     },
+    "/api/v1/prices/{symbol}/news": {
+      "get": {
+        "tags": [
+          "price-controller"
+        ],
+        "summary": "News about an instrument",
+        "description": "Up to 10 headlines from the last 7 days, newest first. Empty when there is no news or market data is unavailable. Cached for 5 minutes per symbol.",
+        "operationId": "getNews",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NewsHeadlineResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "INS-404 Instrument not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VAL-422 Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/prices/{symbol}/bars": {
       "get": {
         "tags": [
@@ -2714,7 +2789,7 @@
           "newsletter-controller"
         ],
         "summary": "Preview this week's newsletter",
-        "description": "Support only. Builds the week so far from the latest prices and news without publishing it; the preview has no id.",
+        "description": "Support only. Builds the week so far from the latest prices without publishing it; the preview has no id.",
         "operationId": "previewIssue",
         "responses": {
           "200": {
@@ -3724,43 +3799,12 @@
         },
         "description": "Biggest falls, worst first"
       },
-      "NewsletterNewsResponse": {
-        "required": [
-          "headline",
-          "symbol",
-          "url"
-        ],
-        "type": "object",
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "description": "The mover the headline is about"
-          },
-          "headline": {
-            "type": "string",
-            "description": "Plain text"
-          },
-          "source": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "description": "Link to the full article; always https"
-          },
-          "publishedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "description": "Headlines about the movers; empty when no news was available"
-      },
       "NewsletterResponse": {
         "required": [
           "gainers",
           "generatedAt",
           "id",
           "losers",
-          "news",
           "weekStart"
         ],
         "type": "object",
@@ -3792,13 +3836,6 @@
             "description": "Biggest falls, worst first",
             "items": {
               "$ref": "#/components/schemas/NewsletterMoverResponse"
-            }
-          },
-          "news": {
-            "type": "array",
-            "description": "Headlines about the movers; empty when no news was available",
-            "items": {
-              "$ref": "#/components/schemas/NewsletterNewsResponse"
             }
           }
         }
@@ -4016,6 +4053,30 @@
             "type": "number"
           },
           "tradedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NewsHeadlineResponse": {
+        "required": [
+          "headline",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string",
+            "description": "Plain text"
+          },
+          "source": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Link to the full article; always https"
+          },
+          "publishedAt": {
             "type": "string",
             "format": "date-time"
           }

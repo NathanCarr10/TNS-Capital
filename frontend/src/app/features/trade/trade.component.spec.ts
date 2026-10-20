@@ -49,9 +49,10 @@ describe('TradeComponent', () => {
     tradingService.getAccountPositions.and.returnValue(of(positions));
 
   beforeEach(async () => {
-    marketDataServiceSpy = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars']);
+    marketDataServiceSpy = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars', 'getNews']);
     marketDataServiceSpy.getQuotes.and.returnValue(of([aaplQuote]));
     marketDataServiceSpy.getBars.and.returnValue(of(bars));
+    marketDataServiceSpy.getNews.and.returnValue(of([]));
     tradingService = tradingServiceStub();
 
     await TestBed.configureTestingModule({
@@ -178,6 +179,7 @@ describe('TradeComponent', () => {
     expect(fixture.nativeElement.querySelector('app-candlestick-chart')).toBeNull();
 
     marketDataServiceSpy.getBars.and.returnValue(of(bars));
+    marketDataServiceSpy.getNews.and.returnValue(of([]));
     (fixture.nativeElement.querySelector('.chart-panel .error-banner button') as HTMLButtonElement).click();
     fixture.detectChanges();
 

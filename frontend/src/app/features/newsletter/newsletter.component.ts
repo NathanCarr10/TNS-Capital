@@ -5,26 +5,14 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
-import {
-  NewsletterControllerService,
-  NewsletterMoverResponse,
-  NewsletterNewsResponse,
-  NewsletterResponse,
-  NewsletterSummaryResponse,
-} from '../../api/trading';
+import { NewsletterControllerService, NewsletterResponse, NewsletterSummaryResponse } from '../../api/trading';
 import { AuthService } from '../../core/auth/auth.service';
 import { readApiError, readErrorMessage } from '../../core/trading/api-error';
 
-/** A mover with the headlines shown under it. */
-export interface MoverNews {
-  mover: NewsletterMoverResponse;
-  headlines: NewsletterNewsResponse[];
-}
-
 /**
- * The weekly market newsletter: the week's biggest gainers and losers and the
- * news about them. Opens the latest issue, or the one in the URL
- * (/newsletter/:id). Support staff can preview the current week's issue; a
+ * The Market Movers page, showing the weekly newsletter: the week's biggest
+ * gainers and losers. Opens the latest issue, or the one in the URL
+ * (/market-movers/:id). Support staff can preview the current week's issue; a
  * preview is not saved, so traders never see it. Where the API allows it (a
  * demo), support can publish the preview before Friday.
  */
@@ -52,17 +40,6 @@ export class NewsletterComponent {
 
   /** The preview while there is one, otherwise the published issue. */
   readonly shown = computed(() => this.preview() ?? this.issue());
-
-  /** Movers that have headlines, gainers first, each with its own headlines. */
-  readonly news = computed<MoverNews[]>(() => {
-    const issue = this.shown();
-    if (!issue) {
-      return [];
-    }
-    return [...issue.gainers, ...issue.losers]
-      .map((mover) => ({ mover, headlines: issue.news.filter((item) => item.symbol === mover.symbol) }))
-      .filter((entry) => entry.headlines.length > 0);
-  });
 
   constructor() {
     inject(ActivatedRoute)
@@ -95,7 +72,7 @@ export class NewsletterComponent {
   }
 
   open(issueId: string): void {
-    void this.router.navigate(['/newsletter', issueId]);
+    void this.router.navigate(['/market-movers', issueId]);
   }
 
   /** Support only: builds this week's issue so far from the latest prices. Nothing is published. */
@@ -136,7 +113,7 @@ export class NewsletterComponent {
       next: (issue) => {
         this.publishing.set(false);
         this.preview.set(null);
-        void this.router.navigate(['/newsletter', issue.id]);
+        void this.router.navigate(['/market-movers', issue.id]);
       },
       error: (error: unknown) => {
         this.publishing.set(false);

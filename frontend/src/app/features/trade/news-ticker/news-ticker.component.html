@@ -1,0 +1,44 @@
+@if (headlines().length > 0) {
+  <section class="news-ticker" [class.paused]="paused()" [attr.aria-label]="'Latest news about ' + symbol()">
+    <span class="label">News</span>
+
+    <div class="viewport">
+      <ul class="track" [style.animation-duration.s]="duration()">
+        @for (item of headlines(); track item.url) {
+          <li>
+            <ng-container *ngTemplateOutlet="headline; context: { $implicit: item, copy: false }" />
+          </li>
+        }
+        <!-- A second copy, so the strip loops without a gap; screen readers and the keyboard skip it -->
+        @for (item of headlines(); track item.url) {
+          <li class="copy" aria-hidden="true">
+            <ng-container *ngTemplateOutlet="headline; context: { $implicit: item, copy: true }" />
+          </li>
+        }
+      </ul>
+    </div>
+
+    <button
+      type="button"
+      class="icon-btn toggle"
+      [attr.aria-label]="paused() ? 'Play the news ticker' : 'Pause the news ticker'"
+      [attr.aria-pressed]="paused()"
+      (click)="togglePause()"
+    >
+      <app-icon [name]="paused() ? 'play' : 'pause'" />
+    </button>
+  </section>
+}
+
+<ng-template #headline let-item let-copy="copy">
+  <!-- Third-party text: interpolated, so it is shown as text and never run as HTML -->
+  <a class="headline" [href]="item.url" target="_blank" rel="noopener noreferrer" [attr.tabindex]="copy ? -1 : null">{{
+    item.headline
+  }}</a>
+  <span class="meta">
+    {{ item.source }}
+    @if (item.publishedAt) {
+      &middot; {{ item.publishedAt | date: 'MMM d, HH:mm' }}
+    }
+  </span>
+</ng-template>

@@ -1,0 +1,112 @@
+// As wide as the page, never as wide as the headlines: the Trade page is a grid,
+// and a grid item would otherwise grow to fit the whole strip and widen the page
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.news-ticker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.label {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  // Fade the headlines in and out at the edges
+  mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  // The track holds the headlines twice, so moving it by half loops seamlessly
+  animation: news-ticker-scroll linear infinite;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding-right: 2.5rem;
+    white-space: nowrap;
+  }
+}
+
+// Stops while the pointer or keyboard focus is on a headline, so it can be read and clicked.
+// Not the whole strip: the play button keeps focus after a click and would keep it paused
+.paused .track,
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
+.headline {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.toggle {
+  flex-shrink: 0;
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+@keyframes news-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+// Reduced motion: a still list to scroll by hand. AccessibilityPreferencesService sets
+// data-motion from the Settings page, defaulting to the system's prefers-reduced-motion
+:host-context(:root[data-motion='reduced']) {
+  .viewport {
+    overflow-x: auto;
+    mask-image: none;
+  }
+
+  .track {
+    animation: none;
+  }
+
+  .copy,
+  .toggle {
+    display: none;
+  }
+}

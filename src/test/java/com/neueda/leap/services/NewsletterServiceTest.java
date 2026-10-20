@@ -2,7 +2,6 @@ package com.neueda.leap.services;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -18,21 +17,17 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import com.neueda.leap.config.NewsletterProperties;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
 import com.neueda.leap.exceptions.NewsletterPublishingDisabledException;
-import com.neueda.leap.marketdata.AlpacaRestClient;
 import com.neueda.leap.marketdata.BarTimeframe;
 import com.neueda.leap.marketdata.MarketDataService;
-import com.neueda.leap.marketdata.NewsArticle;
 import com.neueda.leap.marketdata.PriceBar;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.NewsletterIssue;
 import com.neueda.leap.model.NewsletterMover;
-import com.neueda.leap.model.NewsletterNewsItem;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.NewsletterIssueRepository;
 import com.neueda.leap.time.FixedClock;
@@ -43,32 +38,29 @@ class NewsletterServiceTest {
     // Friday 2026-10-16, 17:00 in New York: the scheduled run
     private static final Instant NOW = Instant.parse("2026-10-16T21:00:00Z");
     private static final LocalDate WEEK_START = LocalDate.of(2026, 10, 12);
-    private static final Instant WEEK_START_INSTANT = Instant.parse("2026-10-12T04:00:00Z");
 
     private final NewsletterIssueRepository issueRepository = mock(NewsletterIssueRepository.class);
     private final InstrumentRepository instrumentRepository = mock(InstrumentRepository.class);
     private final MarketDataService marketDataService = mock(MarketDataService.class);
-    private final AlpacaRestClient alpacaRestClient = mock(AlpacaRestClient.class);
     private final FixedClock clock = new FixedClock(NOW);
     private final List<Instrument> instruments = new ArrayList<>();
 
-    private NewsletterService service(int moversPerSide, int headlinesPerMover) {
-        return service(moversPerSide, headlinesPerMover, false);
+    private NewsletterService service(int moversPerSide) {
+        return service(moversPerSide, false);
     }
 
-    private NewsletterService service(int moversPerSide, int headlinesPerMover, boolean earlyPublish) {
-        return new NewsletterService(issueRepository, instrumentRepository, marketDataService, alpacaRestClient,
-                new NewsletterProperties("-", NEW_YORK, moversPerSide, headlinesPerMover, earlyPublish), clock);
+    private NewsletterService service(int moversPerSide, boolean earlyPublish) {
+        return new NewsletterService(issueRepository, instrumentRepository, marketDataService,
+                new NewsletterProperties("-", NEW_YORK, moversPerSide, earlyPublish), clock);
     }
 
-    private final NewsletterService service = service(5, 3);
+    private final NewsletterService service = service(5);
 
     @BeforeEach
     void setUp() {
         when(instrumentRepository.findAll()).thenReturn(instruments);
         when(issueRepository.findByWeekStart(any())).thenReturn(Optional.empty());
         when(issueRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(alpacaRestClient.news(anyCollection(), any(), anyInt())).thenReturn(List.of());
     }
 
     /** A daily bar for the trading day, timed at midnight New York as Alpaca does */
@@ -84,11 +76,6 @@ class NewsletterServiceTest {
         when(marketDataService.bars(symbol, BarTimeframe.DAY_1, NewsletterService.DAILY_BARS)).thenReturn(List.of(
                 bar("2026-10-08", "1.00"), bar("2026-10-09", start),
                 bar("2026-10-12", "1.00"), bar("2026-10-16", end)));
-    }
-
-    private static NewsArticle article(String headline, String publishedAt, String... symbols) {
-        return new NewsArticle(headline, "benzinga", "https://example.com/" + headline.replace(' ', '-'),
-                Instant.parse(publishedAt), List.of(symbols));
     }
 
     private static List<String> symbols(List<NewsletterMover> movers) {
@@ -135,7 +122,7 @@ class NewsletterServiceTest {
         instrument("EEE", "100", "98");
         instrument("FFF", "100", "97");
 
-        NewsletterIssue issue = service(2, 3).publishWeeklyIssue();
+        NewsletterIssue issue = service(2).publishWeeklyIssue();
 
         assertEquals(List.of("CCC", "BBB"), symbols(issue.getGainers()));
         assertEquals(List.of("FFF", "EEE"), symbols(issue.getLosers()));
@@ -183,12 +170,12 @@ class NewsletterServiceTest {
     @Test
     @DisplayName("Returns the week's issue without calling Alpaca when it was published already")
     void returnsPublishedIssue() {
-        NewsletterIssue published = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of(), List.of());
+        NewsletterIssue published = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of());
         when(issueRepository.findByWeekStart(WEEK_START)).thenReturn(Optional.of(published));
 
         assertSame(published, service.publishWeeklyIssue());
 
-        verifyNoInteractions(marketDataService, alpacaRestClient);
+        verifyNoInteractions(marketDataService);
         verify(issueRepository, never()).save(any());
     }
 
@@ -196,7 +183,7 @@ class NewsletterServiceTest {
     @DisplayName("Returns the other run's issue when one is saved for the week at the same time")
     void returnsIssueSavedConcurrently() {
         instrument("AAPL", "100", "110");
-        NewsletterIssue other = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of(), List.of());
+        NewsletterIssue other = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of());
         when(issueRepository.findByWeekStart(WEEK_START)).thenReturn(Optional.empty()).thenReturn(Optional.of(other));
         when(issueRepository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate week_start"));
 
@@ -240,7 +227,7 @@ class NewsletterServiceTest {
     @DisplayName("Previews from the latest prices even when the week's issue was published")
     void previewIgnoresPublishedIssue() {
         when(issueRepository.findByWeekStart(WEEK_START)).thenReturn(Optional.of(
-                new NewsletterIssue(WEEK_START, NOW, List.of(), List.of(), List.of())));
+                new NewsletterIssue(WEEK_START, NOW, List.of(), List.of())));
         instrument("AAPL", "100", "90");
 
         NewsletterIssue preview = service.previewWeeklyIssue();
@@ -272,7 +259,7 @@ class NewsletterServiceTest {
         clock.setNow(Instant.parse("2026-10-14T15:00:00Z"));
         instrument("AAPL", "100", "110");
 
-        NewsletterIssue issue = service(5, 3, true).publishEarly();
+        NewsletterIssue issue = service(5, true).publishEarly();
 
         assertEquals(WEEK_START, issue.getWeekStart());
         assertEquals(List.of("AAPL"), symbols(issue.getGainers()));
@@ -282,55 +269,11 @@ class NewsletterServiceTest {
     @Test
     @DisplayName("Returns the week's issue when publishing early after it was published")
     void publishEarlyReturnsPublishedIssue() {
-        NewsletterIssue published = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of(), List.of());
+        NewsletterIssue published = new NewsletterIssue(WEEK_START, NOW, List.of(), List.of());
         when(issueRepository.findByWeekStart(WEEK_START)).thenReturn(Optional.of(published));
 
-        assertSame(published, service(5, 3, true).publishEarly());
+        assertSame(published, service(5, true).publishEarly());
 
         verify(issueRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Asks for news about the movers since the start of the week")
-    void asksForMoverNews() {
-        instrument("AAPL", "100", "110");
-        instrument("TSLA", "100", "90");
-
-        service.publishWeeklyIssue();
-
-        verify(alpacaRestClient).news(List.of("AAPL", "TSLA"), WEEK_START_INSTANT, NewsletterService.NEWS_LIMIT);
-    }
-
-    @Test
-    @DisplayName("Shows each mover's newest headlines, up to the limit, each article once")
-    void picksHeadlines() {
-        instrument("AAPL", "100", "110");
-        instrument("TSLA", "100", "90");
-        when(alpacaRestClient.news(anyCollection(), any(), anyInt())).thenReturn(List.of(
-                article("Apple old", "2026-10-12T10:00:00Z", "AAPL"),
-                article("Apple and Tesla", "2026-10-15T10:00:00Z", "AAPL", "TSLA"),
-                article("Apple new", "2026-10-16T10:00:00Z", "AAPL"),
-                article("Tesla only", "2026-10-14T10:00:00Z", "TSLA"),
-                article("Other company", "2026-10-16T11:00:00Z", "MSFT")));
-
-        List<NewsletterNewsItem> news = service(5, 2).publishWeeklyIssue().getNews();
-
-        assertEquals(List.of("AAPL:Apple new", "AAPL:Apple and Tesla", "TSLA:Tesla only"),
-                news.stream().map(item -> item.symbol() + ":" + item.headline()).toList());
-        assertEquals("https://example.com/Apple-new", news.get(0).url());
-        assertEquals(Instant.parse("2026-10-16T10:00:00Z"), news.get(0).publishedAt());
-    }
-
-    @Test
-    @DisplayName("Publishes the issue without headlines when there is no news")
-    void publishesWithoutNews() {
-        instrument("AAPL", "100", "110");
-
-        NewsletterIssue issue = service.publishWeeklyIssue();
-
-        assertTrue(issue.getNews().isEmpty());
-        ArgumentCaptor<NewsletterIssue> saved = ArgumentCaptor.forClass(NewsletterIssue.class);
-        verify(issueRepository).save(saved.capture());
-        assertEquals(List.of("AAPL"), symbols(saved.getValue().getGainers()));
     }
 }

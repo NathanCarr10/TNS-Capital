@@ -17,8 +17,8 @@ import java.util.Objects;
 
 /**
  * One weekly market newsletter (table newsletter_issues): the week's biggest
- * movers and the news about them, as published. Issues are never changed, so
- * there are no setters; the movers and news are stored as JSONB
+ * movers, as published. Issues are never changed, so there are no setters;
+ * the movers are stored as JSONB
  * (docs/DECISIONS.md #17).
  */
 @Entity
@@ -42,10 +42,6 @@ public class NewsletterIssue {
     @Column(nullable = false, updatable = false)
     private List<NewsletterMover> losers;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, updatable = false)
-    private List<NewsletterNewsItem> news;
-
     protected NewsletterIssue() {
         // JPA no-arg constructor
     }
@@ -55,7 +51,7 @@ public class NewsletterIssue {
      * @throws IllegalArgumentException if weekStart is not a Monday
      */
     public NewsletterIssue(LocalDate weekStart, Instant generatedAt, List<NewsletterMover> gainers,
-            List<NewsletterMover> losers, List<NewsletterNewsItem> news) {
+            List<NewsletterMover> losers) {
         this.weekStart = Objects.requireNonNull(weekStart);
         if (!DayOfWeek.MONDAY.equals(weekStart.getDayOfWeek())) {
             throw new IllegalArgumentException("A newsletter week starts on a Monday, not " + weekStart);
@@ -63,7 +59,6 @@ public class NewsletterIssue {
         this.generatedAt = Objects.requireNonNull(generatedAt);
         this.gainers = List.copyOf(gainers);
         this.losers = List.copyOf(losers);
-        this.news = List.copyOf(news);
     }
 
     public Long getId() {
@@ -84,9 +79,5 @@ public class NewsletterIssue {
 
     public List<NewsletterMover> getLosers() {
         return losers;
-    }
-
-    public List<NewsletterNewsItem> getNews() {
-        return news;
     }
 }
