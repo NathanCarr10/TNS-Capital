@@ -65,8 +65,8 @@ describe('NewsTickerComponent', () => {
     create();
 
     const copies = Array.from(element().querySelectorAll('li.copy'));
-    expect(headlines('li:not(.copy) .headline').length).toBe(2);
-    expect(copies.length).toBe(2);
+    expect(headlines('li:not(.copy) .headline')).toHaveSize(2);
+    expect(copies).toHaveSize(2);
     expect(copies.every((copy) => copy.getAttribute('aria-hidden') === 'true')).toBeTrue();
     expect(headlines('li.copy .headline').every((link) => link.getAttribute('tabindex') === '-1')).toBeTrue();
     expect(headlines('li:not(.copy) .headline').some((link) => link.hasAttribute('tabindex'))).toBeFalse();
@@ -117,7 +117,7 @@ describe('NewsTickerComponent', () => {
     fixture.detectChanges();
 
     expect(marketData.getNews).toHaveBeenCalledTimes(2);
-    expect(headlines('li:not(.copy) .headline').length).toBe(2);
+    expect(headlines('li:not(.copy) .headline')).toHaveSize(2);
     discardPeriodicTasks();
   }));
 
