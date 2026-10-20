@@ -66,7 +66,10 @@ services:
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       # The staff accounts are created from these at startup; nothing is seeded (OWASP A07-4).
-      # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app
+      # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app.
+      # Each signs in with its email, admin@tns-capital.local and support@tns-capital.local by default
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tns-capital.local}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@tns-capital.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env (at least 12 characters)}
       SUPPORT_PASSWORD: ${SUPPORT_PASSWORD:?set SUPPORT_PASSWORD in .env (at least 12 characters, not the ADMIN_PASSWORD)}
       DB_HOST: postgres
