@@ -3630,7 +3630,7 @@
             "type": "string",
             "format": "uuid"
           },
-          "customerUsername": {
+          "customerEmail": {
             "type": "string"
           },
           "accountId": {
@@ -3670,7 +3670,7 @@
             "type": "integer",
             "format": "int64"
           },
-          "senderUsername": {
+          "senderEmail": {
             "type": "string"
           },
           "senderRole": {
