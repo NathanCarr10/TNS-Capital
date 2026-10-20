@@ -11,6 +11,8 @@
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
+  // Lets each copy of the cards be at least as wide as the row (100cqi)
+  container-type: inline-size;
 }
 
 .label {
@@ -22,21 +24,41 @@
   color: var(--accent);
 }
 
-// One row of cards, scrolled sideways when they do not all fit
+.viewport {
+  overflow: hidden;
+  // Fade the edges so cards slide in and out rather than being cut off
+  mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: news-scroll var(--news-duration, 48s) linear infinite;
+}
+
+// Pause so a moving headline can be read or clicked
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
 .cards {
+  --card-gap: 0.75rem;
+
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(14rem, 18rem);
-  gap: 0.75rem;
+  gap: var(--card-gap);
+  // On a page wider than the cards the copies still follow each other without a jump
+  min-width: 100cqi;
   margin: 0;
-  padding: 0 0 0.25rem;
+  // The trailing gap keeps the space between the copies the same as between cards,
+  // so moving by half the track lands exactly on the start of the copy
+  padding: 0 var(--card-gap) 0.25rem 0;
   list-style: none;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
 
   li {
     display: flex;
-    scroll-snap-align: start;
   }
 }
 
@@ -82,6 +104,53 @@
   line-clamp: 3;
 }
 
-:host-context(:root[data-motion='reduced']) .news-card {
-  transition: none;
+@keyframes news-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+// No motion: a still row the user can scroll sideways, without the looping copy.
+// The app's own setting wins; until it is set, the system preference decides.
+@mixin still-row {
+  .viewport {
+    overflow-x: auto;
+    mask-image: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .track {
+    animation: none;
+  }
+
+  .cards {
+    min-width: 0;
+    padding-right: 0;
+
+    &[aria-hidden='true'] {
+      display: none;
+    }
+
+    li {
+      scroll-snap-align: start;
+    }
+  }
+
+  .news-card {
+    transition: none;
+  }
+}
+
+:host-context(:root[data-motion='reduced']) {
+  @include still-row;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host-context(:root:not([data-motion='normal'])) {
+    @include still-row;
+  }
 }

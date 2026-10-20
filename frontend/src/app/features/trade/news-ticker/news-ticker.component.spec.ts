@@ -26,8 +26,9 @@ describe('NewsTickerComponent', () => {
   let marketData: jasmine.SpyObj<MarketDataService>;
 
   const element = (): HTMLElement => fixture.nativeElement;
-  const headlines = (selector: string): HTMLAnchorElement[] =>
-    Array.from(element().querySelectorAll<HTMLAnchorElement>(selector));
+  // The cards of the first copy; the second is a hidden duplicate for the loop
+  const cards = (): HTMLAnchorElement[] =>
+    Array.from(element().querySelectorAll<HTMLAnchorElement>('.cards:first-child .news-card'));
 
   /** Creates the ticker for the symbol and lets its first request complete. */
   const create = (symbol = 'AMZN'): void => {
@@ -52,7 +53,7 @@ describe('NewsTickerComponent', () => {
 
     expect(marketData.getNews).toHaveBeenCalledWith('AMZN');
     expect(element().querySelector('.news')?.getAttribute('aria-label')).toBe('Latest news about AMZN');
-    const [first] = headlines('.news-card');
+    const [first] = cards();
     const text = first.querySelector('.headline')!;
     expect(text.textContent).toBe('Amazon opens its <b>AI chips</b> to every developer');
     expect(text.querySelector('b')).toBeNull();
@@ -65,11 +66,35 @@ describe('NewsTickerComponent', () => {
   it('shows each headline as its own card, with its source and time', fakeAsync(() => {
     create();
 
-    const cards = headlines('.news-card');
-    expect(cards).toHaveSize(2);
-    expect(cards[0].querySelector('.meta')?.textContent).toContain('benzinga');
-    expect(cards[0].querySelector('.meta')?.textContent).toContain('Oct 19');
-    expect(cards[1].querySelector('.meta')?.textContent?.trim()).toBe('benzinga');
+    const shown = cards();
+    expect(shown).toHaveSize(2);
+    expect(shown[0].querySelector('.meta')?.textContent).toContain('benzinga');
+    expect(shown[0].querySelector('.meta')?.textContent).toContain('Oct 19');
+    expect(shown[1].querySelector('.meta')?.textContent?.trim()).toBe('benzinga');
+    discardPeriodicTasks();
+  }));
+
+  it('hides the looping copy from screen readers and the keyboard', fakeAsync(() => {
+    create();
+    const copy = element().querySelectorAll('.cards')[1];
+
+    expect(copy.getAttribute('aria-hidden')).toBe('true');
+    expect(Array.from(copy.querySelectorAll('a')).every((link) => link.getAttribute('tabindex') === '-1')).toBeTrue();
+    expect(cards().every((link) => !link.hasAttribute('tabindex'))).toBeTrue();
+    discardPeriodicTasks();
+  }));
+
+  it('scrolls for longer the more headlines there are', fakeAsync(() => {
+    create();
+    const track = (): HTMLElement => element().querySelector<HTMLElement>('.track')!;
+
+    expect(track().style.getPropertyValue('--news-duration')).toBe(`${2 * NewsTickerComponent.SECONDS_PER_CARD}s`);
+
+    marketData.getNews.and.returnValue(of([...HEADLINES, { ...HEADLINES[0], url: 'https://www.benzinga.com/news/3' }]));
+    tick(NewsTickerComponent.REFRESH_INTERVAL_MS);
+    fixture.detectChanges();
+
+    expect(track().style.getPropertyValue('--news-duration')).toBe(`${3 * NewsTickerComponent.SECONDS_PER_CARD}s`);
     discardPeriodicTasks();
   }));
 
@@ -99,7 +124,7 @@ describe('NewsTickerComponent', () => {
     fixture.detectChanges();
 
     expect(marketData.getNews).toHaveBeenCalledTimes(2);
-    expect(headlines('.news-card')).toHaveSize(2);
+    expect(cards()).toHaveSize(2);
     discardPeriodicTasks();
   }));
 
