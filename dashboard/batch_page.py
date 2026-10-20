@@ -36,7 +36,7 @@ def render():
         st.error(f"Could not reach the database: {error}")
         return
     if not batch["available"]:
-        st.warning("The ETL has not run yet, so there is no batch data. Run `python etl/pipeline.py`.")
+        st.warning("The ETL has not run yet, so there is no batch data. Run `docker-compose run --rm etl python pipeline.py`.")
         return
 
     trades = batch["trades"]

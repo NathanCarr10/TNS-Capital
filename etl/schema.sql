@@ -76,3 +76,26 @@ CREATE TABLE IF NOT EXISTS analytics.fact_daily_prices (
     vwap         NUMERIC(18,4),            -- volume-weighted average price
     PRIMARY KEY (symbol, trade_date)
 );
+
+-- Let the dashboard (tns_reader) and the strategy service (tns_strategy) read
+-- these tables. roles.sql grants this by default only on tables tns_etl
+-- creates; a run as the database owner (python pipeline.py with .env's
+-- DB_USER) creates them as the owner, and the readers get "permission denied".
+-- Only objects the running role may grant on are touched, so this cannot fail
+-- the load, and roles that don't exist (a bare test database) are skipped.
+DO $$
+DECLARE
+    reader TEXT;
+    tbl    TEXT;
+BEGIN
+    FOREACH reader IN ARRAY ARRAY['tns_reader', 'tns_strategy'] LOOP
+        CONTINUE WHEN NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = reader);
+        IF (SELECT pg_has_role(nspowner, 'USAGE') FROM pg_namespace WHERE nspname = 'analytics') THEN
+            EXECUTE format('GRANT USAGE ON SCHEMA analytics TO %I', reader);
+        END IF;
+        FOR tbl IN SELECT tablename FROM pg_tables
+                   WHERE schemaname = 'analytics' AND pg_has_role(tableowner, 'USAGE') LOOP
+            EXECUTE format('GRANT SELECT ON analytics.%I TO %I', tbl, reader);
+        END LOOP;
+    END LOOP;
+END $$;
