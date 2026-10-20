@@ -155,10 +155,12 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
-      # kafka:
-      #   condition: service_healthy
-      # broker-simulator:
-      #   condition: service_healthy
+      # Kafka must be up first: a Kafka consumer whose broker name does not resolve yet
+      # fails at startup instead of retrying, and the container exits
+      kafka:
+        condition: service_healthy
+      broker-simulator:
+        condition: service_healthy
     healthcheck:
       # /actuator/health is public and answers UP or DOWN without details
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/actuator/health || exit 1"]
@@ -190,8 +192,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      # kafka:
-      #   condition: service_healthy
+      # As for app: the price stream's Kafka consumer cannot start before Kafka exists
+      kafka:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
     healthcheck:

@@ -29,7 +29,8 @@ test.describe('Admin', () => {
     await signInToAnalytics(page, ADMIN);
 
     await expect(page.getByText(`Signed in as ${ADMIN.email}`)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('Key insights')).toBeVisible();
+    // The dashboard opens on its Live view; Key insights moved to the Batch view
+    await expect(page.getByRole('heading', { name: 'Live trading' })).toBeVisible();
   });
 
   test('an admin logging in to the trading app is sent to the analytics dashboard instead', async ({ page }) => {
@@ -73,6 +74,6 @@ test.describe('Support', () => {
     await signInToAnalytics(page, SUPPORT);
 
     await expect(page.getByText('this dashboard is for admins only')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('Key insights')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Live trading' })).toHaveCount(0);
   });
 });
