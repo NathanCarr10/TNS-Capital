@@ -109,6 +109,8 @@ nav {
   display: flex;
   align-items: center;
   gap: 0.9rem;
+  // Stay at the right end even when there is no symbol search (support view)
+  margin-left: auto;
 }
 
 .divider {
