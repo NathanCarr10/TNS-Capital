@@ -1,0 +1,23 @@
+meta {
+  name: Get News
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{apiUrl}}/api/v1/prices/AAPL/news
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Up to 10 headlines about the instrument from the last 7 days, newest first
+  (headline, source, url, publishedAt), for the Trade page's news ticker.
+  Cached for 5 minutes per symbol. Empty when there is no news, for example
+  when the API runs without Alpaca keys. Returns 404 (INS-404) for a symbol
+  that is not an instrument.
+}

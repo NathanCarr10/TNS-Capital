@@ -12,6 +12,7 @@ import { MarketQuotesStore } from '../../core/trading/market-quotes.store';
 import { BarTimeframe, PriceBar } from '../../core/trading/trading.models';
 import { toHoldingRow } from '../portfolio/holdings/holding-row';
 import { CandlestickChartComponent } from './candlestick-chart/candlestick-chart.component';
+import { NewsTickerComponent } from './news-ticker/news-ticker.component';
 import { OrderTicketComponent } from './order-ticket/order-ticket.component';
 
 export type Trend = 'up' | 'down' | 'flat';
@@ -24,7 +25,7 @@ interface MovingAverageOption {
 /** One instrument: its quote and day's range, a candlestick chart, the user's position and an order ticket. */
 @Component({
   selector: 'app-trade',
-  imports: [CommonModule, RouterLink, CandlestickChartComponent, OrderTicketComponent],
+  imports: [CommonModule, RouterLink, CandlestickChartComponent, NewsTickerComponent, OrderTicketComponent],
   providers: [MarketQuotesStore],
   templateUrl: './trade.component.html',
   styleUrl: './trade.component.scss',

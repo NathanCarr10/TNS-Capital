@@ -14,11 +14,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.neueda.leap.dtos.NewsHeadlineResponse;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
 import com.neueda.leap.marketdata.BarTimeframe;
 import com.neueda.leap.marketdata.MarketDataService;
 import com.neueda.leap.marketdata.MarketQuote;
+import com.neueda.leap.marketdata.NewsArticle;
 import com.neueda.leap.marketdata.PriceBar;
 import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.model.Instrument;
@@ -94,5 +96,23 @@ class PriceControllerTest {
         when(marketDataService.bars(any(), any(), anyInt())).thenReturn(List.of());
 
         assertThrows(MarketDataUnavailableException.class, () -> controller.getBars("AAPL", "1Day", 100));
+    }
+
+    @Test
+    @DisplayName("Returns the news about an instrument as headlines")
+    void returnsNews() {
+        when(marketDataService.news("AAPL")).thenReturn(List.of(new NewsArticle("Apple unveils new chip", "benzinga",
+                "https://www.benzinga.com/news/1", Instant.parse("2026-10-14T09:30:00Z"), List.of("AAPL", "QCOM"))));
+
+        assertEquals(List.of(new NewsHeadlineResponse("Apple unveils new chip", "benzinga",
+                        "https://www.benzinga.com/news/1", Instant.parse("2026-10-14T09:30:00Z"))),
+                controller.getNews(" aapl").getBody());
+    }
+
+    @Test
+    @DisplayName("Never asks for news about a symbol that is not an instrument")
+    void rejectsNewsForUnknownSymbol() {
+        assertThrows(InstrumentNotFoundException.class, () -> controller.getNews("NOPE"));
+        verifyNoInteractions(marketDataService);
     }
 }

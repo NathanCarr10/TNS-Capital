@@ -2,6 +2,7 @@ package com.neueda.leap.controllers;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import com.neueda.leap.dtos.NewsHeadlineResponse;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
 import com.neueda.leap.exceptions.PriceUnavailableException;
@@ -91,6 +92,21 @@ public class PriceController {
             throw new MarketDataUnavailableException("No " + timeframe + " bars for " + normalizedSymbol);
         }
         return ResponseEntity.ok(bars);
+    }
+
+    /** The latest headlines about an instrument, for the Trade page's news ticker. */
+    @Operation(summary = "News about an instrument",
+            description = "Up to 10 headlines from the last 7 days, newest first. Empty when there is no news or "
+                    + "market data is unavailable. Cached for 5 minutes per symbol.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "404", description = "INS-404 Instrument not found")
+    @GetMapping("/{symbol}/news")
+    public ResponseEntity<List<NewsHeadlineResponse>> getNews(@PathVariable String symbol) {
+        String normalizedSymbol = requireInstrument(InputNormalizer.normalize(symbol));
+        return ResponseEntity.ok(marketDataService.news(normalizedSymbol).stream()
+                .map(article -> new NewsHeadlineResponse(article.headline(), article.source(), article.url(),
+                        article.publishedAt()))
+                .toList());
     }
 
     // Only known instruments, so arbitrary symbols are never sent to the market data API
