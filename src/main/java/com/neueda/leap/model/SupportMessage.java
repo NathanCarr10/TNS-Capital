@@ -24,8 +24,8 @@ public class SupportMessage {
     @Column(name = "conversation_id", nullable = false)
     private UUID conversationId;
 
-    @Column(name = "sender_username", nullable = false, length = 255)
-    private String senderUsername;
+    @Column(name = "sender_email", nullable = false, length = 320)
+    private String senderEmail;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "sender_role", nullable = false, length = 20)
@@ -40,10 +40,10 @@ public class SupportMessage {
     protected SupportMessage() {
     }
 
-    public SupportMessage(UUID conversationId, String senderUsername, SenderRole senderRole, String body,
+    public SupportMessage(UUID conversationId, String senderEmail, SenderRole senderRole, String body,
             Instant createdAt) {
         this.conversationId = conversationId;
-        this.senderUsername = senderUsername;
+        this.senderEmail = senderEmail;
         this.senderRole = senderRole;
         this.body = body;
         this.createdAt = createdAt;
@@ -51,7 +51,7 @@ public class SupportMessage {
 
     public Long getId() { return id; }
     public UUID getConversationId() { return conversationId; }
-    public String getSenderUsername() { return senderUsername; }
+    public String getSenderEmail() { return senderEmail; }
     public SenderRole getSenderRole() { return senderRole; }
     public String getBody() { return body; }
     public Instant getCreatedAt() { return createdAt; }

@@ -18,8 +18,8 @@ public class SupportConversation {
     @Id
     private UUID id;
 
-    @Column(name = "customer_username", nullable = false, length = 255)
-    private String customerUsername;
+    @Column(name = "customer_email", nullable = false, length = 320)
+    private String customerEmail;
 
     @Column(nullable = false, length = 120)
     private String subject;
@@ -37,9 +37,9 @@ public class SupportConversation {
     protected SupportConversation() {
     }
 
-    public SupportConversation(String customerUsername, String subject, Instant createdAt) {
+    public SupportConversation(String customerEmail, String subject, Instant createdAt) {
         this.id = UUID.randomUUID();
-        this.customerUsername = customerUsername;
+        this.customerEmail = customerEmail;
         this.subject = subject;
         this.status = Status.OPEN;
         this.createdAt = createdAt;
@@ -47,7 +47,7 @@ public class SupportConversation {
     }
 
     public UUID getId() { return id; }
-    public String getCustomerUsername() { return customerUsername; }
+    public String getCustomerEmail() { return customerEmail; }
     public String getSubject() { return subject; }
     public Status getStatus() { return status; }
     public Instant getCreatedAt() { return createdAt; }

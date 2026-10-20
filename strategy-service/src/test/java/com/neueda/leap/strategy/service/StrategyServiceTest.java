@@ -56,11 +56,11 @@ import static org.mockito.Mockito.when;
 @DisplayName("StrategyService")
 class StrategyServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-19T14:00:00Z");
-    private static final Caller TRADER = new Caller("trader", false, Optional.of(7L));
-    private static final Caller OTHER = new Caller("someone", false, Optional.of(8L));
-    private static final Caller SUPPORT = new Caller("support", true, Optional.empty());
+    private static final Caller TRADER = new Caller("trader@example.com", false, Optional.of(7L));
+    private static final Caller OTHER = new Caller("someone@example.com", false, Optional.of(8L));
+    private static final Caller SUPPORT = new Caller("support@tns-capital.local", true, Optional.empty());
     // Admins work in the analytics dashboard: no account, no strategies here
-    private static final Caller ADMIN = new Caller("admin", false, Optional.empty());
+    private static final Caller ADMIN = new Caller("admin@tns-capital.local", false, Optional.empty());
 
     private StrategyRepository strategies;
     private StrategySignalRepository signals;
@@ -133,7 +133,7 @@ class StrategyServiceTest {
         assertEquals(1, service.list(TRADER).size());
         assertEquals(2, service.list(SUPPORT).size());
         assertTrue(service.list(ADMIN).isEmpty());
-        assertTrue(service.list(new Caller("new", false, Optional.empty())).isEmpty());
+        assertTrue(service.list(new Caller("new@example.com", false, Optional.empty())).isEmpty());
     }
 
     @Test
@@ -200,7 +200,7 @@ class StrategyServiceTest {
                 NOW.minusSeconds(60))).thenReturn(List.of(recent));
 
         assertEquals(1, service.activity(TRADER, NOW.minusSeconds(60)).size());
-        assertTrue(service.activity(new Caller("new", false, Optional.empty()), NOW).isEmpty());
+        assertTrue(service.activity(new Caller("new@example.com", false, Optional.empty()), NOW).isEmpty());
     }
 
     @Test
@@ -253,6 +253,6 @@ class StrategyServiceTest {
         assertThrows(NotOwnerException.class, () -> service.performance(SUPPORT, null));
         assertThrows(NotOwnerException.class, () -> service.performance(ADMIN, 7L));
         assertThrows(NotOwnerException.class, () -> service.performance(TRADER, 8L));
-        assertThrows(NotOwnerException.class, () -> service.performance(new Caller("new", false, Optional.empty()), null));
+        assertThrows(NotOwnerException.class, () -> service.performance(new Caller("new@example.com", false, Optional.empty()), null));
     }
 }

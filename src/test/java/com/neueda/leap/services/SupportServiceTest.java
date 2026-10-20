@@ -42,12 +42,12 @@ class SupportServiceTest {
 
     @BeforeEach
     void setUp() {
-        conversation = new SupportConversation("trader1", "Order question", CREATED_AT);
+        conversation = new SupportConversation("trader1@example.com", "Order question", CREATED_AT);
         conversationId = conversation.getId();
         when(conversations.findById(conversationId)).thenReturn(Optional.of(conversation));
         when(conversations.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         SecurityContextHolder.getContext().setAuthentication(
-            new TestingAuthenticationToken("support", "password", List.of(new SimpleGrantedAuthority("ROLE_SUPPORT"))));
+            new TestingAuthenticationToken("support@tns-capital.local", "password", List.of(new SimpleGrantedAuthority("ROLE_SUPPORT"))));
     }
 
     @AfterEach
@@ -66,14 +66,14 @@ class SupportServiceTest {
     @Test
     void customerCannotCloseConversation() {
         SecurityContextHolder.getContext().setAuthentication(
-            new TestingAuthenticationToken("trader1", "password", List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+            new TestingAuthenticationToken("trader1@example.com", "password", List.of(new SimpleGrantedAuthority("ROLE_USER"))));
 
         assertThrows(AccessDeniedException.class, () -> service.closeConversation(conversationId));
     }
 
     @Test
     void messageCreatesSupportNotification() {
-        SupportMessage saved = new SupportMessage(conversationId, "support", SupportMessage.SenderRole.SUPPORT,
+        SupportMessage saved = new SupportMessage(conversationId, "support@tns-capital.local", SupportMessage.SenderRole.SUPPORT,
                 "We are looking into this", CREATED_AT);
         when(messages.save(any())).thenReturn(saved);
 
@@ -82,6 +82,6 @@ class SupportServiceTest {
         ArgumentCaptor<SupportNotification> notification = ArgumentCaptor.forClass(SupportNotification.class);
         verify(notifications).save(notification.capture());
         assertEquals("CUSTOMER", notification.getValue().getRecipientRole());
-        assertEquals("trader1", notification.getValue().getRecipientUsername());
+        assertEquals("trader1@example.com", notification.getValue().getRecipientEmail());
     }
 }

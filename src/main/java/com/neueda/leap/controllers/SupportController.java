@@ -72,14 +72,14 @@ public class SupportController {
     }
 
     private SupportConversationResponse response(SupportConversation conversation) {
-        return new SupportConversationResponse(conversation.getId(), conversation.getCustomerUsername(),
-            accounts.findAccountIdByUsername(conversation.getCustomerUsername()).orElse(null),
+        return new SupportConversationResponse(conversation.getId(), conversation.getCustomerEmail(),
+            accounts.findAccountIdByEmail(conversation.getCustomerEmail()).orElse(null),
                 conversation.getSubject(), conversation.getStatus(), conversation.getCreatedAt(), conversation.getUpdatedAt(),
                 service.messages(conversation.getId()).stream().map(this::messageResponse).toList());
     }
 
     private SupportMessageResponse messageResponse(SupportMessage message) {
-        return new SupportMessageResponse(message.getId(), message.getSenderUsername(), message.getSenderRole(),
+        return new SupportMessageResponse(message.getId(), message.getSenderEmail(), message.getSenderRole(),
                 message.getBody(), message.getCreatedAt());
     }
 }

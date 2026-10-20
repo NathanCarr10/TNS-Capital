@@ -9,7 +9,7 @@ import java.util.Optional;
 
 /**
  * Builds the Caller from the verified token: the account is looked up by
- * username in users.account_id, as the trading API does.
+ * email in users.account_id, as the trading API does.
  */
 @Component
 public class CallerResolver {
