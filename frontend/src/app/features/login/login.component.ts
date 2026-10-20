@@ -21,7 +21,7 @@ export class LoginComponent {
   readonly errorMessage = signal<string | null>(null);
 
   readonly loginForm = this.formBuilder.nonNullable.group({
-    username: ['', [Validators.required]],
+    email: ['', [Validators.required, Validators.email, Validators.maxLength(320)]],
     password: ['', [Validators.required]],
   });
 

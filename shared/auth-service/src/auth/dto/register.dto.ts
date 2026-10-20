@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDefined, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsDefined, IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
 import { MISSING_CREDENTIALS } from '../../common/validation';
 
 /**
@@ -10,6 +10,12 @@ export const USERNAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 export const HOLDER_NAME_PATTERN = /^[\p{L}\p{M}\p{N} .,'-]+$/u;
 
 export class RegisterDto {
+  @ApiProperty({ example: 'trader1@example.com', format: 'email', maxLength: 320 })
+  @IsDefined({ message: 'email is required' })
+  @IsEmail()
+  @Length(1, 320)
+  email: string;
+
   @ApiProperty({ example: 'trader1', minLength: 3, maxLength: 100, pattern: USERNAME_PATTERN.source })
   @IsDefined({ message: MISSING_CREDENTIALS })
   @IsString()

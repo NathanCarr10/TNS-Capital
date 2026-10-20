@@ -5,13 +5,13 @@
     <p>Sign in to access your account and trading tools.</p>
 
     <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate>
-      <label for="username">Username</label>
+      <label for="email">Email</label>
       <input
-        id="username"
-        type="text"
-        formControlName="username"
-        autocomplete="username"
-        placeholder="Enter username"
+        id="email"
+        type="email"
+        formControlName="email"
+        autocomplete="email"
+        placeholder="Enter email"
       />
 
       <label for="password">Password</label>
@@ -26,9 +26,9 @@
       <!-- One line is always reserved here, so the form keeps its size when a message appears -->
       <div class="form-message" aria-live="polite">
         @if (loginForm.invalid && loginForm.touched) {
-          <p class="field-error">Username and password are required.</p>
+          <p class="field-error">Email and password are required.</p>
         } @else if (errorMessage()) {
-          <p class="server-error">{{ errorMessage() }}</p>
+          <p class="server-error">{{ errorMessage().capitalize() }}</p>
         }
       </div>
 

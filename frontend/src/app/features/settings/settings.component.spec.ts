@@ -51,13 +51,14 @@ describe('SettingsComponent', () => {
     tradingService = tradingServiceStub();
   });
 
-  it('shows the account number, holder, username, status and dates', () => {
+  it('shows the account number, holder, username, email, status and dates', () => {
     const element = create();
     const text = element.querySelector('.details')!.textContent!;
 
     expect(text).toContain('ACC-U000011');
     expect(text).toContain('Trader One');
     expect(text).toContain('trader1');
+    expect(text).toContain('ada@example.com');
     expect(text).toContain('ACTIVE');
     expect(element.querySelector('.opened-on')?.textContent).toContain('Sep 1, 2026');
     expect(element.querySelector('.last-updated')?.textContent).toContain('Oct 13, 2026');
