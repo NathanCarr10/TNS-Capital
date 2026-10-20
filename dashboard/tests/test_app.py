@@ -280,6 +280,31 @@ def test_batch_view_shows_history_insights_and_data_quality(monkeypatch):
     assert len(app.get("plotly_chart")) == 5
 
 
+def test_a_reload_stays_on_the_chosen_view(monkeypatch):
+    app = run_app(monkeypatch, view="Batch")
+    assert app.query_params["view"] == "Batch"
+
+    monkeypatch.setattr(data, "load_batch", lambda: BATCH)
+    reloaded = AppTest.from_file("../app.py", default_timeout=30)
+    reloaded.session_state["token"] = token()
+    reloaded.query_params["view"] = "Batch"  # what the browser sends back after a reload
+    reloaded.run()
+
+    assert not reloaded.exception
+    assert reloaded.title[0].value == "Trading history"
+
+
+def test_an_unknown_view_in_the_url_opens_live(monkeypatch):
+    monkeypatch.setattr(data, "load_live", lambda: LIVE)
+    app = AppTest.from_file("../app.py", default_timeout=30)
+    app.session_state["token"] = token()
+    app.query_params["view"] = "Nope"
+    app.run()
+
+    assert not app.exception
+    assert app.title[0].value == "Live trading"
+
+
 def test_batch_view_leaves_out_what_only_live_has(monkeypatch):
     app = run_app(monkeypatch, view="Batch")
 

@@ -12,6 +12,7 @@ The sidebar switches between three views:
 - Live (live_page.py): what is happening now and what needs an admin, from the trading tables
 - Batch (batch_page.py): trends and reports over the whole history, from the nightly ETL
 - Monitoring (monitoring_page.py): alerts, metrics and logs from the monitoring stack
+The chosen view is kept in the URL (?view=...), so a reload stays on it.
 
 Run with:  streamlit run app.py
 """
@@ -119,7 +120,11 @@ VIEWS = {"Live": live_page, "Batch": batch_page, "Monitoring": monitoring_page}
 admin = require_admin()
 with st.sidebar:
     theme.logo()
-    view = st.segmented_control("View", list(VIEWS), default="Live", key="view", width="stretch")
+    # The view is kept in the URL (?view=Batch), so a reload opens on the same one
+    linked = st.query_params.get("view")
+    view = st.segmented_control("View", list(VIEWS), default=linked if linked in VIEWS else "Live",
+                                key="view", width="stretch")
+    st.query_params["view"] = view or "Live"
     monitoring_page.alert_badge()
     st.divider()
     st.write(f"Signed in as **{admin['sub']}**")
