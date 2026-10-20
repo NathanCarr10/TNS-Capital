@@ -28,7 +28,7 @@
         @if (loginForm.invalid && loginForm.touched) {
           <p class="field-error">Email and password are required.</p>
         } @else if (errorMessage()) {
-          <p class="server-error">{{ errorMessage().capitalize() }}</p>
+          <p class="server-error">{{ errorMessage() }}</p>
         }
       </div>
 
