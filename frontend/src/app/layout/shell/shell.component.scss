@@ -231,8 +231,10 @@ nav {
     overflow-x: auto;
   }
 
+  // The icon has no reversed variant, so lighten its charcoal swoosh for the dark bar
   .brand-logo {
     width: 2.5rem;
+    filter: invert(1) hue-rotate(180deg);
   }
 
   nav {
