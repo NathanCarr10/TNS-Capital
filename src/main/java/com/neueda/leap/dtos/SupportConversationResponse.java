@@ -6,6 +6,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-public record SupportConversationResponse(UUID id, String customerUsername, Long accountId, String subject, Status status,
+public record SupportConversationResponse(UUID id, String customerEmail, Long accountId, String subject, Status status,
         Instant createdAt, Instant updatedAt, List<SupportMessageResponse> messages) {
 }

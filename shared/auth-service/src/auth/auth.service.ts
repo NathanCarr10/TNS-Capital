@@ -8,8 +8,8 @@ import {
   AuthenticatedUser,
   RegisteredUser,
   EmailTakenError,
+  normaliseEmail,
   UserRecord,
-  UsernameTakenError,
   UsersService,
 } from '../users/users.service';
 import { AccessTokenPayload, INVALID_ACCESS_TOKEN, REFRESH_TOKEN_TTL_SECONDS, TokenService } from './token.service';
@@ -36,36 +36,33 @@ export class AuthService {
    * Registers a user and opens their trading account.
    *
    * Satisfies AC#1: Plaintext never stored, only the Argon2id hash
-   * Satisfies AC#4: Duplicate username returns 409
+   * Satisfies AC#4: Duplicate email returns 409
    */
-  async register(username: string, password: string, email = `${username}@example.invalid`, holderName?: string): Promise<RegisteredUser> {
-    if (!email.includes('@')) {
-      holderName = email;
-      email = `${username}@example.invalid`;
-    }
-    // Checked before hashing, so a taken username doesn't cost an Argon2 hash
-    if (await this.users.findByUsername(username)) {
-      throw usernameTaken();
+  async register(email: string, password: string, holderName?: string): Promise<RegisteredUser> {
+    const normalisedEmail = normaliseEmail(email);
+    // Checked before hashing, so a taken email doesn't cost an Argon2 hash
+    if (await this.users.findByEmail(normalisedEmail)) {
+      throw emailTaken();
     }
     const passwordHash = await hashPassword(password);
     try {
-      return await this.users.create(username, passwordHash, email.trim().toLowerCase(), holderName);
+      return await this.users.create(normalisedEmail, passwordHash, holderName);
     } catch (error) {
-      if (error instanceof UsernameTakenError || error instanceof EmailTakenError) {
-        throw usernameTaken();
+      if (error instanceof EmailTakenError) {
+        throw emailTaken();
       }
       throw error;
     }
   }
 
   /**
-  * Checks an email address and password.
+   * Checks an email address and password.
    *
-   * @returns the user, or null if the username is unknown or the password is
+   * @returns the user, or null if the email is unknown or the password is
    *          wrong (callers must not reveal which)
    */
   async validate(email: string, password: string): Promise<UserRecord | null> {
-    const user = await this.users.findByEmail(email.trim().toLowerCase());
+    const user = await this.users.findByEmail(normaliseEmail(email));
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return null;
     }
@@ -77,7 +74,7 @@ export class AuthService {
    * Each login starts a new session (refresh token family), so a user can be
    * signed in on several devices.
    *
-  * Wrong email and wrong password get the same 401, so accounts cannot be probed.
+   * Wrong email and wrong password get the same 401, so accounts cannot be probed.
    */
   async login(email: string, password: string, clientIp = 'unknown'): Promise<LoginResult> {
     const user = await this.validate(email, password);
@@ -88,12 +85,12 @@ export class AuthService {
       metrics.loginFailed();
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CREDENTIALS);
     }
-    this.logger.log(`Login succeeded: username=${JSON.stringify(user.username)} id=${user.id} ip=${clientIp}`);
+    this.logger.log(`Login succeeded: email=${JSON.stringify(user.email)} id=${user.id} ip=${clientIp}`);
     metrics.loginSucceeded();
 
     const refreshToken = this.tokens.generateRefreshToken();
     await this.refreshTokens.create(user.id, refreshToken.hash, randomUUID(), REFRESH_TOKEN_TTL_SECONDS);
-    return { accessToken: await this.tokens.issue(user), refreshToken: refreshToken.token };
+    return { accessToken: await this.tokens.issue(user.email, user.roles), refreshToken: refreshToken.token };
   }
 
   /**
@@ -124,7 +121,7 @@ export class AuthService {
     if (!user) {
       throw invalidRefreshToken();
     }
-    return { accessToken: await this.tokens.issue(user), refreshToken: next.token };
+    return { accessToken: await this.tokens.issue(user.email, user.roles), refreshToken: next.token };
   }
 
   /**
@@ -146,7 +143,7 @@ export class AuthService {
    * @throws ApiException 401 AUTH-401 if the user no longer exists
    */
   async me(claims: AccessTokenPayload): Promise<AuthenticatedUser> {
-    const user = await this.users.findByUsername(claims.sub);
+    const user = await this.users.findByEmail(claims.sub);
     if (!user) {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_ACCESS_TOKEN);
     }
@@ -158,11 +155,11 @@ function invalidRefreshToken(): ApiException {
   return new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_REFRESH_TOKEN);
 }
 
-function usernameTaken(): ApiException {
+function emailTaken(): ApiException {
   return new ApiException(HttpStatus.CONFLICT, 'USR-409', 'User already exists');
 }
 
 // Satisfies AC#5: the password hash never leaves the service
-function withoutPasswordHash({ id, username, email, roles, accountId }: UserRecord): AuthenticatedUser {
-  return { id, username, email, roles, accountId };
+function withoutPasswordHash({ id, email, roles, accountId }: UserRecord): AuthenticatedUser {
+  return { id, email, roles, accountId };
 }

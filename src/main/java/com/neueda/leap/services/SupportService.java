@@ -40,13 +40,13 @@ public class SupportService {
 
     public List<SupportConversation> listConversations() {
         return isSupport() ? conversations.findAllByOrderByUpdatedAtDesc()
-                : conversations.findByCustomerUsernameOrderByUpdatedAtDesc(username());
+                : conversations.findByCustomerEmailOrderByUpdatedAtDesc(email());
     }
 
     @Transactional
     public SupportConversation createConversation(SupportConversationRequest request) {
         Instant now = Instant.now();
-        SupportConversation conversation = conversations.save(new SupportConversation(username(), request.subject().trim(), now));
+        SupportConversation conversation = conversations.save(new SupportConversation(email(), request.subject().trim(), now));
         addMessage(conversation, request.body(), SupportMessage.SenderRole.CUSTOMER, now);
         return conversation;
     }
@@ -72,13 +72,13 @@ public class SupportService {
     }
 
     private void addMessage(SupportConversation conversation, String body, SupportMessage.SenderRole role, Instant now) {
-        SupportMessage message = messages.save(new SupportMessage(conversation.getId(), username(), role, body.trim(), now));
+        SupportMessage message = messages.save(new SupportMessage(conversation.getId(), email(), role, body.trim(), now));
         conversation.touch(now);
         conversations.save(conversation);
         if (role == SupportMessage.SenderRole.CUSTOMER) {
             notifications.save(new SupportNotification("SUPPORT", null, conversation.getId(), message.getId(), now));
         } else {
-            notifications.save(new SupportNotification("CUSTOMER", conversation.getCustomerUsername(), conversation.getId(), message.getId(), now));
+            notifications.save(new SupportNotification("CUSTOMER", conversation.getCustomerEmail(), conversation.getId(), message.getId(), now));
         }
         publish(conversation.getId(), message);
     }
@@ -140,7 +140,7 @@ public class SupportService {
     }
 
     private void checkAccess(SupportConversation conversation) {
-        if (!isSupport() && !conversation.getCustomerUsername().equals(username())) {
+        if (!isSupport() && !conversation.getCustomerEmail().equals(email())) {
             throw new AccessDeniedException("Support conversation does not belong to the caller");
         }
     }
@@ -149,7 +149,7 @@ public class SupportService {
         return authentication().getAuthorities().stream().anyMatch(a -> "ROLE_SUPPORT".equals(a.getAuthority()));
     }
 
-    private String username() { return authentication().getName(); }
+    private String email() { return authentication().getName(); }
 
     private Authentication authentication() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

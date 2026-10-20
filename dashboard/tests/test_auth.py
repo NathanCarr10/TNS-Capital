@@ -93,11 +93,12 @@ def test_login_returns_the_access_and_refresh_tokens(monkeypatch):
 
     monkeypatch.setattr(auth.requests, "post", post)
 
-    assert auth.login("admin@tns-capital.local", "pw") == ("abc", "def")
+    assert auth.login(" admin@tns-capital.local ", "pw") == ("abc", "def")
     assert calls == [(f"{auth.AUTH_URL}/auth/login", {"email": "admin@tns-capital.local", "password": "pw"})]
 
 
 @pytest.mark.parametrize("status, message", [
+    (400, "Enter a valid email address"),
     (401, "Invalid email or password"),
     (429, "Too many sign-in attempts"),
     (500, "HTTP 500"),
@@ -106,7 +107,7 @@ def test_login_explains_failures(monkeypatch, status, message):
     monkeypatch.setattr(auth.requests, "post", lambda url, json, timeout: FakeResponse(status))
 
     with pytest.raises(auth.AuthError, match=message):
-        auth.login("admin", "pw")
+        auth.login("admin@tns-capital.local", "pw")
 
 
 def test_login_reports_an_unreachable_auth_service(monkeypatch):
@@ -116,7 +117,7 @@ def test_login_reports_an_unreachable_auth_service(monkeypatch):
     monkeypatch.setattr(auth.requests, "post", down)
 
     with pytest.raises(auth.AuthError, match="unreachable"):
-        auth.login("admin", "pw")
+        auth.login("admin@tns-capital.local", "pw")
 
 
 def test_refresh_rotates_the_refresh_token(monkeypatch):

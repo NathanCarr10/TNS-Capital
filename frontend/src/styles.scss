@@ -201,6 +201,13 @@ a.symbol-link {
   color: var(--text-muted);
 }
 
+// Logos: the transparent brand PNGs have charcoal lettering, so on dark backgrounds they are
+// inverted with the hue rotated back, giving light lettering while keeping the greens
+.logo-on-dark,
+:root[data-theme='dark'] .logo-adaptive {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 // Buttons
 .btn {
   display: inline-flex;

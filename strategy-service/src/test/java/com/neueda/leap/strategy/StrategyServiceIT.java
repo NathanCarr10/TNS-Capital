@@ -176,17 +176,17 @@ class StrategyServiceIT {
         ordersReceived.clear();
         owner.update("INSERT INTO instruments (symbol, name, asset_class, currency, tradable) VALUES "
                 + "('SPY', 'SPDR S&P 500 ETF', 'ETF', 'USD', true), ('OLD', 'Delisted', 'EQUITY', 'USD', false)");
-        traderAccount = linkUser("trader", "ACC-T0001");
-        linkUser("someone", "ACC-T0002");
+        traderAccount = linkUser("trader@example.com", "ACC-T0001");
+        linkUser("someone@example.com", "ACC-T0002");
         loadDailyPrices();
     }
 
-    private long linkUser(String username, String accountNumber) {
+    private long linkUser(String email, String accountNumber) {
         Long accountId = owner.queryForObject(
                 "INSERT INTO accounts (account_number, holder_name, email, cash_balance) VALUES (?, ?, ?, 10000) RETURNING id",
-                Long.class, accountNumber, username, username + "@example.com");
-        owner.update("INSERT INTO users (username, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
-                username, accountId);
+                Long.class, accountNumber, email, email);
+        owner.update("INSERT INTO users (email, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
+                email, accountId);
         return accountId;
     }
 
@@ -213,9 +213,9 @@ class StrategyServiceIT {
         }
     }
 
-    private static String token(String username, String... roles) throws JOSEException {
+    private static String token(String email, String... roles) throws JOSEException {
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject(username)
+                .subject(email)
                 .issuer(ISSUER)
                 .claim("typ", "access")
                 .claim("roles", List.of(roles))
@@ -269,7 +269,7 @@ class StrategyServiceIT {
     @Test
     @DisplayName("trades a switched-on strategy on replayed bars, through the trading API with its own token")
     void tradesOnReplayedBars() throws Exception {
-        String trader = token("trader", "USER");
+        String trader = token("trader@example.com", "USER");
         long id = createStrategy(trader);
         mockMvc.perform(put("/api/v1/strategies/{id}/status", id).header("Authorization", trader)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"ACTIVE\"}"))
@@ -314,7 +314,7 @@ class StrategyServiceIT {
     @Test
     @DisplayName("backtests a rule on the daily prices the ETL loaded")
     void backtests() throws Exception {
-        mockMvc.perform(post("/api/v1/strategies/backtests").header("Authorization", token("trader", "USER"))
+        mockMvc.perform(post("/api/v1/strategies/backtests").header("Authorization", token("trader@example.com", "USER"))
                 .contentType(MediaType.APPLICATION_JSON).content("""
                         {"symbol": "SPY", "ruleType": "MA_CROSSOVER", "params": {"shortWindow": 5, "longWindow": 20},
                          "from": "2025-01-01", "to": "2025-12-31", "initialCash": 10000}"""))
@@ -323,7 +323,7 @@ class StrategyServiceIT {
                 .andExpect(jsonPath("$.equityCurve.length()").value(300))
                 .andExpect(jsonPath("$.rule").value("SMA 5 / SMA 20 crossover"))
                 .andExpect(jsonPath("$.roundTrips").isNumber());
-        mockMvc.perform(post("/api/v1/strategies/backtests").header("Authorization", token("trader", "USER"))
+        mockMvc.perform(post("/api/v1/strategies/backtests").header("Authorization", token("trader@example.com", "USER"))
                 .contentType(MediaType.APPLICATION_JSON).content("""
                         {"symbol": "AAPL", "ruleType": "BOLLINGER", "to": "%s"}""".formatted(LocalDate.now())))
                 .andExpect(status().isNotFound())
@@ -333,19 +333,19 @@ class StrategyServiceIT {
     @Test
     @DisplayName("keeps traders to their own strategies, support read-only, admins and the service's token out")
     void enforcesAccess() throws Exception {
-        String trader = token("trader", "USER");
+        String trader = token("trader@example.com", "USER");
         long id = createStrategy(trader);
 
-        mockMvc.perform(get("/api/v1/strategies/{id}", id).header("Authorization", token("someone", "USER")))
+        mockMvc.perform(get("/api/v1/strategies/{id}", id).header("Authorization", token("someone@example.com", "USER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("AUTH-403"));
-        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("someone", "USER")))
+        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("someone@example.com", "USER")))
                 .andExpect(jsonPath("$.length()").value(0));
-        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("admin", "ADMIN")))
+        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("admin@tns-capital.local", "ADMIN")))
                 .andExpect(jsonPath("$.length()").value(0));
-        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("support", "SUPPORT")))
+        mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("support@tns-capital.local", "SUPPORT")))
                 .andExpect(jsonPath("$.length()").value(1));
-        mockMvc.perform(put("/api/v1/strategies/{id}/status", id).header("Authorization", token("support", "SUPPORT"))
+        mockMvc.perform(put("/api/v1/strategies/{id}/status", id).header("Authorization", token("support@tns-capital.local", "SUPPORT"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"ACTIVE\"}"))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/strategies").header("Authorization", token("service:strategy-service", "STRATEGY")))
@@ -359,7 +359,7 @@ class StrategyServiceIT {
     @Test
     @DisplayName("allows one active strategy per account, validates input and archives on delete")
     void managesStrategies() throws Exception {
-        String trader = token("trader", "USER");
+        String trader = token("trader@example.com", "USER");
         long first = createStrategy(trader);
         long second = createStrategy(trader);
         String switchOn = "{\"status\": \"ACTIVE\"}";
@@ -394,7 +394,7 @@ class StrategyServiceIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountId").value(traderAccount))
                 .andExpect(jsonPath("$.strategies.trades").value(0));
-        mockMvc.perform(get("/api/v1/strategies/performance").header("Authorization", token("support", "SUPPORT")))
+        mockMvc.perform(get("/api/v1/strategies/performance").header("Authorization", token("support@tns-capital.local", "SUPPORT")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/v1/strategies/{id}", 999).header("Authorization", trader))
                 .andExpect(status().isNotFound())

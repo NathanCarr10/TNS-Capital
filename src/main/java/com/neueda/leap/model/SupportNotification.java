@@ -20,8 +20,8 @@ public class SupportNotification {
     @Column(name = "recipient_role", nullable = false, length = 20)
     private String recipientRole;
 
-    @Column(name = "recipient_username", length = 255)
-    private String recipientUsername;
+    @Column(name = "recipient_email", length = 320)
+    private String recipientEmail;
 
     @Column(name = "conversation_id", nullable = false)
     private UUID conversationId;
@@ -38,10 +38,10 @@ public class SupportNotification {
     protected SupportNotification() {
     }
 
-    public SupportNotification(String recipientRole, String recipientUsername, UUID conversationId, Long messageId,
+    public SupportNotification(String recipientRole, String recipientEmail, UUID conversationId, Long messageId,
             Instant createdAt) {
         this.recipientRole = recipientRole;
-        this.recipientUsername = recipientUsername;
+        this.recipientEmail = recipientEmail;
         this.conversationId = conversationId;
         this.messageId = messageId;
         this.createdAt = createdAt;
@@ -49,7 +49,7 @@ public class SupportNotification {
 
     public Long getId() { return id; }
     public String getRecipientRole() { return recipientRole; }
-    public String getRecipientUsername() { return recipientUsername; }
+    public String getRecipientEmail() { return recipientEmail; }
     public UUID getConversationId() { return conversationId; }
     public Long getMessageId() { return messageId; }
     public Instant getCreatedAt() { return createdAt; }

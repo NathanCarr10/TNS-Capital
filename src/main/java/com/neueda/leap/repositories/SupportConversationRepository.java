@@ -7,6 +7,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SupportConversationRepository extends JpaRepository<SupportConversation, UUID> {
-    List<SupportConversation> findByCustomerUsernameOrderByUpdatedAtDesc(String customerUsername);
+    List<SupportConversation> findByCustomerEmailOrderByUpdatedAtDesc(String customerEmail);
     List<SupportConversation> findAllByOrderByUpdatedAtDesc();
 }

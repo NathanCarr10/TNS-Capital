@@ -58,7 +58,8 @@ const SPOKEN: Record<TickerDirection, string> = { up: 'up', down: 'down', flat: 
 /**
  * A strip of prices that scrolls across the top of every page: each symbol's price, day change
  * and a sparkline of its recent 15-minute closes, green when the day is up and red when it is down.
- * Hovering or focusing it pauses the scroll; users who prefer reduced motion get a still, scrollable row.
+ * Hovering or focusing it pauses the scroll; users who prefer reduced motion (in Settings or, until
+ * that is set, in their system) get a still, scrollable row.
  */
 @Component({
   selector: 'app-ticker-tape',

@@ -23,7 +23,7 @@ describe('Rate limiting', () => {
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(UsersService)
-      .useValue({ findByUsername: jest.fn(async () => null), findByEmail: jest.fn(async () => null) })
+      .useValue({ findByEmail: jest.fn(async () => null) })
       .overrideProvider(RefreshTokensService)
       .useValue({})
       .overrideProvider(getOptionsToken())

@@ -30,7 +30,6 @@
   width: 100%;
   max-width: 12rem;
   height: auto;
-  border-radius: 6px;
 }
 
 .brand-name {
@@ -110,6 +109,8 @@ nav {
   display: flex;
   align-items: center;
   gap: 0.9rem;
+  // Stay at the right end even when there is no symbol search (support view)
+  margin-left: auto;
 }
 
 .divider {
@@ -230,8 +231,10 @@ nav {
     overflow-x: auto;
   }
 
+  // The icon has no reversed variant, so lighten its charcoal swoosh for the dark bar
   .brand-logo {
-    width: 4.25rem;
+    width: 2.5rem;
+    filter: invert(1) hue-rotate(180deg);
   }
 
   nav {

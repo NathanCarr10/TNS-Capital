@@ -31,6 +31,8 @@ LOG_PRESETS = {
     "Refresh token reuse (A09-1)": ("Refresh token reuse", []),
     "Access denied by the API": ("Access denied", []),
     "Errors, every service": ("", ["error"]),
+    # PRC-503 and MKT-503 log "... unavailable" at warn; a Kafka failure logs "Order could not be queued" at error
+    "Unavailable (503)": ("unavailable", ["warn"]),
 }
 
 # PromQL (MetricsQL), by chart. Rates are per minute, which reads better than per second at

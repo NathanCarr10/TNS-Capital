@@ -1,10 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { interval } from 'rxjs';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, interval, map } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { StrategyActivityService } from '../../core/strategy/strategy-activity.service';
+import { DeadLetterCountService } from '../../core/support/dead-letter-count.service';
 import { SupportService } from '../../core/support/support.service';
 import { ThemeService } from '../../core/theme/theme.service';
 import { AccountStore } from '../../core/trading/account.store';
@@ -42,10 +43,12 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly store = inject(AccountStore);
   private readonly supportService = inject(SupportService);
+  private readonly deadLetterCount = inject(DeadLetterCountService);
   readonly theme = inject(ThemeService);
 
   readonly isSupport = this.store.isSupport;
   readonly supportUnreadCount = signal(0);
+  readonly pendingDeadLetters = this.deadLetterCount.pending;
 
   // Support staff neither trade nor have an account of their own, so they get no trade page or
   // settings; they watch strategies read-only, read the newsletter and close dead letters instead
@@ -67,12 +70,22 @@ export class ShellComponent {
         { label: 'Settings', link: '/settings', icon: 'settings' },
       ];
 
+  // The support inbox already shows the conversations, so the floating launcher is hidden there
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event) => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects)
+    ),
+    { initialValue: this.router.url }
+  );
+  readonly showSupportWidget = computed(() => !this.url().startsWith('/support'));
+
   private readonly now = signal(new Date());
   readonly market = computed(() => nyseStatus(this.now()));
 
-  /** The account holder's name, or the support user's username as they have no account. */
+  /** The account holder's name, or the support user's email as they have no account. */
   readonly displayName = computed(() =>
-    this.isSupport ? (this.store.profile()?.username ?? '') : (this.store.account()?.holderName ?? '')
+    this.isSupport ? (this.store.profile()?.email ?? '') : (this.store.account()?.holderName ?? '')
   );
   readonly subtitle = computed(() =>
     this.isSupport ? 'Support' : (this.store.account()?.accountNumber ?? '')
@@ -102,6 +115,7 @@ export class ShellComponent {
   }
 
   private refreshSupportNotifications(): void {
+    this.deadLetterCount.refresh();
     this.supportService.getUnreadNotificationCount().subscribe({
       next: ({ unreadCount }) => this.supportUnreadCount.set(unreadCount),
     });

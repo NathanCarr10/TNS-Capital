@@ -28,7 +28,7 @@ test.describe('Admin', () => {
     await expect(page).toHaveURL(/\/analytics\/$/);
     await signInToAnalytics(page, ADMIN);
 
-    await expect(page.getByText(`Signed in as ${ADMIN.username}`)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(`Signed in as ${ADMIN.email}`)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Key insights')).toBeVisible();
   });
 

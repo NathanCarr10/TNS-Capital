@@ -1,24 +1,22 @@
-// As wide as the page, never as wide as the headlines: the Trade page is a grid,
-// and a grid item would otherwise grow to fit the whole strip and widen the page
+// As wide as the page, never as wide as the cards: the Trade page is a grid,
+// and a grid item would otherwise grow to fit the whole row and widen the page
 :host {
   display: block;
   min-width: 0;
   max-width: 100%;
 }
 
-.news-ticker {
+.news {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
   min-width: 0;
-  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
+  // Lets each copy of the cards be at least as wide as the row (100cqi)
+  container-type: inline-size;
 }
 
 .label {
-  flex-shrink: 0;
+  margin: 0;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -27,48 +25,66 @@
 }
 
 .viewport {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
-  // Fade the headlines in and out at the edges
+  // Fade the edges so cards slide in and out rather than being cut off
   mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
 }
 
 .track {
   display: flex;
   width: max-content;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  // The track holds the headlines twice, so moving it by half loops seamlessly
-  animation: news-ticker-scroll linear infinite;
-
-  li {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    padding-right: 2.5rem;
-    white-space: nowrap;
-  }
+  animation: news-scroll var(--news-duration, 48s) linear infinite;
 }
 
-// Stops while the pointer or keyboard focus is on a headline, so it can be read and clicked.
-// Not the whole strip: the play button keeps focus after a click and would keep it paused
-.paused .track,
+// Pause so a moving headline can be read or clicked
 .viewport:hover .track,
 .viewport:focus-within .track {
   animation-play-state: paused;
 }
 
-.headline {
-  font-size: 0.85rem;
-  font-weight: 600;
+.cards {
+  --card-gap: 0.75rem;
+
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(14rem, 18rem);
+  gap: var(--card-gap);
+  // On a page wider than the cards the copies still follow each other without a jump
+  min-width: 100cqi;
+  margin: 0;
+  // The trailing gap keeps the space between the copies the same as between cards,
+  // so moving by half the track lands exactly on the start of the copy
+  padding: 0 var(--card-gap) 0.25rem 0;
+  list-style: none;
+
+  li {
+    display: flex;
+  }
+}
+
+.news-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
   text-decoration: none;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
 
   &:hover,
   &:focus-visible {
-    text-decoration: underline;
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+
+    .headline {
+      text-decoration: underline;
+    }
   }
 }
 
@@ -77,13 +93,18 @@
   color: var(--text-muted);
 }
 
-.toggle {
-  flex-shrink: 0;
-  width: 1.9rem;
-  height: 1.9rem;
+.headline {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
 
-@keyframes news-ticker-scroll {
+@keyframes news-scroll {
   from {
     transform: translateX(0);
   }
@@ -93,20 +114,43 @@
   }
 }
 
-// Reduced motion: a still list to scroll by hand. AccessibilityPreferencesService sets
-// data-motion from the Settings page, defaulting to the system's prefers-reduced-motion
-:host-context(:root[data-motion='reduced']) {
+// No motion: a still row the user can scroll sideways, without the looping copy.
+// The app's own setting wins; until it is set, the system preference decides.
+@mixin still-row {
   .viewport {
     overflow-x: auto;
     mask-image: none;
+    scroll-snap-type: x proximity;
   }
 
   .track {
     animation: none;
   }
 
-  .copy,
-  .toggle {
-    display: none;
+  .cards {
+    min-width: 0;
+    padding-right: 0;
+
+    &[aria-hidden='true'] {
+      display: none;
+    }
+
+    li {
+      scroll-snap-align: start;
+    }
+  }
+
+  .news-card {
+    transition: none;
+  }
+}
+
+:host-context(:root[data-motion='reduced']) {
+  @include still-row;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host-context(:root:not([data-motion='normal'])) {
+    @include still-row;
   }
 }

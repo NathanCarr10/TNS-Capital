@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
 import { DeadLetterMessageDTO, DeadLetterQueueControllerService } from '../../api/trading';
+import { DeadLetterCountService } from '../../core/support/dead-letter-count.service';
 import { DeadLettersComponent } from './dead-letters.component';
 
 describe('DeadLettersComponent', () => {
@@ -67,6 +68,19 @@ describe('DeadLettersComponent', () => {
     expect(dlqApi.dismissMessage).toHaveBeenCalledWith('dlq-1', 'Duplicate order');
     expect(rows()).toHaveSize(0);
     expect(fixture.componentInstance.counts().IGNORED).toBe(1);
+  });
+
+  it('keeps the nav badge in step with the pending tickets', () => {
+    const pending = TestBed.inject(DeadLetterCountService).pending;
+    expect(pending()).toBe(1);
+
+    dlqApi.dismissMessage.and.returnValue(of(undefined) as never);
+    button('Dismiss').click();
+    fixture.detectChanges();
+    button('Dismiss ticket').click();
+    fixture.detectChanges();
+
+    expect(pending()).toBe(0);
   });
 
   it('replays a ticket and reports when it fails again', () => {

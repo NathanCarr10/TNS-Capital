@@ -22,13 +22,13 @@ GRANT CONNECT ON DATABASE tns_capital TO tns_api, tns_auth, tns_etl, tns_reader,
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO tns_api, tns_auth, tns_etl, tns_reader, tns_strategy;
 
--- Trading API: reads and writes the trading tables; reads only the login name
+-- Trading API: reads and writes the trading tables; reads only the sign-in email
 -- and account link of a user, never the password hash
 GRANT SELECT, INSERT, UPDATE, DELETE
     ON accounts, instruments, orders, positions, executions, order_history, dlq_messages, trade_event_log,
        support_conversations, support_messages, support_notifications
     TO tns_api;
-GRANT SELECT (username, account_id) ON users TO tns_api;
+GRANT SELECT (email, account_id) ON users TO tns_api;
 -- ...and whether an account has an ACTIVE strategy, before taking an order from
 -- the strategy service (AccountAccessGuard)
 GRANT SELECT (account_id, status) ON strategies TO tns_api;
@@ -57,7 +57,7 @@ GRANT SELECT
     ON accounts, instruments, orders, positions, executions, order_history, dlq_messages, trade_event_log,
        strategies, strategy_signals, v_positions_detail, v_order_history, v_account_summary
     TO tns_reader;
-GRANT SELECT (id, username, account_id) ON users TO tns_reader;
+GRANT SELECT (id, email, account_id) ON users TO tns_reader;
 GRANT USAGE ON SCHEMA analytics TO tns_reader;
 ALTER DEFAULT PRIVILEGES FOR ROLE tns_etl IN SCHEMA analytics GRANT SELECT ON TABLES TO tns_reader;
 
@@ -65,7 +65,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE tns_etl IN SCHEMA analytics GRANT SELECT ON TA
 -- hash); tradable instruments; the outcome of the orders it placed; and the
 -- daily price history the ETL loads into analytics, for backtests
 GRANT SELECT, INSERT, UPDATE ON strategies, strategy_signals TO tns_strategy;
-GRANT SELECT (username, account_id) ON users TO tns_strategy;
+GRANT SELECT (email, account_id) ON users TO tns_strategy;
 GRANT SELECT (symbol, tradable) ON instruments TO tns_strategy;
 GRANT SELECT (id, account_id, symbol, side, quantity, price, status, created_on) ON orders TO tns_strategy;
 GRANT USAGE ON SCHEMA analytics TO tns_strategy;

@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { of } from 'rxjs';
 
+import { DeadLetterQueueControllerService } from '../../api/trading';
 import { AuthService } from '../../core/auth/auth.service';
 import { StrategyLabService } from '../../core/strategy/strategy-lab.service';
 import { ThemeService } from '../../core/theme/theme.service';
@@ -18,6 +19,7 @@ describe('ShellComponent', () => {
   let authServiceSpy: jasmine.SpyObj<AuthService>;
   let isSupport: boolean;
   let strategyLab: jasmine.SpyObj<StrategyLabService>;
+  let dlqApi: jasmine.SpyObj<DeadLetterQueueControllerService>;
 
   const create = (): HTMLElement => {
     authServiceSpy.isSupport.and.returnValue(isSupport);
@@ -34,6 +36,8 @@ describe('ShellComponent', () => {
     tradingService.getAccounts.and.returnValue(of([]));
     strategyLab = jasmine.createSpyObj<StrategyLabService>('StrategyLabService', ['activity']);
     strategyLab.activity.and.returnValue(of([]));
+    dlqApi = jasmine.createSpyObj<DeadLetterQueueControllerService>('DeadLetterQueueControllerService', ['getDLQStatistics']);
+    dlqApi.getDLQStatistics.and.returnValue(of({ pendingMessages: 0 }) as never);
     // The ticker tape quotes prices on every page
     const marketData = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars']);
     marketData.getQuotes.and.returnValue(of([]));
@@ -47,6 +51,7 @@ describe('ShellComponent', () => {
         { provide: AuthService, useValue: authServiceSpy },
         { provide: TradingService, useValue: tradingService },
         { provide: StrategyLabService, useValue: strategyLab },
+        { provide: DeadLetterQueueControllerService, useValue: dlqApi },
         { provide: MarketDataService, useValue: marketData },
       ],
     }).compileComponents();
@@ -91,6 +96,29 @@ describe('ShellComponent', () => {
     expect(element.querySelector('app-symbol-search')).toBeNull();
   });
 
+  it('shows support how many dead letters are pending', () => {
+    isSupport = true;
+    dlqApi.getDLQStatistics.and.returnValue(of({ pendingMessages: 3 }) as never);
+
+    const element = create();
+    const badge = element.querySelector('nav a[href="/dead-letters"] .nav-notification');
+
+    expect(badge?.textContent).toContain('3');
+    expect(badge?.getAttribute('aria-label')).toBe('3 pending dead letters');
+  });
+
+  it('shows no dead-letter badge when none are pending', () => {
+    isSupport = true;
+
+    expect(create().querySelector('nav a[href="/dead-letters"] .nav-notification')).toBeNull();
+  });
+
+  it("does not ask a trader's session for dead-letter counts", () => {
+    create();
+
+    expect(dlqApi.getDLQStatistics).not.toHaveBeenCalled();
+  });
+
   it("shows the account holder's name, initials and account number", () => {
     const element = create();
 
@@ -100,12 +128,12 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.user .badge')?.textContent).toContain('Trader');
   });
 
-  it('shows support by username', () => {
+  it('shows support by email', () => {
     isSupport = true;
 
     const element = create();
 
-    expect(element.querySelector('.user-name')?.textContent).toContain('trader1');
+    expect(element.querySelector('.user-name')?.textContent).toContain('ada@example.com');
     expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
   });
 

@@ -27,7 +27,6 @@ export class SettingsComponent {
   readonly account = this.store.account;
   readonly accountLoading = this.store.accountLoading;
   readonly accountError = this.store.accountError;
-  readonly username = computed(() => this.store.profile()?.username ?? '');
   readonly email = computed(() => this.store.profile()?.email ?? '');
 
   readonly editing = signal(false);

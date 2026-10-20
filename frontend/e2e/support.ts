@@ -1,17 +1,16 @@
 import { APIRequestContext, Locator, Page, expect } from '@playwright/test';
 
 /**
- * The admin, which the auth service creates from ADMIN_PASSWORD (email <username>@tns-capital.local): ci/e2e-tests.sh generates one
+ * The admin, which the auth service creates from ADMIN_PASSWORD (email admin@tns-capital.local): ci/e2e-tests.sh generates one
  * and passes it in; against your own stack, set E2E_ADMIN_PASSWORD to the one in your .env.
  */
-export const ADMIN = { username: 'admin', email: 'admin@tns-capital.local', password: process.env['E2E_ADMIN_PASSWORD'] ?? '' };
+export const ADMIN = { email: process.env['E2E_ADMIN_EMAIL'] ?? 'admin@tns-capital.local', password: process.env['E2E_ADMIN_PASSWORD'] ?? '' };
 
 /** The support user, created the same way from SUPPORT_PASSWORD (E2E_SUPPORT_PASSWORD here). */
-export const SUPPORT = { username: 'support', email: 'support@tns-capital.local', password: process.env['E2E_SUPPORT_PASSWORD'] ?? '' };
+export const SUPPORT = { email: process.env['E2E_SUPPORT_EMAIL'] ?? 'support@tns-capital.local', password: process.env['E2E_SUPPORT_PASSWORD'] ?? '' };
 
 export interface Trader {
   email: string;
-  username: string;
   password: string;
   holderName: string;
 }
@@ -19,7 +18,7 @@ export interface Trader {
 /** A trader nobody has registered yet, so every run starts from an empty account. */
 export function newTrader(): Trader {
   const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  return { email: `e2e${suffix}@example.com`, username: `e2e${suffix}`, password: 'e2e-password-1', holderName: `E2E Trader ${suffix}` };
+  return { email: `e2e${suffix}@example.com`, password: 'e2e-password-1', holderName: `E2E Trader ${suffix}` };
 }
 
 /** Registers through the auth API and returns the new trading account's id. */

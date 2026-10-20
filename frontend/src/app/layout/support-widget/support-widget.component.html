@@ -29,9 +29,9 @@
                 <time>{{ conversation.updatedAt | date:'MMM d, h:mm a' }}</time>
               </button>
               @if (isSupport && conversation.accountId != null) {
-                <a class="customer-link" href="/portfolio" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerUsername }}</a>
+                <a class="customer-link" href="/portfolio" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerEmail }}</a>
               } @else {
-                <span>{{ conversation.customerUsername }}</span>
+                <span>{{ conversation.customerEmail }}</span>
               }
             </div>
           }
@@ -49,7 +49,7 @@
             <div class="messages" aria-live="polite">
               @for (message of conversation.messages; track message.id) {
                 <article class="message" [class.from-agent]="message.senderRole === 'SUPPORT'">
-                  <span class="message-author">{{ message.senderRole === 'SUPPORT' ? 'Support team' : message.senderUsername }}</span>
+                  <span class="message-author">{{ message.senderRole === 'SUPPORT' ? 'Support team' : message.senderEmail }}</span>
                   <p>{{ message.body }}</p>
                   <time>{{ message.createdAt | date:'MMM d, h:mm a' }}</time>
                 </article>

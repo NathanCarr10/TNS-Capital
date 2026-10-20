@@ -26,7 +26,6 @@ test.describe('Signing in', () => {
     await page.getByRole('link', { name: 'Create an account' }).click();
 
     await page.getByLabel('Email').fill(trader.email);
-    await page.getByLabel('Username').fill(trader.username);
     await page.getByLabel(/Account holder name/).fill(trader.holderName);
     await page.getByLabel('Password', { exact: true }).fill(trader.password);
     await page.getByLabel('Confirm password').fill(trader.password);

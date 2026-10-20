@@ -14,7 +14,7 @@ import { AppModule, configureApp } from '../src/app.module';
 import { validateEnv } from '../src/config/env.validation';
 import { hashPassword } from '../src/users/password-hasher';
 import { RefreshTokensService } from '../src/users/refresh-tokens.service';
-import { RegisteredUser, UserRecord, UsernameTakenError, UsersService } from '../src/users/users.service';
+import { EmailTakenError, RegisteredUser, UserRecord, UsersService } from '../src/users/users.service';
 
 const SECRET = process.env.JWT_SECRET as string;
 const ISSUER = 'urn:tns-capital:auth-service';
@@ -23,21 +23,20 @@ const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const TRADER = { email: 'trader@example.com', password: 'traderPass123' };
 const ADMIN = { email: 'admin@example.com', password: 'adminPassword' };
 
-/** The users table, in memory */
+/** The users table, in memory, keyed by email */
 const store = new Map<string, UserRecord>();
 
 const fakeUsers = {
-  findByUsername: jest.fn(async (username: string) => store.get(username) ?? null),
-  findByEmail: jest.fn(async (email: string) => [...store.values()].find((user) => user.email === email) ?? null),
+  findByEmail: jest.fn(async (email: string) => store.get(email) ?? null),
   findById: jest.fn(async (id: number) => [...store.values()].find((u) => u.id === id) ?? null),
-  create: jest.fn(async (username: string, _passwordHash: string, email: string): Promise<RegisteredUser> => {
-    if (username === 'taken') {
-      throw new UsernameTakenError();
+  create: jest.fn(async (email: string): Promise<RegisteredUser> => {
+    if (email === 'taken@example.com') {
+      throw new EmailTakenError();
     }
-    if (username === 'explode') {
+    if (email === 'explode@example.com') {
       throw new Error('connection refused at db.ts:42');
     }
-    return { id: 9, username, email, createdAt: new Date(), accountId: 42, accountNumber: 'ACC-U000009' };
+    return { id: 9, email, createdAt: new Date(), accountId: 42, accountNumber: 'ACC-U000009' };
   }),
 };
 
@@ -87,17 +86,15 @@ describe('Auth API contract', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
-    store.set('trader', {
+    store.set('trader@example.com', {
       id: 3,
-      username: 'trader',
       email: 'trader@example.com',
       passwordHash: await hashPassword(TRADER.password),
       roles: ['USER'],
       accountId: 7,
     });
-    store.set('admin', {
+    store.set('admin@example.com', {
       id: 1,
-      username: 'admin',
       email: 'admin@example.com',
       passwordHash: await hashPassword(ADMIN.password),
       roles: ['ADMIN'],
@@ -122,8 +119,7 @@ describe('Auth API contract', () => {
 
   const post = (path: string, body: unknown) => request(app.getHttpServer()).post(path).send(body as object);
   const login = (body: unknown) => post('/auth/login', body);
-  const register = (body: Record<string, unknown>, withDefaultEmail = true) =>
-    post('/auth/register', withDefaultEmail && !('email' in body) ? { email: 'newtrader@example.com', ...body } : body);
+  const register = (body: Record<string, unknown>) => post('/auth/register', body);
   const refresh = (refreshToken: unknown) => post('/auth/refresh', { refreshToken });
   const logout = (refreshToken: unknown) => post('/auth/logout', { refreshToken });
   const me = (authorization?: string) => {
@@ -153,7 +149,7 @@ describe('Auth API contract', () => {
       const decoded = jwt.decode(await tokenFor(TRADER)) as jwt.JwtPayload;
 
       expect(Object.keys(decoded).sort()).toEqual(['exp', 'iat', 'iss', 'jti', 'roles', 'sub', 'typ']);
-      expect(decoded.sub).toBe('trader');
+      expect(decoded.sub).toBe('trader@example.com');
       expect(decoded.typ).toBe('access');
       expect(decoded.iss).toBe(ISSUER);
     });
@@ -181,7 +177,7 @@ describe('Auth API contract', () => {
 
       expect(jwt.decode(token, { complete: true })!.header.alg).toBe('HS256');
       const verified = jwt.verify(token, SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
-      expect(verified.sub).toBe('trader');
+      expect(verified.sub).toBe('trader@example.com');
     });
 
     it('never puts the password, hash or database ids in the token', async () => {
@@ -203,7 +199,7 @@ describe('Auth API contract', () => {
       });
     });
 
-    it('gives the same answer for an unknown user, so usernames cannot be probed', async () => {
+    it('gives the same answer for an unknown user, so emails cannot be probed', async () => {
       const unknown = await login({ email: 'nobody@example.com', password: 'wrong' }).expect(401);
       const wrongPassword = await login({ email: 'trader@example.com', password: 'wrong' }).expect(401);
 
@@ -285,64 +281,66 @@ describe('Auth API contract', () => {
   });
 
   describe('POST /auth/register', () => {
-    it('requires an email address', async () => {
-      const response = await register({ username: 'newtrader', password: 'password123' }, false).expect(400);
-
-      expect(response.body.errorCode).toBe('VAL-422');
-      expect(fakeUsers.create).not.toHaveBeenCalled();
-    });
+    const NEW_TRADER = { email: 'newtrader@example.com', password: 'password123' };
 
     it('returns 201 with the new user and the account opened for them', async () => {
-      const response = await register({ username: 'newtrader', password: 'password123' }).expect(201);
+      const response = await register(NEW_TRADER).expect(201);
 
       expect(response.body).toEqual({
         id: 9,
-        username: 'newtrader',
         email: 'newtrader@example.com',
         createdAt: expect.stringMatching(ISO_8601),
         accountId: 42,
         accountNumber: 'ACC-U000009',
       });
-      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.stringMatching(/^\$argon2id\$/), 'newtrader@example.com', undefined);
+      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader@example.com', expect.stringMatching(/^\$argon2id\$/), undefined);
+    });
+
+    it('stores the email trimmed and in lower case', async () => {
+      await register({ ...NEW_TRADER, email: 'NewTrader@Example.COM' }).expect(201);
+
+      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader@example.com', expect.any(String), undefined);
+    });
+
+    it('rejects a username, which is no longer part of registration', async () => {
+      const response = await register({ ...NEW_TRADER, username: 'newtrader' }).expect(400);
+
+      expect(response.body.message).toBe('Unexpected property: username');
+      expect(fakeUsers.create).not.toHaveBeenCalled();
     });
 
     it('hashes the password before it reaches the database layer', async () => {
-      await register({ username: 'newtrader', password: 'password123' }).expect(201);
+      await register(NEW_TRADER).expect(201);
 
       expect(JSON.stringify(fakeUsers.create.mock.calls)).not.toContain('password123');
     });
 
     it('passes the holder name through for the account', async () => {
-      await register({ username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).expect(201);
+      await register({ ...NEW_TRADER, holderName: 'Ada Lovelace' }).expect(201);
 
-      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.any(String), 'newtrader@example.com', 'Ada Lovelace');
+      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader@example.com', expect.any(String), 'Ada Lovelace');
     });
 
     it('says which characters are allowed when the holder name has script characters', async () => {
-      const response = await register({ username: 'newtrader', password: 'password123', holderName: '<b>Ada</b>' }).expect(400);
+      const response = await register({ ...NEW_TRADER, holderName: '<b>Ada</b>' }).expect(400);
 
       expect(response.body.message).toBe("holderName can only contain letters, numbers, spaces and . , ' -");
     });
 
     it('accepts real names with accents, apostrophes and hyphens', async () => {
-      await register({ username: 'zoe.oneill_1', password: 'password123', holderName: "Zoë O'Neill-Smith" }).expect(201);
+      await register({ ...NEW_TRADER, holderName: "Zoë O'Neill-Smith" }).expect(201);
 
-      expect(fakeUsers.create).toHaveBeenCalledWith(
-        'zoe.oneill_1',
-        expect.any(String),
-        'newtrader@example.com',
-        "Zoë O'Neill-Smith",
-      );
+      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader@example.com', expect.any(String), "Zoë O'Neill-Smith");
     });
 
     it('never returns the password or its hash', async () => {
-      const response = await register({ username: 'newtrader', password: 'password123' }).expect(201);
+      const response = await register(NEW_TRADER).expect(201);
 
       expect(JSON.stringify(response.body)).not.toMatch(/password|hash/i);
     });
 
-    it('rejects a duplicate username with 409 USR-409', async () => {
-      const response = await register({ username: 'trader', password: 'password123' }).expect(409);
+    it('rejects a registered email, in any case, with 409 USR-409', async () => {
+      const response = await register({ email: 'Trader@Example.com', password: 'password123' }).expect(409);
 
       expect(response.body).toEqual({
         errorCode: 'USR-409',
@@ -352,22 +350,23 @@ describe('Auth API contract', () => {
       expect(fakeUsers.create).not.toHaveBeenCalled();
     });
 
-    it('rejects a username registered concurrently with 409 USR-409', async () => {
-      const response = await register({ username: 'taken', password: 'password123' }).expect(409);
+    it('rejects an email registered concurrently with 409 USR-409', async () => {
+      const response = await register({ email: 'taken@example.com', password: 'password123' }).expect(409);
       expect(response.body.errorCode).toBe('USR-409');
     });
 
     it.each([
-      ['username is missing', { password: 'password123' }],
-      ['username is shorter than 3 characters', { username: 'ab', password: 'password123' }],
-      ['password is shorter than 8 characters', { username: 'newtrader', password: 'short' }],
-      ['holderName is blank', { username: 'newtrader', password: 'password123', holderName: '   ' }],
-      ['there is an unexpected property', { username: 'newtrader', password: 'password123', role: 'ADMIN' }],
-      ['username contains a script tag', { username: '<script>alert(1)</script>', password: 'password123' }],
-      ['username contains an HTML event handler', { username: '<img src=x onerror=alert(1)>', password: 'password123' }],
-      ['holderName contains a script tag', { username: 'newtrader', password: 'password123', holderName: '<script>alert(1)</script>' }],
-      ['holderName contains an HTML event handler', { username: 'newtrader', password: 'password123', holderName: '<img src=x onerror=alert(1)>' }],
-      ['holderName breaks out of an attribute', { username: 'newtrader', password: 'password123', holderName: '"><svg onload=alert(1)>' }],
+      ['email is missing', { password: 'password123' }],
+      ['email is malformed', { email: 'newtrader', password: 'password123' }],
+      ['password is missing', { email: 'newtrader@example.com' }],
+      ['password is shorter than 8 characters', { email: 'newtrader@example.com', password: 'short' }],
+      ['holderName is blank', { ...NEW_TRADER, holderName: '   ' }],
+      ['there is an unexpected property', { ...NEW_TRADER, role: 'ADMIN' }],
+      ['email contains a script tag', { email: '<script>alert(1)</script>@example.com', password: 'password123' }],
+      ['email contains an HTML event handler', { email: '<img src=x onerror=alert(1)>', password: 'password123' }],
+      ['holderName contains a script tag', { ...NEW_TRADER, holderName: '<script>alert(1)</script>' }],
+      ['holderName contains an HTML event handler', { ...NEW_TRADER, holderName: '<img src=x onerror=alert(1)>' }],
+      ['holderName breaks out of an attribute', { ...NEW_TRADER, holderName: '"><svg onload=alert(1)>' }],
     ])('rejects the body when %s', async (_case, body) => {
       const response = await register(body).expect(400);
 
@@ -376,7 +375,7 @@ describe('Auth API contract', () => {
     });
 
     it('hides internal errors behind SYS-500', async () => {
-      const response = await register({ username: 'explode', password: 'password123' }).expect(500);
+      const response = await register({ email: 'explode@example.com', password: 'password123' }).expect(500);
 
       expect(response.body).toEqual({
         errorCode: 'SYS-500',
@@ -395,7 +394,7 @@ describe('Auth API contract', () => {
       expect(Object.keys(response.body).sort()).toEqual(['accessToken', 'refreshToken']);
       expect(response.body.refreshToken).not.toBe(refreshToken);
       const decoded = jwt.verify(response.body.accessToken, SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
-      expect(decoded.sub).toBe('trader');
+      expect(decoded.sub).toBe('trader@example.com');
       expect(decoded.roles).toEqual(['USER']);
     });
 
@@ -561,7 +560,7 @@ describe('Auth API contract', () => {
       const response = await clientToken(STRATEGY_CLIENT).expect(200);
 
       expect(response.body.accessToken).toBeDefined();
-      expect(fakeUsers.findByUsername).not.toHaveBeenCalled();
+      expect(fakeUsers.findByEmail).not.toHaveBeenCalled();
       expect(fakeRefreshTokens.create).not.toHaveBeenCalled();
     });
 
@@ -598,7 +597,7 @@ describe('Auth API contract', () => {
       timestamp: expect.stringMatching(ISO_8601),
     };
     const sign = (claims: object, options: jwt.SignOptions = {}, secret = SECRET) =>
-      jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', jti: 'test-jti', ...claims }, secret, {
+      jwt.sign({ sub: 'trader@example.com', roles: ['USER'], typ: 'access', jti: 'test-jti', ...claims }, secret, {
         algorithm: 'HS256',
         issuer: ISSUER,
         expiresIn: '15m',
@@ -608,23 +607,23 @@ describe('Auth API contract', () => {
     it('returns the user the access token belongs to', async () => {
       const response = await me(`Bearer ${await tokenFor(TRADER)}`).expect(200);
 
-      expect(response.body).toEqual({ username: 'trader', email: 'trader@example.com', roles: ['USER'], accountId: 7 });
+      expect(response.body).toEqual({ email: 'trader@example.com', roles: ['USER'], accountId: 7 });
     });
 
     it('returns an admin with no account', async () => {
       const response = await me(`Bearer ${await tokenFor(ADMIN)}`).expect(200);
 
-      expect(response.body).toEqual({ username: 'admin', email: 'admin@example.com', roles: ['ADMIN'], accountId: null });
+      expect(response.body).toEqual({ email: 'admin@example.com', roles: ['ADMIN'], accountId: null });
     });
 
     it('gives the handler the verified claims; the only lookup is the handler\'s own', async () => {
       const token = await tokenFor(TRADER);
-      fakeUsers.findByUsername.mockClear();
+      fakeUsers.findByEmail.mockClear();
 
       await me(`Bearer ${token}`).expect(200);
 
-      expect(fakeUsers.findByUsername).toHaveBeenCalledTimes(1);
-      expect(fakeUsers.findByUsername).toHaveBeenCalledWith('trader');
+      expect(fakeUsers.findByEmail).toHaveBeenCalledTimes(1);
+      expect(fakeUsers.findByEmail).toHaveBeenCalledWith('trader@example.com');
     });
 
     it('accepts an access token obtained through refresh', async () => {
@@ -632,7 +631,7 @@ describe('Auth API contract', () => {
       const { accessToken } = (await refresh(refreshToken).expect(200)).body;
 
       const response = await me(`Bearer ${accessToken}`).expect(200);
-      expect(response.body.username).toBe('trader');
+      expect(response.body.email).toBe('trader@example.com');
     });
 
     it.each([
@@ -651,13 +650,13 @@ describe('Auth API contract', () => {
       ['is signed with another secret', () => sign({}, {}, 'another-secret-that-is-at-least-32-bytes')],
       ['has another issuer', () => sign({}, { issuer: 'urn:someone-else' })],
       ['has the old stub issuer', () => sign({}, { issuer: 'urn:tns-capital:auth-stub' })],
-      ['has no issuer', () => jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', jti: 'x' }, SECRET, { algorithm: 'HS256' })],
-      ['uses alg "none"', () => jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', jti: 'x', iss: ISSUER }, '', { algorithm: 'none' })],
+      ['has no issuer', () => jwt.sign({ sub: 'trader@example.com', roles: ['USER'], typ: 'access', jti: 'x' }, SECRET, { algorithm: 'HS256' })],
+      ['uses alg "none"', () => jwt.sign({ sub: 'trader@example.com', roles: ['USER'], typ: 'access', jti: 'x', iss: ISSUER }, '', { algorithm: 'none' })],
       ['has no roles claim', () => sign({ roles: undefined })],
       ['has no typ claim', () => sign({ typ: undefined })],
       ['is not typ access', () => sign({ typ: 'refresh' })],
       ['has no jti claim', () => sign({ jti: undefined })],
-      ['belongs to a user who no longer exists', () => sign({ sub: 'deleted-user' })],
+      ['belongs to a user who no longer exists', () => sign({ sub: 'deleted-user@example.com' })],
     ])('rejects a token that %s', async (_case, makeToken) => {
       const response = await me(`Bearer ${makeToken()}`).expect(401);
       expect(response.body).toEqual(unauthorised);
@@ -676,7 +675,7 @@ describe('Auth API contract', () => {
 
     it('accepts the scheme in any case', async () => {
       const response = await me(`bearer ${await tokenFor(TRADER)}`).expect(200);
-      expect(response.body.username).toBe('trader');
+      expect(response.body.email).toBe('trader@example.com');
     });
   });
 

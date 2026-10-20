@@ -41,17 +41,16 @@ describe('AuthService', () => {
   });
 
   it('posts registration details to the registration endpoint', () => {
-    authService.register({ email: 'ada@example.com', username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).subscribe();
+    authService.register({ email: 'ada@example.com', password: 'password123', holderName: 'Ada Lovelace' }).subscribe();
 
     const request = httpMock.expectOne('/auth/register');
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({
       email: 'ada@example.com',
-      username: 'newtrader',
       password: 'password123',
       holderName: 'Ada Lovelace',
     });
-    request.flush({ username: 'newtrader', accountId: 1 });
+    request.flush({ email: 'ada@example.com', accountId: 1 });
   });
 
   it('clears session and calls logout endpoint when refresh token exists', () => {

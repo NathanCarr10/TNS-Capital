@@ -15,7 +15,7 @@ import java.util.Optional;
  * - SUPPORT (token roles ["SUPPORT"]) may access every account: support staff
  *   look after traders' accounts in the trading app
  * - Anyone else, ADMIN included, may only access the account linked to their
- *   username (the token's "sub") in users.account_id, opened when they
+ *   email (the token's "sub") in users.account_id, opened when they
  *   registered. Admins run the analytics dashboard and operations, not
  *   traders' accounts (docs/DECISIONS.md, "Roles")
  * - The strategy service (token roles ["STRATEGY"], from the auth service's
@@ -61,7 +61,7 @@ public class AccountAccessGuard {
         if (auth == null) {
             return Optional.empty();
         }
-        return accountRepository.findAccountIdByUsername(auth.getName());
+        return accountRepository.findAccountIdByEmail(auth.getName());
     }
 
     /**

@@ -104,8 +104,9 @@
   }
 }
 
-// No motion: a still row the user can scroll sideways, without the looping copy
-@media (prefers-reduced-motion: reduce) {
+// No motion: a still row the user can scroll sideways, without the looping copy.
+// The app's own setting wins; until it is set, the system preference decides.
+@mixin still-row {
   .tape {
     overflow-x: auto;
     mask-image: none;
@@ -121,5 +122,15 @@
 
   .group {
     min-width: 0;
+  }
+}
+
+:host-context(:root[data-motion='reduced']) {
+  @include still-row;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host-context(:root:not([data-motion='normal'])) {
+    @include still-row;
   }
 }
