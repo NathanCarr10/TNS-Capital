@@ -49,6 +49,10 @@ export class SupportService {
     return this.http.get<{ unreadCount: number }>(`${this.endpoint}/notifications/unread`);
   }
 
+  markNotificationsRead(): Observable<void> {
+    return this.http.post<void>(`${this.endpoint}/notifications/read`, {});
+  }
+
   connectToConversation(conversationId: string, onMessage: (message: SupportMessage) => void): AbortController {
     const controller = new AbortController();
     const token = this.auth.getAccessToken();

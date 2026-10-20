@@ -142,6 +142,9 @@ export class SupportWidgetComponent {
       this.service.getUnreadNotificationCount().subscribe({
         next: ({ unreadCount }) => this.unreadCount.set(unreadCount),
       });
+      this.service.markNotificationsRead().subscribe({
+        next: () => this.unreadCount.set(0),
+      });
     }
   }
 

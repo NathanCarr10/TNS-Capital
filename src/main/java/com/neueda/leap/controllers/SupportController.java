@@ -60,6 +60,12 @@ public class SupportController {
         return new SupportNotificationResponse(service.unreadSupportNotifications());
     }
 
+    @PostMapping("/notifications/read")
+    public ResponseEntity<Void> markNotificationsRead() {
+        service.markSupportNotificationsRead();
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping(value = "/{conversationId}/events", produces = "text/event-stream")
     public SseEmitter events(@PathVariable UUID conversationId) {
         return service.subscribe(conversationId);

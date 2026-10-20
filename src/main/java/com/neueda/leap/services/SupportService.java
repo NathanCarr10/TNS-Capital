@@ -94,6 +94,12 @@ public class SupportService {
         return notifications.countByRecipientRoleAndReadAtIsNull("SUPPORT");
     }
 
+    @Transactional
+    public void markSupportNotificationsRead() {
+        if (!isSupport()) throw new AccessDeniedException("Support role required");
+        notifications.markSupportNotificationsRead();
+    }
+
     public SseEmitter subscribe(UUID conversationId) {
         SupportConversation conversation = conversations.findById(conversationId)
                 .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
