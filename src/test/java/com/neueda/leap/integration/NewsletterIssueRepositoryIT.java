@@ -81,7 +81,8 @@ class NewsletterIssueRepositoryIT extends AbstractIntegrationTest {
     @DisplayName("Refuses a second issue for the same week")
     void oneIssuePerWeek() {
         repository.save(issue(WEEK_START));
+        NewsletterIssue sameWeek = issue(WEEK_START);
 
-        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(issue(WEEK_START)));
+        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(sameWeek));
     }
 }

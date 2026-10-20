@@ -32,6 +32,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AlpacaRestClient {
     private static final String SYMBOLS_PARAM = "symbols";
+    private static final String START_PARAM = "start";
+    private static final String LIMIT_PARAM = "limit";
     // A trading day is at most 16 hours of 1-minute bars (pre-market to after-hours)
     private static final int MAX_MINUTE_BARS = 1000;
 
@@ -129,8 +131,8 @@ public class AlpacaRestClient {
                     .uri(uri -> uri.path("/v2/stocks/bars")
                             .queryParam(SYMBOLS_PARAM, symbol)
                             .queryParam("timeframe", timeframe.value())
-                            .queryParam("start", start.toString())
-                            .queryParam("limit", limit)
+                            .queryParam(START_PARAM, start.toString())
+                            .queryParam(LIMIT_PARAM, limit)
                             .queryParam("adjustment", "raw")
                             .queryParam("feed", properties.feed())
                             // Newest first, so the limit keeps the most recent bars
@@ -171,8 +173,8 @@ public class AlpacaRestClient {
             NewsResponse response = restClient.get()
                     .uri(uri -> uri.path("/v1beta1/news")
                             .queryParam(SYMBOLS_PARAM, String.join(",", symbols))
-                            .queryParam("start", start.toString())
-                            .queryParam("limit", limit)
+                            .queryParam(START_PARAM, start.toString())
+                            .queryParam(LIMIT_PARAM, limit)
                             .queryParam("sort", "desc")
                             .build())
                     .retrieve()
@@ -211,9 +213,9 @@ public class AlpacaRestClient {
                     .uri(uri -> uri.path("/v2/stocks/bars")
                             .queryParam(SYMBOLS_PARAM, symbol)
                             .queryParam("timeframe", "1Min")
-                            .queryParam("start", start.toString())
+                            .queryParam(START_PARAM, start.toString())
                             .queryParam("end", end.toString())
-                            .queryParam("limit", MAX_MINUTE_BARS)
+                            .queryParam(LIMIT_PARAM, MAX_MINUTE_BARS)
                             .queryParam("adjustment", "raw")
                             .queryParam("feed", feed)
                             .queryParam("sort", "asc")

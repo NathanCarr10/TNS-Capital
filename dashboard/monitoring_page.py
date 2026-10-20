@@ -47,7 +47,8 @@ def count(number):
 
 
 def seconds(number):
-    return "n/a" if number is None or number != number else f"{number:.1f} s"
+    # None, or NaN (e.g. a percentile with no samples yet)
+    return "n/a" if pd.isna(number) else f"{number:.1f} s"
 
 
 def alert_badge():
