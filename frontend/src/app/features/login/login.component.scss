@@ -88,19 +88,16 @@
   }
 }
 
-.field-error,
-.server-error {
-  margin: 0;
+.login-card .form-message {
+  min-height: 1.25em;
   font-size: 0.88rem;
-  color: var(--negative);
-  visibility: hidden;
   line-height: 1.25;
-}
 
-.field-error.visible,
-.server-error.visible {
-  visibility: visible;
-  margin-top: 0.15rem;
+  // Override the card's paragraph margins, which are meant for the intro text
+  p {
+    margin: 0;
+    color: var(--negative);
+  }
 }
 
 .auth-link {
