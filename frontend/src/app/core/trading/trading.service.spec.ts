@@ -34,7 +34,7 @@ describe('TradingService', () => {
   afterEach(() => httpMock.verify());
 
   it('gets the current user profile from the auth service', () => {
-    const profile: CurrentUser = { email: 'trader1@example.com', username: 'trader1', roles: ['USER'], accountId: 11 };
+    const profile: CurrentUser = { email: 'trader1@example.com', roles: ['USER'], accountId: 11 };
     let result: CurrentUser | undefined;
     service.getCurrentUserProfile().subscribe((response) => (result = response));
 

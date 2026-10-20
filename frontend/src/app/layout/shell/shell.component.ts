@@ -64,9 +64,9 @@ export class ShellComponent {
   private readonly now = signal(new Date());
   readonly market = computed(() => nyseStatus(this.now()));
 
-  /** The account holder's name, or the support user's username as they have no account. */
+  /** The account holder's name, or the support user's email as they have no account. */
   readonly displayName = computed(() =>
-    this.isSupport ? (this.store.profile()?.username ?? '') : (this.store.account()?.holderName ?? '')
+    this.isSupport ? (this.store.profile()?.email ?? '') : (this.store.account()?.holderName ?? '')
   );
   readonly subtitle = computed(() =>
     this.isSupport ? 'Support' : (this.store.account()?.accountNumber ?? '')

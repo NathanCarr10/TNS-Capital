@@ -121,12 +121,12 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.user .badge')?.textContent).toContain('Trader');
   });
 
-  it('shows support by username', () => {
+  it('shows support by email', () => {
     isSupport = true;
 
     const element = create();
 
-    expect(element.querySelector('.user-name')?.textContent).toContain('trader1');
+    expect(element.querySelector('.user-name')?.textContent).toContain('ada@example.com');
     expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
   });
 

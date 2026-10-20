@@ -25,7 +25,7 @@
           @for (conversation of conversations(); track conversation.id) {
             <button type="button" class="conversation" [class.selected]="selectedId() === conversation.id" (click)="select(conversation.id)">
               <strong>{{ conversation.subject }}</strong>
-              <span class="customer-link" role="link" tabindex="0" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerUsername }}</span>
+              <span class="customer-link" role="link" tabindex="0" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerEmail }}</span>
               <time>{{ conversation.updatedAt | date:'MMM d, h:mm a' }}</time>
             </button>
           }
@@ -43,7 +43,7 @@
             <div class="messages" aria-live="polite">
               @for (message of conversation.messages; track message.id) {
                 <article class="message" [class.from-agent]="message.senderRole === 'SUPPORT'">
-                  <span class="message-author">{{ message.senderRole === 'SUPPORT' ? 'Support team' : message.senderUsername }}</span>
+                  <span class="message-author">{{ message.senderRole === 'SUPPORT' ? 'Support team' : message.senderEmail }}</span>
                   <p>{{ message.body }}</p>
                   <time>{{ message.createdAt | date:'MMM d, h:mm a' }}</time>
                 </article>

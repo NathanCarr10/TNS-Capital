@@ -6,7 +6,7 @@ import { AuthService } from '../auth/auth.service';
 
 export interface SupportMessage {
   id: number;
-  senderUsername: string;
+  senderEmail: string;
   senderRole: 'CUSTOMER' | 'SUPPORT';
   body: string;
   createdAt: string;
@@ -14,7 +14,7 @@ export interface SupportMessage {
 
 export interface SupportConversation {
   id: string;
-  customerUsername: string;
+  customerEmail: string;
   accountId: number | null;
   subject: string;
   status: 'OPEN' | 'CLOSED';
