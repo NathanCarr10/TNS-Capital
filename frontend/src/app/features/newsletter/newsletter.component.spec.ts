@@ -80,8 +80,8 @@ describe('NewsletterComponent', () => {
     ]);
     const changes = texts(element, 'tbody .change');
     expect(changes).toEqual(['+4.26%', '+3.30%', '-2.06%']);
-    expect(element.querySelectorAll('tbody .change-up').length).toBe(2);
-    expect(element.querySelectorAll('tbody .change-down').length).toBe(1);
+    expect(element.querySelectorAll('tbody .change-up')).toHaveSize(2);
+    expect(element.querySelectorAll('tbody .change-down')).toHaveSize(1);
   });
 
   it('lets the reader switch to a past issue', () => {

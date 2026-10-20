@@ -1,7 +1,7 @@
 package com.neueda.leap.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.cfg.MappingSettings;
 import org.hibernate.type.format.jackson.JacksonJsonFormatMapper;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernatePropertiesCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -19,7 +19,7 @@ public class NewsletterConfig {
 
     @Bean
     HibernatePropertiesCustomizer jsonFormatMapper(ObjectMapper objectMapper) {
-        return properties -> properties.put(AvailableSettings.JSON_FORMAT_MAPPER,
+        return properties -> properties.put(MappingSettings.JSON_FORMAT_MAPPER,
                 new JacksonJsonFormatMapper(objectMapper));
     }
 }

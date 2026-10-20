@@ -35,12 +35,13 @@
 }
 
 @if (preview()) {
-  <div class="note preview-banner" role="status">
-    <span>
+  <div class="note preview-banner">
+    <!-- Only the message is announced, not the buttons beside it -->
+    <output>
       <strong>Preview, not published.</strong> This is the week so far. Traders see the issue the weekly job
       publishes on Friday after the close. Publishing it now makes it this week's issue, and the Friday run
       then skips this week.
-    </span>
+    </output>
     <span class="preview-actions">
       <button type="button" class="btn btn-small btn-primary" [disabled]="publishing()" (click)="publish()">
         {{ publishing() ? 'Publishing...' : 'Publish this issue' }}

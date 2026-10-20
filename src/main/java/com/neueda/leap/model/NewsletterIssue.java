@@ -53,7 +53,7 @@ public class NewsletterIssue {
     public NewsletterIssue(LocalDate weekStart, Instant generatedAt, List<NewsletterMover> gainers,
             List<NewsletterMover> losers) {
         this.weekStart = Objects.requireNonNull(weekStart);
-        if (weekStart.getDayOfWeek() != DayOfWeek.MONDAY) {
+        if (!DayOfWeek.MONDAY.equals(weekStart.getDayOfWeek())) {
             throw new IllegalArgumentException("A newsletter week starts on a Monday, not " + weekStart);
         }
         this.generatedAt = Objects.requireNonNull(generatedAt);

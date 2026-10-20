@@ -14,6 +14,7 @@ import { IconComponent, IconName } from '../icon/icon.component';
 import { nyseStatus } from '../market-status/market-hours';
 import { SymbolSearchComponent } from '../symbol-search/symbol-search.component';
 import { SupportWidgetComponent } from '../support-widget/support-widget.component';
+import { TickerTapeComponent } from '../ticker-tape/ticker-tape.component';
 
 interface NavItem {
   label: string;
@@ -24,7 +25,15 @@ interface NavItem {
 /** The signed-in area: navigation on the left, search and account on top, the page in between. */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, IconComponent, SymbolSearchComponent, SupportWidgetComponent],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    IconComponent,
+    SymbolSearchComponent,
+    SupportWidgetComponent,
+    TickerTapeComponent,
+  ],
   providers: [AccountStore, OrderTrackerService, StrategyActivityService],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.scss',

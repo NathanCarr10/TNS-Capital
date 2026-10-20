@@ -25,6 +25,7 @@ import java.util.UUID;
 
 @Service
 public class SupportService {
+    private static final String CONVERSATION_NOT_FOUND = "Support conversation not found";
     private final SupportConversationRepository conversations;
     private final SupportMessageRepository messages;
     private final SupportNotificationRepository notifications;
@@ -53,7 +54,7 @@ public class SupportService {
     @Transactional
     public SupportConversation addMessage(UUID conversationId, SupportMessageRequest request) {
         SupportConversation conversation = conversations.findById(conversationId)
-                .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
+                .orElseThrow(() -> new IllegalArgumentException(CONVERSATION_NOT_FOUND));
         checkAccess(conversation);
         Instant now = Instant.now();
         SupportMessage.SenderRole role = isSupport() ? SupportMessage.SenderRole.SUPPORT : SupportMessage.SenderRole.CUSTOMER;
@@ -65,7 +66,7 @@ public class SupportService {
     public SupportConversation closeConversation(UUID conversationId) {
         if (!isSupport()) throw new AccessDeniedException("Support role required");
         SupportConversation conversation = conversations.findById(conversationId)
-                .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
+                .orElseThrow(() -> new IllegalArgumentException(CONVERSATION_NOT_FOUND));
         conversation.close();
         return conversations.save(conversation);
     }
@@ -84,7 +85,7 @@ public class SupportService {
 
     public List<SupportMessage> messages(UUID conversationId) {
         SupportConversation conversation = conversations.findById(conversationId)
-                .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
+                .orElseThrow(() -> new IllegalArgumentException(CONVERSATION_NOT_FOUND));
         checkAccess(conversation);
         return messages.findByConversationIdOrderByCreatedAtAsc(conversationId);
     }
@@ -102,7 +103,7 @@ public class SupportService {
 
     public SseEmitter subscribe(UUID conversationId) {
         SupportConversation conversation = conversations.findById(conversationId)
-                .orElseThrow(() -> new IllegalArgumentException("Support conversation not found"));
+                .orElseThrow(() -> new IllegalArgumentException(CONVERSATION_NOT_FOUND));
         checkAccess(conversation);
         SseEmitter emitter = new SseEmitter(0L);
         streams.computeIfAbsent(conversationId, ignored -> new CopyOnWriteArrayList<>()).add(emitter);

@@ -43,7 +43,6 @@
 .trader-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.72fr);
-  align-items: stretch;
   gap: clamp(2rem, 7vw, 7rem);
   width: min(1100px, 100%);
   min-height: clamp(30rem, calc(100dvh - 11rem), 56rem);

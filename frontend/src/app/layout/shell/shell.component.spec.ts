@@ -9,6 +9,7 @@ import { DeadLetterQueueControllerService } from '../../api/trading';
 import { AuthService } from '../../core/auth/auth.service';
 import { StrategyLabService } from '../../core/strategy/strategy-lab.service';
 import { ThemeService } from '../../core/theme/theme.service';
+import { MarketDataService } from '../../core/trading/market-data.service';
 import { tradingServiceStub } from '../../core/trading/testing/trading-fixtures';
 import { TradingService } from '../../core/trading/trading.service';
 import { ShellComponent } from './shell.component';
@@ -37,6 +38,10 @@ describe('ShellComponent', () => {
     strategyLab.activity.and.returnValue(of([]));
     dlqApi = jasmine.createSpyObj<DeadLetterQueueControllerService>('DeadLetterQueueControllerService', ['getDLQStatistics']);
     dlqApi.getDLQStatistics.and.returnValue(of({ pendingMessages: 0 }) as never);
+    // The ticker tape quotes prices on every page
+    const marketData = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars']);
+    marketData.getQuotes.and.returnValue(of([]));
+    marketData.getBars.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
@@ -47,6 +52,7 @@ describe('ShellComponent', () => {
         { provide: TradingService, useValue: tradingService },
         { provide: StrategyLabService, useValue: strategyLab },
         { provide: DeadLetterQueueControllerService, useValue: dlqApi },
+        { provide: MarketDataService, useValue: marketData },
       ],
     }).compileComponents();
   });
@@ -74,7 +80,7 @@ describe('ShellComponent', () => {
     ]);
   });
 
-  it('gives support Dead Letters instead of Trade and Settings, and no symbol search', () => {
+  it('gives support Dead Letters and Support Inbox instead of Trade and Settings, and no symbol search', () => {
     isSupport = true;
 
     const element = create();
@@ -85,6 +91,7 @@ describe('ShellComponent', () => {
       ['Strategy Lab', '/strategies'],
       ['Market Movers', '/market-movers'],
       ['Dead Letters', '/dead-letters'],
+      ['Support Inbox', '/support'],
     ]);
     expect(element.querySelector('app-symbol-search')).toBeNull();
   });
@@ -130,14 +137,10 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
   });
 
-  it('shows Support Inbox for support staff and opens the widget', () => {
-    isSupport = true;
-
+  it('gives traders no Support Inbox link', () => {
     const element = create();
-    (element.querySelector('.support-nav') as HTMLButtonElement).click();
 
-    expect(element.querySelector('.support-nav')?.textContent).toContain('Support Inbox');
-    expect(element.querySelector('.support-panel')).toBeTruthy();
+    expect(navLinks(element).map(([label]) => label)).not.toContain('Support Inbox');
   });
 
   it('shows whether the NYSE is open', () => {

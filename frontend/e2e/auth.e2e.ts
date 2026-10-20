@@ -46,7 +46,7 @@ test.describe('Signing in', () => {
   test('a wrong password keeps the trader on the login page with an error', async ({ page }) => {
     await page.goto('/login');
 
-    await submitLogin(page, 'admin', 'not-the-password');
+    await submitLogin(page, 'admin@tns-capital.local', 'not-the-password');
 
     await expect(page.locator('.server-error')).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);

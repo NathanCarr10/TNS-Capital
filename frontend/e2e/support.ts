@@ -1,7 +1,7 @@
 import { APIRequestContext, Locator, Page, expect } from '@playwright/test';
 
 /**
- * The admin, which the auth service creates from ADMIN_PASSWORD: ci/e2e-tests.sh generates one
+ * The admin, which the auth service creates from ADMIN_PASSWORD (email admin@tns-capital.local): ci/e2e-tests.sh generates one
  * and passes it in; against your own stack, set E2E_ADMIN_PASSWORD to the one in your .env.
  */
 export const ADMIN = { email: process.env['E2E_ADMIN_EMAIL'] ?? 'admin@tns-capital.local', password: process.env['E2E_ADMIN_PASSWORD'] ?? '' };

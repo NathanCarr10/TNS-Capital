@@ -27,7 +27,7 @@
   </div>
 
   @if (actionMessage()) {
-    <p class="note success" role="status">{{ actionMessage() }}</p>
+    <output class="note success">{{ actionMessage() }}</output>
   }
   @if (actionError()) {
     <p class="note error" role="alert">{{ actionError() }}</p>
