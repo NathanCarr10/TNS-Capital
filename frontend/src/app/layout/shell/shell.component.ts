@@ -48,7 +48,7 @@ export class ShellComponent {
         { label: 'Portfolio', link: '/portfolio', icon: 'portfolio' },
         { label: 'Order History', link: '/orders', icon: 'history' },
         { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
-        { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
+        { label: 'Market Movers', link: '/market-movers', icon: 'newsletter' },
         { label: 'Dead Letters', link: '/dead-letters', icon: 'inbox' },
         { label: 'Support Inbox', link: '/support', icon: 'help' },
       ]
@@ -57,7 +57,7 @@ export class ShellComponent {
         { label: 'Trade', link: '/trade', icon: 'trade' },
         { label: 'Order History', link: '/orders', icon: 'history' },
         { label: 'Strategy Lab', link: '/strategies', icon: 'strategy' },
-        { label: 'Newsletter', link: '/newsletter', icon: 'newsletter' },
+        { label: 'Market Movers', link: '/market-movers', icon: 'newsletter' },
         { label: 'Settings', link: '/settings', icon: 'settings' },
       ];
 

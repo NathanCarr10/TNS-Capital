@@ -10,8 +10,8 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Binds the newsletter.* settings, and has Hibernate write JSONB columns (the
- * newsletter's movers and news) with Spring's ObjectMapper, so dates are
- * stored as ISO-8601 text rather than numbers.
+ * newsletter's movers) with Spring's ObjectMapper, so they are written with
+ * the same settings as the API's responses.
  */
 @Configuration
 @EnableConfigurationProperties(NewsletterProperties.class)

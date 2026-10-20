@@ -28,13 +28,15 @@ export const routes: Routes = [
 			{ path: 'orders', loadComponent: () => import('./features/orders/order-history.component').then((m) => m.OrderHistoryComponent), title: 'Order History · TNS Capital' },
 			{ path: 'strategies', loadComponent: () => import('./features/strategy-lab/strategy-lab.component').then((m) => m.StrategyLabComponent), title: 'Strategy Lab · TNS Capital' },
 			{ path: 'dead-letters', canActivate: [supportGuard], loadComponent: () => import('./features/dead-letters/dead-letters.component').then((m) => m.DeadLettersComponent), title: 'Dead Letters · TNS Capital' },
-			// Without an id, the newsletter page opens the latest issue
-			{ path: 'newsletter', loadComponent: loadNewsletter, title: 'Newsletter · TNS Capital' },
-			{ path: 'newsletter/:id', loadComponent: loadNewsletter, title: 'Newsletter · TNS Capital' },
+			// The weekly newsletter's page; without an id it opens the latest issue
+			{ path: 'market-movers', loadComponent: loadNewsletter, title: 'Market Movers · TNS Capital' },
+			{ path: 'market-movers/:id', loadComponent: loadNewsletter, title: 'Market Movers · TNS Capital' },
 			{ path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent), title: 'Settings · TNS Capital' },
 			// Old links
 			{ path: 'dashboard', redirectTo: 'portfolio' },
 			{ path: 'symbols/:symbol', redirectTo: 'trade/:symbol' },
+			{ path: 'newsletter', redirectTo: 'market-movers' },
+			{ path: 'newsletter/:id', redirectTo: 'market-movers/:id' },
 		],
 	},
 	{ path: '**', redirectTo: '' },
