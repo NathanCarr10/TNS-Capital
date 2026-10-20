@@ -1,7 +1,7 @@
 .home-page {
   min-height: 100dvh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   align-content: start;
   gap: 1.5rem;
   padding: clamp(1.5rem, 4vw, 3rem);
@@ -9,6 +9,7 @@
     radial-gradient(circle at 12% 18%, rgba(132, 169, 140, 0.35), transparent 38%),
     radial-gradient(circle at 88% 82%, rgba(82, 121, 111, 0.25), transparent 42%),
     var(--bg);
+  animation: home-reveal 600ms ease-out both;
 }
 
 .home-header {
@@ -16,11 +17,20 @@
   margin: 0 auto;
   text-align: left;
 
+  .home-logo-frame {
+    display: block;
+    width: min(22rem, 72vw);
+    aspect-ratio: 1.55;
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+  }
+
   .home-logo {
     display: block;
-    width: min(14rem, 41vw);
-    height: auto;
-    margin-bottom: 1.25rem;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
     mix-blend-mode: multiply;
   }
 
@@ -41,7 +51,10 @@
 }
 
 .trader-entry {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.72fr);
+  align-items: stretch;
+  gap: clamp(2rem, 7vw, 7rem);
   width: min(1100px, 100%);
   min-height: clamp(30rem, calc(100dvh - 11rem), 56rem);
   margin: 0 auto;
@@ -61,6 +74,7 @@
   box-shadow: 0 24px 60px rgba(47, 62, 70, 0.24);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease;
+  animation: hero-reveal 700ms 100ms ease-out both;
 
   &:hover,
   &:focus-visible {
@@ -75,7 +89,7 @@
 
   h2 {
     margin: 0;
-    font-size: clamp(2.75rem, 8vw, 6rem);
+    font-size: clamp(2.75rem, 7vw, 5.25rem);
     line-height: 0.95;
     color: #ffffff;
   }
@@ -90,7 +104,20 @@
 }
 
 .trader-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   max-width: 42rem;
+}
+
+.trader-eyebrow,
+.market-eyebrow {
+  margin-bottom: 0.9rem;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
 }
 
 .home-action {
@@ -103,6 +130,248 @@
   font-weight: 700;
   color: var(--sidebar);
   background: #ffffff;
+  transition: gap 160ms ease, transform 160ms ease;
+
+  &:hover {
+    gap: 0.9rem;
+    transform: translateY(-2px);
+  }
+}
+
+.market-panel {
+  align-self: center;
+  width: 100%;
+  max-width: 28rem;
+  padding: clamp(1.15rem, 3vw, 1.6rem);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 1rem;
+  background: rgba(16, 40, 42, 0.28);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  animation: panel-reveal 700ms 280ms ease-out both;
+}
+
+.market-panel-header,
+.market-stats,
+.market-stats div {
+  display: flex;
+}
+
+.market-panel-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+
+  strong {
+    display: block;
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+}
+
+.market-eyebrow {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.65rem;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(179, 230, 178, 0.28);
+  border-radius: 999px;
+  color: #c4ebc0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+
+  span {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: #9ee49a;
+    box-shadow: 0 0 0 0 rgba(158, 228, 154, 0.65);
+    animation: live-pulse 2s infinite;
+  }
+}
+
+.chart {
+  position: relative;
+  display: flex;
+  height: clamp(8rem, 17vw, 11rem);
+  align-items: flex-end;
+  gap: clamp(0.35rem, 1.5vw, 0.7rem);
+  margin: 2rem 0 1.25rem;
+  padding: 1rem 0.2rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 31%, rgba(255, 255, 255, 0.08) 32%, transparent 33%);
+}
+
+.chart-line {
+  position: absolute;
+  z-index: 1;
+  inset: 1rem 0.2rem 0;
+  width: calc(100% - 0.4rem);
+  height: calc(100% - 1rem);
+  overflow: visible;
+
+  polyline {
+    fill: none;
+    stroke: #ffffff;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.35;
+    stroke-dasharray: 150;
+    stroke-dashoffset: 150;
+    animation: line-draw 1.2s 250ms ease-out forwards;
+  }
+}
+
+.chart span {
+  flex: 1;
+  height: var(--bar-height);
+  min-width: 0.5rem;
+  border-radius: 0.3rem 0.3rem 0 0;
+  background: linear-gradient(to top, rgba(158, 212, 157, 0.36), #b8e1ae);
+  transform-origin: bottom;
+  animation: bar-rise 800ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.chart span:nth-child(2) { animation-delay: 60ms; }
+.chart span:nth-child(3) { animation-delay: 120ms; }
+.chart span:nth-child(4) { animation-delay: 180ms; }
+.chart span:nth-child(5) { animation-delay: 240ms; }
+.chart span:nth-child(6) { animation-delay: 300ms; }
+.chart span:nth-child(7) { animation-delay: 360ms; }
+.chart span:nth-child(8) { animation-delay: 420ms; }
+
+.market-stats {
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  div {
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  span {
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 0.66rem;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: #c4ebc0;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+}
+
+.market-status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1.15rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.7rem;
+
+  strong {
+    color: #c4ebc0;
+    font-weight: 700;
+  }
+
+  strong.closed {
+    color: #f2d49c;
+  }
+
+  time {
+    margin-left: auto;
+    color: rgba(255, 255, 255, 0.42);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.home-benefits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  gap: 1rem;
+  animation: hero-reveal 700ms 420ms ease-out both;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.65rem 0.25rem;
+
+  div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  strong {
+    color: var(--text);
+    font-size: 0.82rem;
+  }
+
+  div span {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+  }
+}
+
+.benefit-mark {
+  display: grid;
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  color: var(--primary);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+@keyframes home-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes hero-reveal {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes panel-reveal {
+  from { opacity: 0; transform: translateX(1rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes bar-rise {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+@keyframes line-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes live-pulse {
+  70%, 100% { box-shadow: 0 0 0 0 rgba(158, 228, 154, 0); }
+  0% { box-shadow: 0 0 0 0.35rem rgba(158, 228, 154, 0.18); }
 }
 
 .admin-access {
@@ -131,7 +400,7 @@
 /* Keep the admin control below the primary viewport on small screens too. */
 @media (max-width: 600px) {
   .home-page {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     padding: 1rem;
   }
 
@@ -140,11 +409,34 @@
   }
 
   .trader-entry {
+    grid-template-columns: 1fr;
     min-height: max(28rem, calc(100dvh - 9rem));
     padding: clamp(1.25rem, 7vw, 2rem);
   }
 
+  .market-panel {
+    align-self: end;
+    max-width: none;
+  }
+
+  .home-benefits {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+
   .admin-access {
     justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-page,
+  .trader-entry,
+  .market-panel,
+  .chart span,
+  .chart-line polyline,
+  .home-benefits,
+  .live-indicator span {
+    animation: none;
   }
 }

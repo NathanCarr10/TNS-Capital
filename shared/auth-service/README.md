@@ -179,6 +179,7 @@ the next refresh.
 | Data | `users/refresh-tokens.service.ts` | SQL on the `refresh_tokens` table; rotation runs in one transaction |
 | Access control | `auth/guards/`, `auth/decorators/` | `JwtAuthGuard`, `RolesGuard`, `@Public()`, `@Roles()`, `@CurrentUser()` |
 | Logging | `common/request-logging.interceptor.ts` | one line per request (method, path, status, time, user); never bodies, so no passwords or tokens |
+| Metrics | `common/metrics.ts` | login, refresh token reuse and response status counters for the monitoring stack |
 
 ## Errors
 
@@ -199,6 +200,18 @@ Browsers reach the service through the frontend's nginx, so the client IP comes 
 limited by its own address, so the header cannot be forged to dodge the limit. Behind other
 proxies, set `AUTH_TRUST_PROXY` to their addresses or subnets, a number of hops, or `false`.
 
+## Logs and metrics
+
+With `LOG_FORMAT=json` (as in Docker Compose) every log line is one JSON object (`level`,
+`message`, `context`, `timestamp`), so the monitoring stack can filter it by level. Without
+it the usual coloured text lines are kept.
+
+With `METRICS_PORT` set (9464 in Compose) the service serves Prometheus counters at
+`GET /metrics` on that port, for the monitoring stack's alerts (OWASP A09-1, A09-2):
+`auth_logins_total{outcome}`, `auth_refresh_token_reuse_total` and
+`auth_http_responses_total{status}`. The port is not published and nginx does not proxy it.
+See [observability/README.md](../../observability/README.md).
+
 ## Tests
 
 ```bash
@@ -209,6 +222,7 @@ npm test
   database replaced by a fake
 - `tests/request-logging.interceptor.spec.ts`: the request log line and its level
 - `tests/rate-limit.spec.ts`: the 429 on the credential endpoints, with a limit of 3
+- `tests/metrics.spec.ts`: the counters and the `/metrics` server
 - `tests/auth.service.spec.ts`, `tests/token.service.spec.ts`, `tests/guards.spec.ts`: unit tests
 - `tests/password-hasher.spec.ts`: Argon2id hashing
 - `tests/users.service.spec.ts`: the SQL of `UsersService` and `RefreshTokensService` against a real Postgres with the `db/` schema. Skipped

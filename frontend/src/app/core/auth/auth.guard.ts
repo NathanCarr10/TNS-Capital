@@ -37,3 +37,7 @@ export const notAdminGuard: CanActivateFn = () => {
   }
   return true;
 };
+
+/** Dead letters are support's to close; the API refuses traders, so they land on their portfolio. */
+export const supportGuard: CanActivateFn = () =>
+  inject(AuthService).isSupport() || inject(Router).createUrlTree(['/portfolio']);

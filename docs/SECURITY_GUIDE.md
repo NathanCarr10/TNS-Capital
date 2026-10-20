@@ -328,6 +328,8 @@ Codes follow section 21 of the specification; the codes marked * extend it for c
 | `InsufficientFundsException` | 400 | `ORD-400` | "The account does not have sufficient funds for this operation" |
 | `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` | 409 | `ORD-409` | Insufficient holdings / duplicate idempotency key / order cannot be cancelled |
 | `OrderNotFoundException` | 404 | `ORD-404`* | "The requested order could not be found" |
+| `NewsletterNotFoundException` | 404 | `NWS-404`* | "The requested newsletter issue could not be found" |
+| `NewsletterPublishingDisabledException` | 403 | `NWS-403`* | "Publishing the newsletter before the weekly run is switched off" |
 | `MethodArgumentNotValidException`, malformed JSON, bad path variable | 422 | `VAL-422` | Field-specific validation messages |
 | Missing or invalid JWT | 401 | `AUTH-401` | "Unauthorised or invalid token" |
 | `AccessDeniedException` | 403 | `AUTH-403`* | "You do not have permission to access this resource" |
@@ -530,6 +532,10 @@ POST   /api/v1/accounts        - Open account (ADMIN)
 *      /api/v1/accounts/{id}/** - Account, balance, deposit, withdraw, positions, orders (owner or ADMIN)
 GET    /api/v1/positions/{id}  - List positions (owner or ADMIN)
 *      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
+GET    /api/v1/newsletters     - List newsletter issues (any signed-in user)
+GET    /api/v1/newsletters/{id} - Get a newsletter issue (any signed-in user)
+GET    /api/v1/newsletters/preview - Preview this week's issue, not saved (SUPPORT)
+POST   /api/v1/newsletters/publish - Publish this week's issue early, if NEWSLETTER_EARLY_PUBLISH is on (SUPPORT)
 ```
 
 ### Public Endpoints (No Auth Required)

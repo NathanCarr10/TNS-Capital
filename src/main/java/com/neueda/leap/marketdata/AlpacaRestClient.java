@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -23,7 +24,7 @@ import java.util.stream.Collectors;
  * Latest trades fill the live price pool at startup and price symbols the
  * stream has no recent trade for (market closed, or not subscribed).
  * Snapshots give the previous close for the dashboard's daily change, and
- * bars feed its candlestick chart.
+ * bars feed its candlestick chart. News gives the newsletter its headlines.
  * Failures are logged and return no prices, so callers fall back to whatever
  * they already have. Timeouts come from spring.http.client.* in application.yml.
  */
@@ -153,6 +154,44 @@ public class AlpacaRestClient {
     }
 
     /**
+     * Fetches the most recent news about any of the symbols in one request.
+     * Articles without a headline or an https link are left out, so a link
+     * from the feed can never be a javascript: or plain http URL.
+     *
+     * @param symbols normalized symbols, e.g. AAPL
+     * @param start   earliest publication time to look at
+     * @param limit   how many articles to return at most (Alpaca allows 50)
+     * @return articles newest first; empty if there are none or the call fails
+     */
+    public List<NewsArticle> news(Collection<String> symbols, Instant start, int limit) {
+        if (!properties.isConfigured() || symbols.isEmpty()) {
+            return List.of();
+        }
+        try {
+            NewsResponse response = restClient.get()
+                    .uri(uri -> uri.path("/v1beta1/news")
+                            .queryParam(SYMBOLS_PARAM, String.join(",", symbols))
+                            .queryParam("start", start.toString())
+                            .queryParam("limit", limit)
+                            .queryParam("sort", "desc")
+                            .build())
+                    .retrieve()
+                    .body(NewsResponse.class);
+
+            if (response == null || response.news() == null) {
+                return List.of();
+            }
+            return response.news().stream()
+                    .filter(Article::isDisplayable)
+                    .map(Article::toNewsArticle)
+                    .toList();
+        } catch (RestClientException e) {
+            log.warn("Could not fetch news from Alpaca for {}: {}", symbols, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
      * Fetches the 1-minute bars of one symbol between two times, for a replay
      * of a past trading day. A regular session has 390 of them, so one page holds them.
      *
@@ -215,6 +254,23 @@ public class AlpacaRestClient {
             @JsonProperty("c") BigDecimal close, @JsonProperty("v") long volume) {
         PriceBar toPriceBar() {
             return new PriceBar(time, open, high, low, close, volume);
+        }
+    }
+
+    // Response body of GET /v1beta1/news; next_page_token is ignored as one page holds the limit
+    record NewsResponse(List<Article> news) {
+    }
+
+    // One article; author, summary, content and images are ignored
+    record Article(String headline, String source, String url,
+            @JsonProperty("created_at") Instant createdAt, List<String> symbols) {
+        boolean isDisplayable() {
+            return StringUtils.hasText(headline) && url != null && url.startsWith("https://");
+        }
+
+        NewsArticle toNewsArticle() {
+            return new NewsArticle(headline.strip(), source, url, createdAt,
+                    symbols == null ? List.of() : List.copyOf(symbols));
         }
     }
 }

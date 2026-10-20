@@ -76,6 +76,11 @@ services:
       DB_USER: tns_auth
       DB_PASSWORD: ${DB_AUTH_PASSWORD:-${DB_PASSWORD}}
       PORT: 4000
+      # Login and token reuse counters for the monitoring stack (profile "observability"),
+      # on a port that is not published or proxied
+      METRICS_PORT: 9464
+      # One JSON object per log line, like the Java services' ECS lines
+      LOG_FORMAT: ${AUTH_LOG_FORMAT:-json}
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
       # Proxies whose X-Forwarded-For gives the client IP: nginx on the Docker network
       AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-loopback, uniquelocal}
@@ -126,9 +131,16 @@ services:
       BROKER_URL: http://broker-simulator:8085
       # One JSON object per log line (Elastic Common Schema), for log tools to parse
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      # Prometheus metrics for the monitoring stack (profile "observability"), on a port that
+      # is not published or proxied; the actuator on :3000 stays admin-only
+      METRICS_PORT: 9464
       ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
       ALPACA_FEED: ${ALPACA_FEED:-iex}
+      # When the weekly newsletter is published (Spring cron, New York time); - switches it off
+      NEWSLETTER_CRON: ${NEWSLETTER_CRON:-0 0 17 * * FRI}
+      # Lets support staff publish the week's issue before Friday (demos); off unless set to true
+      NEWSLETTER_EARLY_PUBLISH: ${NEWSLETTER_EARLY_PUBLISH:-false}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
     # Localhost only: browsers reach it through the frontend's /api/ proxy
     ports:
@@ -239,6 +251,11 @@ services:
       DB_PASSWORD: ${DB_READER_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       DASHBOARD_AUTH_URL: http://auth-service:4000
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # The monitoring stack (profile "observability"); without it the Monitoring view
+      # says how to start it
+      MONITORING_METRICS_URL: http://victoriametrics:8428
+      MONITORING_ALERTS_URL: http://vmalert:8880
+      MONITORING_LOGS_URL: http://victorialogs:9428
     # Localhost only: browsers reach it through the frontend's /analytics/ proxy,
     # which also adds the security headers
     ports:
@@ -272,5 +289,96 @@ services:
       - "127.0.0.1:${KAFKA_UI_PORT:-8090}:8080"
     restart: unless-stopped
 
+  # Monitoring stack, shown in the admin dashboard's Monitoring view. Profile "observability":
+  # starts with the rest when .env sets COMPOSE_PROFILES=observability (as .env.example does),
+  # or on request with: docker compose --profile observability up -d
+  # About 150-200 MB in all. None of it publishes a port: the dashboard is the only UI, and
+  # it is admins only (observability/README.md).
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.153.0
+    profiles: [observability]
+    mem_limit: 160m
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=15d
+      - -promscrape.config=/etc/victoriametrics/scrape.yml
+      # A few thousand series need small caches; the default is 60% of the memory limit
+      - -memory.allowedPercent=40
+      - -search.maxConcurrentRequests=4
+      # Show samples 5 s after they are scraped (default 30 s) so the dashboard keeps up with
+      # orders as they come in; the scrapes are the only writes, so nothing arrives late
+      - -search.latencyOffset=5s
+    volumes:
+      - vmdata:/storage
+      - ./observability/victoriametrics/scrape.yml:/etc/victoriametrics/scrape.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8428/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.153.0
+    profiles: [observability]
+    mem_limit: 64m
+    command:
+      - -rule=/etc/vmalert/alerts.yml
+      - -datasource.url=http://victoriametrics:8428
+      # Writes the ALERTS series back, and reads it at startup to keep alerts' start times
+      - -remoteWrite.url=http://victoriametrics:8428
+      - -remoteRead.url=http://victoriametrics:8428
+      - -evaluationInterval=30s
+      # No Alertmanager: firing alerts are read from vmalert by the dashboard
+      - -notifier.blackhole
+    volumes:
+      - ./observability/vmalert/alerts.yml:/etc/vmalert/alerts.yml:ro
+    depends_on:
+      victoriametrics:
+        condition: service_healthy
+    restart: unless-stopped
+
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.53.0
+    profiles: [observability]
+    mem_limit: 128m
+    command:
+      - -storageDataPath=/vlogs
+      - -retentionPeriod=7d
+      # Oldest days are dropped first if the logs outgrow this
+      - -retention.maxDiskSpaceUsageBytes=2GiB
+      - -memory.allowedPercent=40
+    volumes:
+      - vlogsdata:/vlogs
+    # No health check: the image has only the victoria-logs binary, no shell or wget to probe
+    # /health with. Fluent Bit retries its sends until it is up.
+    restart: unless-stopped
+
+  fluent-bit:
+    image: fluent/fluent-bit:5.1.3
+    profiles: [observability]
+    mem_limit: 48m
+    command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+    environment:
+      DOCKER_CONTAINERS_DIR: /var/lib/docker/containers
+      # Only this project's containers are shipped
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
+    # Root, to read Docker's log files (owned by root), but with no capabilities and a
+    # read-only view of them; no Docker socket
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    volumes:
+      - ${DOCKER_CONTAINERS_DIR:-/var/lib/docker/containers}:/var/lib/docker/containers:ro
+      - ./observability/fluent-bit:/fluent-bit/etc:ro
+      - fluentbit-state:/fluent-bit/state
+    depends_on:
+      victorialogs:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  vmdata:
+  vlogsdata:
+  fluentbit-state:
