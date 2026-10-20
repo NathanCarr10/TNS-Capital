@@ -130,7 +130,14 @@ export class DeadLettersComponent {
   }
 
   statusLabel(status: string | undefined): string {
-    return status === 'IGNORED' ? 'Dismissed' : status === 'RESOLVED' ? 'Resolved' : 'Pending';
+    switch (status) {
+      case 'IGNORED':
+        return 'Dismissed';
+      case 'RESOLVED':
+        return 'Resolved';
+      default:
+        return 'Pending';
+    }
   }
 
   readonly shortId = shortId;
