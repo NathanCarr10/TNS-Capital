@@ -17,7 +17,7 @@ the whole history, with trends, the per-user report, market prices and the ETL's
 ## Admins only
 
 The dashboard shows every user's trades, so only admins can open it. The page asks for a
-username and password and signs in through the auth service (`POST /auth/login`). It then
+email and password and signs in through the auth service (`POST /auth/login`). It then
 checks the access token itself, the same checks the auth service's guard makes: HS256
 signature with the shared `JWT_SECRET`, issuer `urn:tns-capital:auth-service`, `typ` "access"
 and expiry. Only a token whose `roles` include `ADMIN` gets past the sign-in form. A trader
@@ -84,7 +84,7 @@ latest loaded order was placed and how many newer orders wait for the next run.
 | Data quality | Rows the latest ETL run refused, by rule broken, and live orders not loaded yet | `etl_reject_reasons`, `not_yet_in_batch` |
 
 The account holder list is keyed by account, since holder names can repeat. Each trade is
-labelled with the username that owns the account (`users.account_id`); accounts no user owns,
+labelled with the email of the user who owns the account (`users.account_id`); accounts no user owns,
 such as the seeded ones, show as `(no login)`.
 
 ## Monitoring

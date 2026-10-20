@@ -118,11 +118,11 @@ def not_yet_in_batch(live_orders, batch_trades):
 def trades_by_user(trades):
     """What each user has traded, for the admin view: one row per user, busiest first.
 
-    trades needs a username column (see data.py). fill_rate is NaN for a user
+    trades needs an email column (see data.py). fill_rate is NaN for a user
     with no finished orders yet; top_symbol is the instrument they filled the
     most value in, or None if nothing filled.
     """
-    columns = ["username", "holder_name", "account_number", "orders", "filled", "rejected", "fill_rate",
+    columns = ["email", "holder_name", "account_number", "orders", "filled", "rejected", "fill_rate",
                "buy_value", "sell_value", "top_symbol", "last_order"]
     if trades.empty:
         return pd.DataFrame(columns=columns)
@@ -134,7 +134,7 @@ def trades_by_user(trades):
         buy_value=trades["notional"].where(done & (trades["side"] == "BUY"), 0),
         sell_value=trades["notional"].where(done & (trades["side"] == "SELL"), 0),
     )
-    keys = ["username", "holder_name", "account_number"]
+    keys = ["email", "holder_name", "account_number"]
     users = flagged.groupby(keys, as_index=False).agg(
         orders=("order_id", "count"), filled=("filled", "sum"), rejected=("rejected", "sum"),
         finished=("finished", "sum"), buy_value=("buy_value", "sum"), sell_value=("sell_value", "sum"),
@@ -150,7 +150,7 @@ def trades_by_user(trades):
         users = users.merge(top[keys + ["symbol"]].rename(columns={"symbol": "top_symbol"}), on=keys, how="left")
         users["top_symbol"] = users["top_symbol"].astype(object).where(users["top_symbol"].notna(), None)
 
-    users = users.sort_values(["orders", "username"], ascending=[False, True]).reset_index(drop=True)
+    users = users.sort_values(["orders", "email"], ascending=[False, True]).reset_index(drop=True)
     return users[columns]
 
 
@@ -182,7 +182,7 @@ def strategy_vs_trader(trades):
 
 def strategy_trades(trades):
     """What each strategy has traded, busiest first: one row per strategy and owner."""
-    columns = ["strategy_name", "username", "symbol", "orders", "filled", "buy_value", "sell_value", "last_order"]
+    columns = ["strategy_name", "email", "symbol", "orders", "filled", "buy_value", "sell_value", "last_order"]
     if trades.empty or "strategy_name" not in trades or trades["strategy_name"].isna().all():
         return pd.DataFrame(columns=columns)
     theirs = trades[trades["strategy_name"].notna()]
@@ -191,7 +191,7 @@ def strategy_trades(trades):
         filled=done,
         buy_value=theirs["notional"].where(done & (theirs["side"] == "BUY"), 0),
         sell_value=theirs["notional"].where(done & (theirs["side"] == "SELL"), 0))
-    summary = flagged.groupby(["strategy_name", "username", "symbol"], as_index=False).agg(
+    summary = flagged.groupby(["strategy_name", "email", "symbol"], as_index=False).agg(
         orders=("order_id", "count"), filled=("filled", "sum"), buy_value=("buy_value", "sum"),
         sell_value=("sell_value", "sum"), last_order=("created_on", "max"))
     return summary.sort_values(["orders", "strategy_name"], ascending=[False, True]).reset_index(drop=True)[columns]

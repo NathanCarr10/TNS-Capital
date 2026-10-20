@@ -146,7 +146,7 @@ def render_fills_vs_market(fills, prices):
                      labels={"trade_date": "Day", "close": "Price ($)"})
     figure.data[0].name, figure.data[0].showlegend = "Market close", True
     for trace in px.scatter(theirs, x="created_on", y="price", color="side",
-                            hover_data=["username", "quantity"]).data:
+                            hover_data=["email", "quantity"]).data:
         figure.add_trace(trace)
     theme.plot(st, figure)
 
@@ -160,7 +160,7 @@ def render_users(trades):
     st.dataframe(
         by_user, width="stretch", hide_index=True,
         column_config={
-            "username": "User", "holder_name": "Holder", "account_number": "Account",
+            "email": "Email", "holder_name": "Holder", "account_number": "Account",
             "orders": "Orders", "filled": "Filled", "rejected": "Rejected",
             "fill_rate": st.column_config.NumberColumn(FILL_RATE_LABEL, format="percent"),
             "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
@@ -170,7 +170,7 @@ def render_users(trades):
         })
 
     # Picked by holder name, keyed by account: names can repeat, and every account without a
-    # login shares the username "(no login)"
+    # login shares the email "(no login)"
     holders = by_user.sort_values(["holder_name", "account_number"])
     labels = dict(zip(holders["account_number"], holders["holder_name"] + " (" + holders["account_number"] + ")"))
     account = st.selectbox("See one account holder's orders", list(labels), index=None,
@@ -215,7 +215,7 @@ def render_strategies(trades):
                                 "fill_rate": st.column_config.NumberColumn(FILL_RATE_LABEL, format="percent"),
                                 "traded_value": st.column_config.NumberColumn("Filled value ($)", format="dollar")})
     st.dataframe(by_strategy, width="stretch", hide_index=True,
-                 column_config={"strategy_name": "Strategy", "username": "Owner", "symbol": "Instrument",
+                 column_config={"strategy_name": "Strategy", "email": "Owner", "symbol": "Instrument",
                                 "orders": "Orders", "filled": "Filled",
                                 "buy_value": st.column_config.NumberColumn("Bought ($)", format="dollar"),
                                 "sell_value": st.column_config.NumberColumn("Sold ($)", format="dollar"),

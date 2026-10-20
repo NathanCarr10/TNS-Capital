@@ -13,7 +13,7 @@ def trade(order_id, account="ACC-1", holder="Ann", symbol="ACME", asset_class="E
     created_on = pd.Timestamp(day + " 10:00")
     filled_on = None if filled_after is None else created_on + timedelta(seconds=filled_after)
     return {"order_id": order_id, "account_number": account, "holder_name": holder,
-            "username": holder.lower(), "symbol": symbol,
+            "email": f"{holder.lower()}@example.com", "symbol": symbol,
             "asset_class": asset_class, "side": side, "quantity": quantity, "price": price,
             "notional": quantity * price, "status": status, "created_on": created_on,
             "status_reason": reason, "filled_on": filled_on}
@@ -167,10 +167,10 @@ def test_numbers_are_none_without_trades():
 
 
 def test_trades_by_user_summarises_each_users_trading(trades):
-    users = insights.trades_by_user(trades).set_index("username")
+    users = insights.trades_by_user(trades).set_index("email")
 
-    assert users.index.tolist() == ["ann", "bob", "cy"]  # busiest first
-    ann, bob, cy = users.loc["ann"], users.loc["bob"], users.loc["cy"]
+    assert users.index.tolist() == ["ann@example.com", "bob@example.com", "cy@example.com"]  # busiest first
+    ann, bob, cy = users.loc["ann@example.com"], users.loc["bob@example.com"], users.loc["cy@example.com"]
     assert (ann.orders, ann.filled, ann.rejected) == (3, 2, 0)
     assert ann.fill_rate == pytest.approx(2 / 3)  # the cancelled order counts as finished
     assert (ann.buy_value, ann.sell_value, ann.top_symbol) == (150, 0, "ACME")
@@ -198,7 +198,7 @@ def test_trades_by_user_with_no_fills_or_trades():
 
     empty = insights.trades_by_user(pd.DataFrame(columns=list(trade("x"))))
     assert empty.empty
-    assert "username" in empty.columns
+    assert "email" in empty.columns
 
 
 @pytest.mark.parametrize("reason, category", [
@@ -315,7 +315,7 @@ def test_strategy_trades_summarises_each_strategy(trades):
 
     assert summary["strategy_name"].tolist() == ["Fast", "Bands"]  # busiest first
     fast = summary.iloc[0]
-    assert (fast.username, fast.orders, fast.filled, fast.buy_value) == ("ann", 2, 2, 150)
+    assert (fast.email, fast.orders, fast.filled, fast.buy_value) == ("ann@example.com", 2, 2, 150)
     assert summary.iloc[1].sell_value == 20
 
 

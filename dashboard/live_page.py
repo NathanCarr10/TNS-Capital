@@ -73,7 +73,7 @@ def render_attention(trades, dlq, now):
     if not stuck.empty:
         st.warning(f"{len(stuck)} order(s) have been waiting for over {minutes} minutes. "
                    "Check the Kafka consumer and the broker simulator.")
-        st.dataframe(stuck[["created_on", "minutes", "username", "symbol", "side", "quantity", "order_id"]],
+        st.dataframe(stuck[["created_on", "minutes", "email", "symbol", "side", "quantity", "order_id"]],
                      width="stretch", hide_index=True,
                      column_config={"created_on": st.column_config.DatetimeColumn(WHEN_PLACED),
                                     "minutes": st.column_config.NumberColumn("Waiting (min)", format="%.0f")})
@@ -106,11 +106,11 @@ def render_rejections(recent):
     theme.plot(left, px.bar(reasons, x="orders", y="category", orientation="h", hover_data=["share"],
                             title="Rejected orders by reason", labels={"orders": "Orders", "category": ""}))
     right.dataframe(
-        insights.rejected_orders(recent)[["created_on", "username", "symbol", "side", "quantity", "category",
+        insights.rejected_orders(recent)[["created_on", "email", "symbol", "side", "quantity", "category",
                                           "status_reason"]],
         width="stretch", hide_index=True,
         column_config={"created_on": st.column_config.DatetimeColumn("When (UTC)", format="D MMM, HH:mm:ss"),
-                       "username": "User", "symbol": "Instrument", "side": "Side", "quantity": "Quantity",
+                       "email": "Email", "symbol": "Instrument", "side": "Side", "quantity": "Quantity",
                        "category": "Reason", "status_reason": "Details"})
 
 
@@ -125,10 +125,10 @@ def render_fill_times(recent):
     if slowest.empty:
         right.caption("No timed fills in this period.")
     else:
-        right.dataframe(slowest[["seconds", "username", "symbol", "side", "quantity", "created_on"]],
+        right.dataframe(slowest[["seconds", "email", "symbol", "side", "quantity", "created_on"]],
                         width="stretch", hide_index=True,
                         column_config={"seconds": st.column_config.NumberColumn("Seconds", format="%.1f"),
-                                       "username": "User", "symbol": "Instrument", "side": "Side",
+                                       "email": "Email", "symbol": "Instrument", "side": "Side",
                                        "quantity": "Quantity",
                                        "created_on": st.column_config.DatetimeColumn(WHEN_PLACED)})
 
@@ -147,9 +147,9 @@ def render_traders(recent):
         if strategies.empty:
             st.caption("No strategy placed an order in this period.")
         else:
-            st.dataframe(strategies[["strategy_name", "username", "symbol", "orders", "filled", "last_order"]],
+            st.dataframe(strategies[["strategy_name", "email", "symbol", "orders", "filled", "last_order"]],
                          width="stretch", hide_index=True,
-                         column_config={"strategy_name": "Strategy", "username": "Owner", "symbol": "Instrument",
+                         column_config={"strategy_name": "Strategy", "email": "Owner", "symbol": "Instrument",
                                         "orders": "Orders", "filled": "Filled",
                                         "last_order": st.column_config.DatetimeColumn("Last order (UTC)",
                                                                                       format="D MMM, HH:mm")})
@@ -161,11 +161,11 @@ def render_latest(trades):
         st.caption("No order has been placed yet.")
         return
     latest = trades.sort_values("created_on", ascending=False).head(LATEST_ORDERS)
-    st.dataframe(latest[["created_on", "username", "symbol", "side", "quantity", "price", "status", "status_reason",
+    st.dataframe(latest[["created_on", "email", "symbol", "side", "quantity", "price", "status", "status_reason",
                          "strategy_name"]],
                  width="stretch", hide_index=True,
                  column_config={"created_on": st.column_config.DatetimeColumn(WHEN_PLACED, format="D MMM, HH:mm:ss"),
-                                "username": "User", "symbol": "Instrument", "side": "Side", "quantity": "Quantity",
+                                "email": "Email", "symbol": "Instrument", "side": "Side", "quantity": "Quantity",
                                 "price": st.column_config.NumberColumn("Price ($)", format="dollar"),
                                 "status": "Status", "status_reason": "Reason", "strategy_name": "Strategy"})
 

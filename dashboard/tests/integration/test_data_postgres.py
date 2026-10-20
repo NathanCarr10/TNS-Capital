@@ -25,8 +25,8 @@ pytestmark = pytest.mark.skipif(not os.getenv("DASHBOARD_IT"), reason="set DASHB
 REPO = Path(__file__).resolve().parents[3]
 
 TEST_DATA = """
-    INSERT INTO accounts (account_number, holder_name, cash_balance, status) VALUES
-        ('ACC-1001', 'John Doe', 5000.00, 'ACTIVE');
+    INSERT INTO accounts (account_number, holder_name, email, cash_balance, status) VALUES
+        ('ACC-1001', 'John Doe', 'john@example.com', 5000.00, 'ACTIVE');
     INSERT INTO instruments (symbol, name, asset_class, currency, tradable) VALUES
         ('ACME', 'Acme Corp', 'Equity', 'USD', TRUE);
     INSERT INTO orders (id, account_id, symbol, side, quantity, price, status, idempotency_key) VALUES
@@ -42,8 +42,8 @@ TEST_DATA = """
     INSERT INTO dlq_messages (original_order_id, original_message, failure_reason, failure_type, is_retryable)
         VALUES ('22222222-2222-2222-2222-222222222222', '{}', 'Insufficient funds for buy order',
                 'NON_RETRYABLE_InsufficientFundsException', FALSE);
-    INSERT INTO users (username, password_hash, role, account_id) VALUES
-        ('john', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
+    INSERT INTO users (email, password_hash, role, account_id) VALUES
+        ('john@example.com', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
     INSERT INTO strategies (account_id, name, symbol, rule_type, rule_params, quantity, status) VALUES
         ((SELECT id FROM accounts), 'MA 20/50', 'ACME', 'MA_CROSSOVER', '{}', 10, 'ACTIVE');
     INSERT INTO strategy_signals (strategy_id, side, price, bar_time, source, order_id, outcome)
@@ -72,7 +72,7 @@ def test_live_source_loads_before_the_etl_has_run(db):
     assert data.load_batch()["available"] is False
     assert data.load_batch()["trades"].empty
     assert sorted(live["status"]) == ["FILLED", "REJECTED"]
-    assert set(live["username"]) == {"john"}
+    assert set(live["email"]) == {"john@example.com"}
     by_order = live.set_index("order_id")["strategy_name"]
     assert by_order["11111111-1111-1111-1111-111111111111"] == "MA 20/50"
     assert by_order["22222222-2222-2222-2222-222222222222"] is None
@@ -104,7 +104,7 @@ def test_batch_source_loads_once_the_etl_has_run(db):
 
     assert batch["available"] is True
     assert batch["trades"]["order_id"].tolist() == ["11111111-1111-1111-1111-111111111111"]
-    assert batch["trades"]["username"].tolist() == ["john"]
+    assert batch["trades"]["email"].tolist() == ["john@example.com"]
     assert batch["trades"]["strategy_name"].tolist() == ["MA 20/50"]
     assert insights.rejection_reasons(batch["trades"]).empty  # reasons are only in the live source
     assert insights.not_yet_in_batch(data.load_live()["trades"], batch["trades"])["order_id"].tolist() == [
@@ -119,4 +119,4 @@ def test_batch_source_loads_once_the_etl_has_run(db):
 def test_accounts_without_a_login_are_labelled(db):
     db.execute("DELETE FROM users")
 
-    assert set(data.load_live()["trades"]["username"]) == {"(no login)"}
+    assert set(data.load_live()["trades"]["email"]) == {"(no login)"}

@@ -22,11 +22,11 @@ SECRET = "test-secret-of-at-least-32-bytes-long!!"
 # Placed in the last few hours, so the Live view's default period (24 hours) includes them
 NOW = pd.Timestamp.now(tz="UTC").tz_localize(None).floor("s")
 TRADES = pd.DataFrame([
-    {"order_id": "o1", "account_number": "ACC-1", "holder_name": "Ann", "username": "ann", "symbol": "ACME", "asset_class": "Equity",
+    {"order_id": "o1", "account_number": "ACC-1", "holder_name": "Ann", "email": "ann@example.com", "symbol": "ACME", "asset_class": "Equity",
      "side": "BUY", "quantity": 10, "price": 5.0, "notional": 50.0, "status": "FILLED",
      "created_on": NOW - timedelta(hours=3), "status_reason": None,
      "filled_on": NOW - timedelta(hours=3) + timedelta(seconds=2), "strategy_name": None},
-    {"order_id": "o2", "account_number": "ACC-2", "holder_name": "Bob", "username": "bob", "symbol": "ACME", "asset_class": "Equity",
+    {"order_id": "o2", "account_number": "ACC-2", "holder_name": "Bob", "email": "bob@example.com", "symbol": "ACME", "asset_class": "Equity",
      "side": "SELL", "quantity": 2, "price": 6.0, "notional": 12.0, "status": "REJECTED",
      "created_on": NOW - timedelta(hours=2), "status_reason": "Cannot sell 2 of ACME, only 0 available",
      "filled_on": None, "strategy_name": None},
@@ -58,7 +58,7 @@ def fresh_cache(monkeypatch):
     monkeypatch.setattr(sessions, "browser_cookie", lambda: None)
 
 
-def token(roles=("ADMIN",), sub="admin", expires_in=900):
+def token(roles=("ADMIN",), sub="admin@tns-capital.local", expires_in=900):
     now = int(time.time())
     claims = {"sub": sub, "roles": list(roles), "typ": "access", "iss": auth.ISSUER, "iat": now,
               "exp": now + expires_in}
@@ -100,12 +100,12 @@ def test_asks_for_sign_in_and_loads_no_data_without_a_token(monkeypatch):
     app = AppTest.from_file("../app.py", default_timeout=30).run()
 
     assert not app.exception
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]
     assert not app.metric
 
 
 def test_admin_sign_in_opens_the_dashboard(monkeypatch):
-    monkeypatch.setattr(auth, "login", lambda username, password: (token(), "refresh-1"))
+    monkeypatch.setattr(auth, "login", lambda email, password: (token(), "refresh-1"))
     app = run_app(monkeypatch, signed_in_with="")
 
     app.text_input[0].input("admin")
@@ -114,12 +114,12 @@ def test_admin_sign_in_opens_the_dashboard(monkeypatch):
 
     assert not app.exception
     assert any(metric.label == "Orders" for metric in app.metric)
-    assert "Signed in as **admin**" in app.sidebar.markdown[0].value
+    assert "Signed in as **admin@tns-capital.local**" in app.sidebar.markdown[0].value
 
 
 def test_wrong_password_shows_the_auth_message(monkeypatch):
-    def rejected(username, password):
-        raise auth.AuthError("Invalid username or password.")
+    def rejected(email, password):
+        raise auth.AuthError("Invalid email or password.")
 
     monkeypatch.setattr(auth, "login", rejected)
     app = run_app(monkeypatch, signed_in_with="")
@@ -128,12 +128,12 @@ def test_wrong_password_shows_the_auth_message(monkeypatch):
     app.text_input[1].input("wrong")
     app.button[0].click().run()
 
-    assert app.error[0].value == "Invalid username or password."
+    assert app.error[0].value == "Invalid email or password."
     assert not app.metric
 
 
 def test_a_trader_is_turned_away(monkeypatch):
-    app = run_app(monkeypatch, signed_in_with=token(roles=["USER"], sub="ann"))
+    app = run_app(monkeypatch, signed_in_with=token(roles=["USER"], sub="ann@example.com"))
 
     assert "this dashboard is for admins only" in app.error[0].value
     assert not app.metric
@@ -158,7 +158,7 @@ def test_a_forged_token_is_rejected(monkeypatch):
 
 
 def test_support_is_turned_away_and_pointed_to_the_trading_app(monkeypatch):
-    app = run_app(monkeypatch, signed_in_with=token(roles=["SUPPORT"], sub="support"))
+    app = run_app(monkeypatch, signed_in_with=token(roles=["SUPPORT"], sub="support@tns-capital.local"))
 
     assert "this dashboard is for admins only" in app.error[0].value
     assert "trading app" in app.info[0].value
@@ -177,7 +177,7 @@ def test_sign_out_returns_to_the_form(monkeypatch):
     app.sidebar.button[0].click().run()
 
     assert "token" not in app.session_state
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]
 
 
 def test_live_view_shows_the_period_and_what_needs_attention(monkeypatch):
@@ -196,7 +196,7 @@ def test_live_view_shows_the_period_and_what_needs_attention(monkeypatch):
     [dlq] = [frame.value for frame in app.dataframe if "failure_type" in frame.value]
     assert dlq["pending"].tolist() == [1]
     [rejected] = [frame.value for frame in app.dataframe if "category" in frame.value]
-    assert rejected[["username", "category"]].values.tolist() == [["bob", "Insufficient holdings"]]
+    assert rejected[["email", "category"]].values.tolist() == [["bob@example.com", "Insufficient holdings"]]
     [latest] = [frame.value for frame in app.dataframe if "strategy_name" in frame.value]
     assert latest["status"].tolist() == ["REJECTED", "FILLED"]  # newest first
     # Rejections, most active accounts, exposure
@@ -340,8 +340,8 @@ def test_batch_view_warns_before_the_first_etl_run(monkeypatch):
 def test_shows_what_each_user_traded_and_one_users_orders(monkeypatch):
     app = run_app(monkeypatch, batch={**BATCH, "trades": TRADES}, view="Batch")
 
-    [by_user] = [frame.value for frame in app.dataframe if "fill_rate" in frame.value and "username" in frame.value]
-    assert by_user["username"].tolist() == ["ann", "bob"]
+    [by_user] = [frame.value for frame in app.dataframe if "fill_rate" in frame.value and "email" in frame.value]
+    assert by_user["email"].tolist() == ["ann@example.com", "bob@example.com"]
 
     picker = account_picker(app)
     assert picker.options == ["Ann (ACC-1)", "Bob (ACC-2)"]
@@ -357,8 +357,8 @@ def test_shows_what_each_user_traded_and_one_users_orders(monkeypatch):
 
 
 def test_accounts_without_a_login_are_picked_one_at_a_time(monkeypatch):
-    # Seeded accounts have no login, so they all share the username "(no login)"
-    no_login = TRADES.assign(username="(no login)")
+    # Seeded accounts have no login, so they all share the email "(no login)"
+    no_login = TRADES.assign(email="(no login)")
     app = run_app(monkeypatch, batch={**BATCH, "trades": no_login}, view="Batch")
 
     account_picker(app).select("ACC-1").run()
@@ -451,7 +451,7 @@ def cookie_scripts(app):
 
 
 def test_sign_in_keeps_the_tokens_on_the_server_and_only_a_session_id_in_the_cookie(monkeypatch):
-    monkeypatch.setattr(auth, "login", lambda username, password: (token(), "refresh-1"))
+    monkeypatch.setattr(auth, "login", lambda email, password: (token(), "refresh-1"))
     app = run_app(monkeypatch, signed_in_with="")
 
     app.text_input[0].input("admin")
@@ -481,7 +481,7 @@ def test_an_unknown_or_ended_session_cookie_shows_the_sign_in_form(monkeypatch):
 
     app = run_app(monkeypatch, signed_in_with="")
 
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]
 
 
 def test_an_expired_access_token_is_refreshed_without_signing_out(monkeypatch):
@@ -529,4 +529,4 @@ def test_sign_out_ends_the_server_session_and_clears_the_cookie(monkeypatch):
     assert revoked == ["refresh-1"]
     assert sessions.STORE.access_token(session_id) is None
     assert any("Max-Age=0" in script for script in cookie_scripts(app))
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]

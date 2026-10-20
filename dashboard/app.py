@@ -100,12 +100,12 @@ def require_admin():
         if message := st.session_state.pop("auth_message", None):
             st.warning(message)
         with st.form("sign_in"):
-            username = st.text_input("Username")
+            email = st.text_input("Email", placeholder="you@example.com")
             password = st.text_input("Password", type="password")
             submitted = st.form_submit_button("Sign in", type="primary", width="stretch")
     if submitted:
         try:
-            access_token, refresh_token = auth.login(username, password)
+            access_token, refresh_token = auth.login(email, password)
         except auth.AuthError as error:
             card.error(str(error))
         else:

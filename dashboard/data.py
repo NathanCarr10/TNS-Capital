@@ -8,7 +8,7 @@
 Trades come back as DataFrames with the same columns from either source, so
 the insight functions work on both. Only the live source has each order's rejection
 reason (status_reason) and first execution time (filled_on); they are empty
-in the batch source. Each trade carries the username of the account's
+in the batch source. Each trade carries the email of the account's
 owner (users.account_id), or "(no login)" for accounts no user owns, such as
 the seeded ones, and strategy_name: the Strategy Lab strategy that placed
 it, or None for an order the trader placed themselves.
@@ -33,7 +33,7 @@ DB_SETTINGS = {
 
 BATCH_TRADES_SQL = """
     SELECT f.order_id::text AS order_id, f.account_number, a.holder_name,
-           COALESCE(u.username, '(no login)') AS username, f.symbol,
+           COALESCE(u.email, '(no login)') AS email, f.symbol,
            i.asset_class, f.side, f.quantity, f.price, f.notional, f.status, f.created_on,
            NULL::text AS status_reason, NULL::timestamp AS filled_on,
            (SELECT s.name FROM strategy_signals g JOIN strategies s ON s.id = g.strategy_id
@@ -47,7 +47,7 @@ BATCH_TRADES_SQL = """
 
 LIVE_TRADES_SQL = """
     SELECT o.id::text AS order_id, a.account_number, a.holder_name,
-           COALESCE(u.username, '(no login)') AS username, o.symbol,
+           COALESCE(u.email, '(no login)') AS email, o.symbol,
            i.asset_class, o.side, o.quantity, o.price, o.quantity * o.price AS notional,
            o.status, o.created_on, o.status_reason,
            (SELECT MIN(e.executed_on) FROM executions e WHERE e.order_id = o.id) AS filled_on,
