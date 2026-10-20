@@ -72,12 +72,12 @@ def test_asks_for_sign_in_and_loads_no_data_without_a_token(monkeypatch):
     app = AppTest.from_file("../app.py", default_timeout=30).run()
 
     assert not app.exception
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]
     assert not app.metric
 
 
 def test_admin_sign_in_opens_the_dashboard(monkeypatch):
-    monkeypatch.setattr(auth, "login", lambda username, password: (token(), "refresh-1"))
+    monkeypatch.setattr(auth, "login", lambda email, password: (token(), "refresh-1"))
     app = run_app(monkeypatch, FRAMES, signed_in_with="")
 
     app.text_input[0].input("admin")
@@ -149,7 +149,7 @@ def test_sign_out_returns_to_the_form(monkeypatch):
     app.sidebar.button[0].click().run()
 
     assert "token" not in app.session_state
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]
 
 
 def test_shows_what_each_user_traded_and_one_users_orders(monkeypatch):
@@ -334,7 +334,7 @@ def cookie_scripts(app):
 
 
 def test_sign_in_keeps_the_tokens_on_the_server_and_only_a_session_id_in_the_cookie(monkeypatch):
-    monkeypatch.setattr(auth, "login", lambda username, password: (token(), "refresh-1"))
+    monkeypatch.setattr(auth, "login", lambda email, password: (token(), "refresh-1"))
     app = run_app(monkeypatch, FRAMES, signed_in_with="")
 
     app.text_input[0].input("admin")
@@ -364,7 +364,7 @@ def test_an_unknown_or_ended_session_cookie_shows_the_sign_in_form(monkeypatch):
 
     app = run_app(monkeypatch, FRAMES, signed_in_with="")
 
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]
 
 
 def test_an_expired_access_token_is_refreshed_without_signing_out(monkeypatch):
@@ -412,4 +412,4 @@ def test_sign_out_ends_the_server_session_and_clears_the_cookie(monkeypatch):
     assert revoked == ["refresh-1"]
     assert sessions.STORE.access_token(session_id) is None
     assert any("Max-Age=0" in script for script in cookie_scripts(app))
-    assert [field.label for field in app.text_input] == ["Username", "Password"]
+    assert [field.label for field in app.text_input] == ["Email", "Password"]

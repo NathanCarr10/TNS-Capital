@@ -93,12 +93,12 @@ def test_login_returns_the_access_and_refresh_tokens(monkeypatch):
 
     monkeypatch.setattr(auth.requests, "post", post)
 
-    assert auth.login("admin", "pw") == ("abc", "def")
-    assert calls == [(f"{auth.AUTH_URL}/auth/login", {"username": "admin", "password": "pw"})]
+    assert auth.login("admin@tns-capital.local", "pw") == ("abc", "def")
+    assert calls == [(f"{auth.AUTH_URL}/auth/login", {"email": "admin@tns-capital.local", "password": "pw"})]
 
 
 @pytest.mark.parametrize("status, message", [
-    (401, "Invalid username or password"),
+    (401, "Invalid email or password"),
     (429, "Too many sign-in attempts"),
     (500, "HTTP 500"),
 ])

@@ -31,15 +31,15 @@ class AuthError(Exception):
     """Sign-in failed; the message is safe to show to the user."""
 
 
-def login(username, password):
-    """Exchange a username and password for (access token, refresh token) via the auth service."""
+def login(email, password):
+    """Exchange an email and password for (access token, refresh token) via the auth service."""
     try:
-        response = requests.post(f"{AUTH_URL}/auth/login", json={"username": username, "password": password},
+        response = requests.post(f"{AUTH_URL}/auth/login", json={"email": email, "password": password},
                                  timeout=TIMEOUT_SECONDS)
     except requests.RequestException as error:
         raise AuthError("The auth service is unreachable. Try again shortly.") from error
     if response.status_code == 401:
-        raise AuthError("Invalid username or password.")
+        raise AuthError("Invalid email or password.")
     if response.status_code == 429:
         raise AuthError("Too many sign-in attempts. Wait a minute and try again.")
     if response.status_code != 200:
