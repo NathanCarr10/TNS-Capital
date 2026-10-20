@@ -15,7 +15,7 @@ import { RefreshTokensService } from '../src/users/refresh-tokens.service';
 import { UsersService } from '../src/users/users.service';
 
 const LIMIT = 3;
-const WRONG_LOGIN = { username: 'nobody', password: 'wrongPassword' };
+const WRONG_LOGIN = { email: 'nobody@example.com', password: 'wrongPassword' };
 
 describe('Rate limiting', () => {
   let app: INestApplication;
@@ -23,7 +23,7 @@ describe('Rate limiting', () => {
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(UsersService)
-      .useValue({ findByUsername: jest.fn(async () => null) })
+      .useValue({ findByUsername: jest.fn(async () => null), findByEmail: jest.fn(async () => null) })
       .overrideProvider(RefreshTokensService)
       .useValue({})
       .overrideProvider(getOptionsToken())

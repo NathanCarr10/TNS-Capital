@@ -16,6 +16,7 @@ describe('AuthService', () => {
   let trader: UserRecord;
   const users = {
     findByUsername: jest.fn(),
+    findByEmail: jest.fn(),
     findById: jest.fn(),
     create: jest.fn(),
   };
@@ -36,7 +37,14 @@ describe('AuthService', () => {
   );
 
   beforeAll(async () => {
-    trader = { id: 3, username: 'trader', roles: ['USER'], accountId: 7, passwordHash: await hashPassword('password123') };
+    trader = {
+      id: 3,
+      username: 'trader',
+      email: 'trader@example.com',
+      roles: ['USER'],
+      accountId: 7,
+      passwordHash: await hashPassword('password123'),
+    };
   });
 
   beforeEach(() => jest.clearAllMocks());
@@ -48,9 +56,10 @@ describe('AuthService', () => {
 
       await auth.register('newtrader', 'password123', 'Ada');
 
-      const [, passwordHash, holderName] = users.create.mock.calls[0];
+      const [, passwordHash, email, holderName] = users.create.mock.calls[0];
       expect(passwordHash).toMatch(/^\$argon2id\$/);
       expect(passwordHash).not.toContain('password123');
+      expect(email).toBe('newtrader@example.invalid');
       expect(holderName).toBe('Ada');
     });
 
@@ -72,9 +81,9 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('issues both tokens and stores the refresh token hash in a new session family', async () => {
-      users.findByUsername.mockResolvedValue(trader);
+      users.findByEmail.mockResolvedValue(trader);
 
-      expect(await auth.login('trader', 'password123')).toEqual({
+      expect(await auth.login('trader@example.com', 'password123')).toEqual({
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
@@ -82,10 +91,10 @@ describe('AuthService', () => {
     });
 
     it('starts a different session family on every login', async () => {
-      users.findByUsername.mockResolvedValue(trader);
+      users.findByEmail.mockResolvedValue(trader);
 
-      await auth.login('trader', 'password123');
-      await auth.login('trader', 'password123');
+      await auth.login('trader@example.com', 'password123');
+      await auth.login('trader@example.com', 'password123');
 
       const [first, second] = refreshTokens.create.mock.calls.map((call) => call[2]);
       expect(first).not.toBe(second);
@@ -95,19 +104,19 @@ describe('AuthService', () => {
       ['the password is wrong', 'wrong-password'],
       ['the user does not exist', 'password123'],
     ])('gives the same AUTH-401 when %s, and stores nothing', async (theCase, password) => {
-      users.findByUsername.mockResolvedValue(theCase.includes('exist') ? null : trader);
+      users.findByEmail.mockResolvedValue(theCase.includes('exist') ? null : trader);
 
-      const error = (await auth.login('trader', password).catch((e) => e)) as ApiException;
+      const error = (await auth.login('trader@example.com', password).catch((e) => e)) as ApiException;
       expect(error.errorCode).toBe('AUTH-401');
-      expect(error.message).toBe('invalid username or password');
+      expect(error.message).toBe('invalid email or password');
       expect(refreshTokens.create).not.toHaveBeenCalled();
     });
 
     it('logs a successful login with the username and client IP, never the password (A09-2)', async () => {
-      users.findByUsername.mockResolvedValue(trader);
+      users.findByEmail.mockResolvedValue(trader);
       const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 
-      await auth.login('trader', 'password123', '10.0.0.5');
+      await auth.login('trader@example.com', 'password123', '10.0.0.5');
 
       expect(log).toHaveBeenCalledWith('Login succeeded: username="trader" id=3 ip=10.0.0.5');
       expect(JSON.stringify(log.mock.calls)).not.toContain('password123');
@@ -115,13 +124,13 @@ describe('AuthService', () => {
     });
 
     it('logs a failed login, quoting the username so it cannot forge log lines', async () => {
-      users.findByUsername.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
-      await auth.login('evil\nLogin succeeded: username="admin"', 'guess', '10.0.0.6').catch(() => undefined);
+      await auth.login('evil\nLogin succeeded: email="admin@example.com"', 'guess', '10.0.0.6').catch(() => undefined);
 
       expect(warn).toHaveBeenCalledWith(
-        'Login failed: username="evil\\nLogin succeeded: username=\\"admin\\"" ip=10.0.0.6',
+        'Login failed: email="evil\\nLogin succeeded: email=\\"admin@example.com\\"" ip=10.0.0.6',
       );
       expect(JSON.stringify(warn.mock.calls)).not.toContain('guess');
       warn.mockRestore();
@@ -189,17 +198,17 @@ describe('AuthService', () => {
 
   describe('validate', () => {
     it('returns the user for the right password', async () => {
-      users.findByUsername.mockResolvedValue(trader);
+      users.findByEmail.mockResolvedValue(trader);
 
-      expect(await auth.validate('trader', 'password123')).toBe(trader);
+      expect(await auth.validate('TRADER@EXAMPLE.COM', 'password123')).toBe(trader);
     });
 
     it('returns null for a wrong password or an unknown user', async () => {
-      users.findByUsername.mockResolvedValue(trader);
-      expect(await auth.validate('trader', 'wrongPassword')).toBeNull();
+      users.findByEmail.mockResolvedValue(trader);
+      expect(await auth.validate('trader@example.com', 'wrongPassword')).toBeNull();
 
-      users.findByUsername.mockResolvedValue(null);
-      expect(await auth.validate('nobody', 'password123')).toBeNull();
+      users.findByEmail.mockResolvedValue(null);
+      expect(await auth.validate('nobody@example.com', 'password123')).toBeNull();
     });
   });
 
@@ -209,7 +218,7 @@ describe('AuthService', () => {
     it('returns the current user without the password hash', async () => {
       users.findByUsername.mockResolvedValue(trader);
 
-      expect(await auth.me(claims)).toEqual({ id: 3, username: 'trader', roles: ['USER'], accountId: 7 });
+      expect(await auth.me(claims)).toEqual({ id: 3, username: 'trader', email: 'trader@example.com', roles: ['USER'], accountId: 7 });
     });
 
     it('rejects with AUTH-401 when the user no longer exists', async () => {

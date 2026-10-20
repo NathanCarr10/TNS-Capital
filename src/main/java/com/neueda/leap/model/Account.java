@@ -26,6 +26,9 @@ public class Account {
     @Column(nullable = false)
     private String holderName;
 
+    @Column(nullable = false, length = 320)
+    private String email;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal cashBalance;
 
@@ -50,9 +53,17 @@ public class Account {
     }
 
     public Account(String accountNumber, String holderName, BigDecimal cashBalance, Clock clock) {
+        this(accountNumber, holderName, accountNumber.toLowerCase() + "@example.invalid", cashBalance, clock);
+    }
+
+    public Account(String accountNumber, String holderName, String email, BigDecimal cashBalance, Clock clock) {
         validateConstructorArgs(accountNumber, holderName, cashBalance);
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
         this.accountNumber = accountNumber;
         this.holderName = holderName;
+        this.email = email.trim().toLowerCase();
         this.cashBalance = new BigDecimal(cashBalance.toPlainString());
         this.status = AccountStatus.ACTIVE;
         this.version = 0;
@@ -68,6 +79,7 @@ public class Account {
         this.id = null;
         this.accountNumber = other.accountNumber;
         this.holderName = other.holderName;
+        this.email = other.email;
         this.cashBalance = new BigDecimal(other.cashBalance.toPlainString());
         this.reservedCash = new BigDecimal(other.reservedCash.toPlainString());
         this.status = other.status;
@@ -173,6 +185,10 @@ public class Account {
 
     public String getHolderName() {
         return holderName;
+    }
+
+    public String getEmail() {
+        return email;
     }
 
     public void setHolderName(String holderName) {

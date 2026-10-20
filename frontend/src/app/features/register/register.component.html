@@ -5,6 +5,15 @@
     <p>Register to access your account and trading tools.</p>
 
     <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" novalidate>
+      <label for="email">Email</label>
+      <input
+        id="email"
+        type="email"
+        formControlName="email"
+        autocomplete="email"
+        placeholder="you@example.com"
+      />
+
       <label for="username">Username</label>
       <input
         id="username"

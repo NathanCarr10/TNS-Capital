@@ -65,6 +65,10 @@
           <dd>{{ username() }}</dd>
         </div>
         <div class="detail">
+          <dt>Email</dt>
+          <dd>{{ email() }}</dd>
+        </div>
+        <div class="detail">
           <dt>Status</dt>
           <dd><span class="badge" [class.badge-positive]="details.status === 'ACTIVE'">{{ details.status }}</span></dd>
         </div>
