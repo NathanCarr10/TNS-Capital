@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -62,6 +62,15 @@ export class PortfolioComponent {
 
   /** First name of the account holder, for the greeting. */
   readonly firstName = computed(() => this.account()?.holderName.split(/\s+/)[0] ?? '');
+
+  constructor() {
+    // The market watch picks the quoted symbols for traders; support has no market watch,
+    // so quote the shown account's holdings, or the holdings and KPIs would never get prices
+    if (this.isSupport) {
+      const quotes = inject(MarketQuotesStore);
+      effect(() => quotes.watch(this.heldSymbols().slice(0, MarketWatchComponent.MAX_SYMBOLS)));
+    }
+  }
 
   viewAccount(accountId: number): void {
     this.statusError.set(null);
