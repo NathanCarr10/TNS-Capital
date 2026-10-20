@@ -10,7 +10,7 @@ from pathlib import Path
 
 import streamlit as st
 
-LOGO = Path(__file__).parent / "static" / "TNS_Capital_stacked_transparent.png"
+LOGO = Path(__file__).parent / "static" / "TNS_Capital_horizontal_transparent.png"
 LOGO_FAVICON = Path(__file__).parent / "static" / "TNS_Capital_icon_transparent.png"
 
 # The trading app's tokens (styles.scss), for the parts config.toml has no option for
