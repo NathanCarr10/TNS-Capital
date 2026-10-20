@@ -47,5 +47,14 @@ INSERT INTO orders (account_id, symbol, side, quantity, price, status, idempoten
     ((SELECT id FROM accounts WHERE account_number = 'ACC-1010'), 'KO', 'BUY', 15, 77.79, 'FILLED', 'seed-key-42', NULL, date_trunc('day', NOW()) - INTERVAL '4 days' + INTERVAL '935 minutes'),
     ((SELECT id FROM accounts WHERE account_number = 'ACC-1005'), 'TSLA', 'BUY', 16, 242.28, 'FILLED', 'seed-key-43', NULL, date_trunc('day', NOW()) - INTERVAL '2 days' + INTERVAL '1207 minutes'),
     ((SELECT id FROM accounts WHERE account_number = 'ACC-1005'), 'QQQ', 'BUY', 5, 476.23, 'CANCELLED', 'seed-key-44', 'User requested cancellation', date_trunc('day', NOW()) - INTERVAL '1 days' + INTERVAL '1083 minutes'),
-    ((SELECT id FROM accounts WHERE account_number = 'ACC-1002'), 'KO', 'BUY', 47, 77.53, 'FILLED', 'seed-key-45', NULL, date_trunc('day', NOW()) - INTERVAL '1 days' + INTERVAL '966 minutes')
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-1002'), 'KO', 'BUY', 47, 77.53, 'FILLED', 'seed-key-45', NULL, date_trunc('day', NOW()) - INTERVAL '1 days' + INTERVAL '966 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'AAPL', 'BUY', 40, 180.00, 'FILLED', 'seed-demo-jane-buy-1', NULL, date_trunc('day', NOW()) - INTERVAL '12 days' + INTERVAL '1040 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'MSFT', 'BUY', 25, 350.00, 'FILLED', 'seed-demo-jane-buy-2', NULL, date_trunc('day', NOW()) - INTERVAL '10 days' + INTERVAL '1095 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'SPY', 'BUY', 20, 420.00, 'FILLED', 'seed-demo-jane-buy-3', NULL, date_trunc('day', NOW()) - INTERVAL '8 days' + INTERVAL '975 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'TLT', 'BUY', 35, 90.00, 'FILLED', 'seed-demo-jane-buy-4', NULL, date_trunc('day', NOW()) - INTERVAL '7 days' + INTERVAL '1120 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'GLD', 'BUY', 15, 180.00, 'FILLED', 'seed-demo-jane-buy-5', NULL, date_trunc('day', NOW()) - INTERVAL '5 days' + INTERVAL '1085 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'VTI', 'BUY', 30, 220.00, 'FILLED', 'seed-demo-jane-buy-6', NULL, date_trunc('day', NOW()) - INTERVAL '3 days' + INTERVAL '1060 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'TSLA', 'SELL', 25, 248.00, 'FILLED', 'seed-demo-jane-key-1', NULL, date_trunc('day', NOW()) - INTERVAL '6 days' + INTERVAL '1030 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'QQQ', 'SELL', 18, 485.00, 'FILLED', 'seed-demo-jane-key-2', NULL, date_trunc('day', NOW()) - INTERVAL '4 days' + INTERVAL '1115 minutes'),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'AMD', 'SELL', 30, 142.50, 'FILLED', 'seed-demo-jane-key-3', NULL, date_trunc('day', NOW()) - INTERVAL '2 days' + INTERVAL '1010 minutes')
 ON CONFLICT (idempotency_key) DO NOTHING;

@@ -161,6 +161,28 @@ export class UsersService {
     );
   }
 
+  /** Creates or updates the local demo trader without opening a second account. */
+  async saveDemoUser(username: string, passwordHash: string, email: string, accountNumber: string): Promise<void> {
+    const account = await this.pool.query('SELECT id FROM accounts WHERE account_number = $1', [accountNumber]);
+    if (account.rows.length === 0) {
+      throw new Error(`Demo account ${accountNumber} does not exist`);
+    }
+
+    const existing = await this.findByUsername(username);
+    if (existing && (existing.roles.length !== 1 || existing.roles[0] !== 'USER' || existing.accountId !== Number(account.rows[0].id))) {
+      throw new Error(`Demo username "${username}" is already linked to another user`);
+    }
+    if (existing) {
+      await this.pool.query('UPDATE users SET password_hash = $1, email = $2, updated_at = NOW() WHERE id = $3', [passwordHash, email, existing.id]);
+      return;
+    }
+
+    await this.pool.query(
+      'INSERT INTO users (username, email, password_hash, role, account_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())',
+      [username, email, passwordHash, 'USER', account.rows[0].id],
+    );
+  }
+
   async findByUsername(username: string): Promise<UserRecord | null> {
     const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE username = $1`, [username]);
     return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
