@@ -38,30 +38,31 @@ yours with `db/recreate_db.sh`.
 ```bash
 curl -X POST http://localhost:4000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123","holderName":"Ada Lovelace"}'
+  -d '{"email":"trader1@example.com","password":"password123","holderName":"Ada Lovelace"}'
 ```
 
 ```json
-{"id":4,"username":"trader1","createdAt":"...","accountId":11,"accountNumber":"ACC-U000004"}
+{"id":4,"email":"trader1@example.com","createdAt":"...","accountId":11,"accountNumber":"ACC-U000004"}
 ```
 
 Registration creates the user **and** their trading account in one transaction: status
-`ACTIVE`, cash balance `0`, holder name `holderName` (defaults to the username). The user is
-linked to it through `users.account_id`. Usernames are 3-100 characters, passwords 8-256.
+`ACTIVE`, cash balance `0`, holder name `holderName` (defaults to the part of the email before
+the `@`). The user is linked to it through `users.account_id`. The email is the user's only
+identity: it is stored trimmed and in lower case, at most 320 characters. Passwords are 8-256.
 
 ## Log in
 
 ```bash
 curl -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123"}'
+  -d '{"email":"trader1@example.com","password":"password123"}'
 ```
 
 ```json
 {"accessToken":"eyJhbGc...","refreshToken":"Xq3v...43 characters"}
 ```
 
-- **`accessToken`**: a JWT valid for 15 minutes, with the claims `sub` (username), `roles`,
+- **`accessToken`**: a JWT valid for 15 minutes, with the claims `sub` (the user's email), `roles`,
   `typ` (`"access"`), `jti` (a random UUID), `iss` (`urn:tns-capital:auth-service`), `iat`
   and `exp`. Send it as `Authorization: Bearer <accessToken>` to the trading API and to
   `GET /auth/me`.
@@ -72,14 +73,14 @@ curl -X POST http://localhost:4000/auth/login \
 | User | Password | roles | Can access |
 |---|---|---|---|
 | any registered user | their own | `["USER"]` | only their own account |
-| `support` | `SUPPORT_PASSWORD` | `["SUPPORT"]` | every account in the trading app, suspending and reactivating them, opening accounts, instruments |
-| `admin` | `ADMIN_PASSWORD` | `["ADMIN"]` | the analytics dashboard, the DLQ, the actuator; no traders' accounts |
+| `support@tns-capital.local` | `SUPPORT_PASSWORD` | `["SUPPORT"]` | every account in the trading app, suspending and reactivating them, opening accounts, instruments |
+| `admin@tns-capital.local` | `ADMIN_PASSWORD` | `["ADMIN"]` | the analytics dashboard, the DLQ, the actuator; no traders' accounts |
 
 Roles come from `users.role`. Nothing is seeded with a known password: when the service
-starts, `src/users/staff-bootstrap.ts` creates the `admin` user (`ADMIN_USERNAME` to rename it)
-from `ADMIN_PASSWORD` and the `support` user (`SUPPORT_USERNAME`) from `SUPPORT_PASSWORD`, or sets
+starts, `src/users/staff-bootstrap.ts` creates the `admin@tns-capital.local` user (`ADMIN_EMAIL` to change it)
+from `ADMIN_PASSWORD` and the `support@tns-capital.local` user (`SUPPORT_EMAIL`) from `SUPPORT_PASSWORD`, or sets
 the password on one if it differs, so changing the variable and restarting rotates it. It never
-changes a role: a trader who registered one of those usernames is never promoted, and the
+changes a role: a trader who registered one of those emails is never promoted, and the
 support user never becomes the admin. The two passwords must differ. The trading API resolves which account a USER owns from the
 token's `sub`.
 
@@ -120,7 +121,7 @@ them without calling this service.
 
 ```bash
 curl http://localhost:4000/auth/me -H "Authorization: Bearer <accessToken>"
-# -> {"username":"trader1","roles":["USER"],"accountId":11}
+# -> {"email":"trader1@example.com","roles":["USER"],"accountId":11}
 ```
 
 Every route needs an access token unless it is marked `@Public()`. Two global guards
@@ -160,7 +161,7 @@ the next refresh.
 
 Every error is `{ "errorCode", "message", "timestamp" }`: `VAL-422` (400, invalid body or
 unknown property), `AUTH-401` (wrong credentials, with no hint which part was wrong),
-`AUTH-403` (missing role), `AUTH-429` (rate limit), `USR-409` (username taken), `NOT-404`,
+`AUTH-403` (missing role), `AUTH-429` (rate limit), `USR-409` (email already registered), `NOT-404`,
 `REQ-405` and `SYS-500`.
 
 ## Rate limiting

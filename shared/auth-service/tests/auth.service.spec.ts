@@ -8,14 +8,13 @@ import { TokenService } from '../src/auth/token.service';
 import { ApiException } from '../src/common/api.exception';
 import { hashPassword } from '../src/users/password-hasher';
 import { RefreshTokensService } from '../src/users/refresh-tokens.service';
-import { UserRecord, UsernameTakenError, UsersService } from '../src/users/users.service';
+import { EmailTakenError, UserRecord, UsersService } from '../src/users/users.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe('AuthService', () => {
   let trader: UserRecord;
   const users = {
-    findByUsername: jest.fn(),
     findByEmail: jest.fn(),
     findById: jest.fn(),
     create: jest.fn(),
@@ -39,7 +38,6 @@ describe('AuthService', () => {
   beforeAll(async () => {
     trader = {
       id: 3,
-      username: 'trader',
       email: 'trader@example.com',
       roles: ['USER'],
       accountId: 7,
@@ -51,31 +49,39 @@ describe('AuthService', () => {
 
   describe('register', () => {
     it('hashes the password with Argon2id before creating the user (AC#1)', async () => {
-      users.findByUsername.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
       users.create.mockResolvedValue({ id: 9 });
 
-      await auth.register('newtrader', 'password123', 'Ada');
+      await auth.register(' NewTrader@Example.com ', 'password123', 'Ada');
 
-      const [, passwordHash, email, holderName] = users.create.mock.calls[0];
+      const [email, passwordHash, holderName] = users.create.mock.calls[0];
       expect(passwordHash).toMatch(/^\$argon2id\$/);
       expect(passwordHash).not.toContain('password123');
-      expect(email).toBe('newtrader@example.invalid');
+      expect(email).toBe('newtrader@example.com');
       expect(holderName).toBe('Ada');
     });
 
-    it('maps a concurrent duplicate to USR-409', async () => {
-      users.findByUsername.mockResolvedValue(null);
-      users.create.mockRejectedValue(new UsernameTakenError());
+    it('rejects a registered email with USR-409 before hashing', async () => {
+      users.findByEmail.mockResolvedValue(trader);
 
-      await expect(auth.register('trader', 'password123')).rejects.toMatchObject({ errorCode: 'USR-409' });
+      await expect(auth.register('Trader@Example.com', 'password123')).rejects.toMatchObject({ errorCode: 'USR-409' });
+      expect(users.findByEmail).toHaveBeenCalledWith('trader@example.com');
+      expect(users.create).not.toHaveBeenCalled();
+    });
+
+    it('maps a concurrent duplicate to USR-409', async () => {
+      users.findByEmail.mockResolvedValue(null);
+      users.create.mockRejectedValue(new EmailTakenError());
+
+      await expect(auth.register('trader@example.com', 'password123')).rejects.toMatchObject({ errorCode: 'USR-409' });
     });
 
     it('passes on any other error', async () => {
       const failure = new Error('database down');
-      users.findByUsername.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
       users.create.mockRejectedValue(failure);
 
-      await expect(auth.register('trader', 'password123')).rejects.toBe(failure);
+      await expect(auth.register('trader@example.com', 'password123')).rejects.toBe(failure);
     });
   });
 
@@ -112,18 +118,18 @@ describe('AuthService', () => {
       expect(refreshTokens.create).not.toHaveBeenCalled();
     });
 
-    it('logs a successful login with the username and client IP, never the password (A09-2)', async () => {
+    it('logs a successful login with the email and client IP, never the password (A09-2)', async () => {
       users.findByEmail.mockResolvedValue(trader);
       const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 
       await auth.login('trader@example.com', 'password123', '10.0.0.5');
 
-      expect(log).toHaveBeenCalledWith('Login succeeded: username="trader" id=3 ip=10.0.0.5');
+      expect(log).toHaveBeenCalledWith('Login succeeded: email="trader@example.com" id=3 ip=10.0.0.5');
       expect(JSON.stringify(log.mock.calls)).not.toContain('password123');
       log.mockRestore();
     });
 
-    it('logs a failed login, quoting the username so it cannot forge log lines', async () => {
+    it('logs a failed login, quoting the email so it cannot forge log lines', async () => {
       users.findByEmail.mockResolvedValue(null);
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
@@ -145,7 +151,7 @@ describe('AuthService', () => {
       expect(await auth.refresh('old-token')).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
       expect(refreshTokens.rotate).toHaveBeenCalledWith('hash-of-old-token', 'refresh-hash', 604800);
       expect(users.findById).toHaveBeenCalledWith(3);
-      expect(tokens.issue).toHaveBeenCalledWith(trader);
+      expect(tokens.issue).toHaveBeenCalledWith('trader@example.com', ['USER']);
     });
 
     it('rejects a reused token with AUTH-401 and logs the reuse', async () => {
@@ -213,16 +219,17 @@ describe('AuthService', () => {
   });
 
   describe('me', () => {
-    const claims = { sub: 'trader', roles: ['ADMIN' as const], typ: 'access' as const, jti: 'j', iss: 'x', iat: 0, exp: 0 };
+    const claims = { sub: 'trader@example.com', roles: ['ADMIN' as const], typ: 'access' as const, jti: 'j', iss: 'x', iat: 0, exp: 0 };
 
     it('returns the current user without the password hash', async () => {
-      users.findByUsername.mockResolvedValue(trader);
+      users.findByEmail.mockResolvedValue(trader);
 
-      expect(await auth.me(claims)).toEqual({ id: 3, username: 'trader', email: 'trader@example.com', roles: ['USER'], accountId: 7 });
+      expect(await auth.me(claims)).toEqual({ id: 3, email: 'trader@example.com', roles: ['USER'], accountId: 7 });
+      expect(users.findByEmail).toHaveBeenCalledWith('trader@example.com');
     });
 
     it('rejects with AUTH-401 when the user no longer exists', async () => {
-      users.findByUsername.mockResolvedValue(null);
+      users.findByEmail.mockResolvedValue(null);
       await expect(auth.me(claims)).rejects.toMatchObject({ errorCode: 'AUTH-401' });
     });
   });

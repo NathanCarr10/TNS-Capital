@@ -6,7 +6,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, ServiceRole, TokenService } from './token.ser
 
 export const INVALID_CLIENT = 'invalid client credentials';
 
-/** Prefix of a service's token subject; usernames cannot contain ":" so it never names a user */
+/** Prefix of a service's token subject; a registered email never starts with it, so it never names a user */
 export const SERVICE_SUBJECT_PREFIX = 'service:';
 
 export interface ServiceTokenResult {
@@ -22,7 +22,7 @@ interface ServiceClient {
 
 /**
  * Backend services that log in with a client id and secret (OAuth 2.0 client
- * credentials) instead of a username and password, and get an access token
+ * credentials) instead of an email and password, and get an access token
  * with a service role and no refresh token.
  *
  * The only client is the strategy service (STRATEGY_CLIENT_SECRET), which
@@ -58,7 +58,7 @@ export class ServiceClientsService {
       throw new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', INVALID_CLIENT);
     }
     this.logger.log(`Service login succeeded: clientId=${JSON.stringify(clientId)} ip=${clientIp}`);
-    const accessToken = await this.tokens.issue({ username: SERVICE_SUBJECT_PREFIX + clientId, roles: client.roles });
+    const accessToken = await this.tokens.issue(SERVICE_SUBJECT_PREFIX + clientId, client.roles);
     return { accessToken, tokenType: 'Bearer', expiresIn: ACCESS_TOKEN_TTL_SECONDS };
   }
 }

@@ -6,10 +6,10 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { StaffBootstrap } from '../src/users/staff-bootstrap';
 import { hashPassword, verifyPassword } from '../src/users/password-hasher';
-import { StaffNameTakenError, UserRecord, UsersService } from '../src/users/users.service';
+import { StaffEmailTakenError, UserRecord, UsersService } from '../src/users/users.service';
 
 describe('StaffBootstrap', () => {
-  const users = { findByUsername: jest.fn(), saveStaff: jest.fn() };
+  const users = { findByEmail: jest.fn(), saveStaff: jest.fn() };
   const PASSWORD = 'a-strong-admin-password';
   const SUPPORT_PASSWORD = 'a-strong-support-password';
 
@@ -21,7 +21,7 @@ describe('StaffBootstrap', () => {
 
   const admin = async (password: string): Promise<UserRecord> => ({
     id: 1,
-    username: 'admin',
+    email: 'admin@tns-capital.local',
     roles: ['ADMIN'],
     accountId: null,
     passwordHash: await hashPassword(password),
@@ -40,29 +40,29 @@ describe('StaffBootstrap', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('creates the admin from ADMIN_PASSWORD, storing only an Argon2id hash', async () => {
-    users.findByUsername.mockResolvedValue(null);
+    users.findByEmail.mockResolvedValue(null);
 
     await bootstrap({ ADMIN_PASSWORD: PASSWORD });
 
-    const [username, hash] = savedAs('ADMIN')!;
-    expect(username).toBe('admin');
+    const [email, hash] = savedAs('ADMIN')!;
+    expect(email).toBe('admin@tns-capital.local');
     expect(hash).toMatch(/^\$argon2id\$/);
     expect(await verifyPassword(PASSWORD, hash)).toBe(true);
   });
 
   it('creates the support account from SUPPORT_PASSWORD, apart from the admin', async () => {
-    users.findByUsername.mockResolvedValue(null);
+    users.findByEmail.mockResolvedValue(null);
 
     await bootstrap({ ADMIN_PASSWORD: PASSWORD, SUPPORT_PASSWORD });
 
-    const [username, hash] = savedAs('SUPPORT')!;
-    expect(username).toBe('support');
+    const [email, hash] = savedAs('SUPPORT')!;
+    expect(email).toBe('support@tns-capital.local');
     expect(await verifyPassword(SUPPORT_PASSWORD, hash)).toBe(true);
-    expect(savedAs('ADMIN')![0]).toBe('admin');
+    expect(savedAs('ADMIN')![0]).toBe('admin@tns-capital.local');
   });
 
   it('replaces a different password, such as the old seeded default', async () => {
-    users.findByUsername.mockResolvedValue(await admin('adminPassword'));
+    users.findByEmail.mockResolvedValue(await admin('adminPassword'));
 
     await bootstrap({ ADMIN_PASSWORD: PASSWORD });
 
@@ -70,37 +70,37 @@ describe('StaffBootstrap', () => {
   });
 
   it('leaves the admin alone when the password already matches', async () => {
-    users.findByUsername.mockResolvedValue(await admin(PASSWORD));
+    users.findByEmail.mockResolvedValue(await admin(PASSWORD));
 
     await bootstrap({ ADMIN_PASSWORD: PASSWORD });
 
     expect(users.saveStaff).not.toHaveBeenCalled();
   });
 
-  it('uses ADMIN_USERNAME and SUPPORT_USERNAME when they are set', async () => {
-    users.findByUsername.mockResolvedValue(null);
+  it('uses ADMIN_EMAIL and SUPPORT_EMAIL when they are set, in lower case', async () => {
+    users.findByEmail.mockResolvedValue(null);
 
-    await bootstrap({ ADMIN_PASSWORD: PASSWORD, ADMIN_USERNAME: 'ops', SUPPORT_PASSWORD, SUPPORT_USERNAME: 'helpdesk' });
+    await bootstrap({ ADMIN_PASSWORD: PASSWORD, ADMIN_EMAIL: 'Ops@Example.com', SUPPORT_PASSWORD, SUPPORT_EMAIL: 'helpdesk@example.com' });
 
-    expect(savedAs('ADMIN')![0]).toBe('ops');
-    expect(savedAs('SUPPORT')![0]).toBe('helpdesk');
+    expect(savedAs('ADMIN')![0]).toBe('ops@example.com');
+    expect(savedAs('SUPPORT')![0]).toBe('helpdesk@example.com');
   });
 
   it('changes nothing without the passwords, and warns for each', async () => {
     await bootstrap({});
 
-    expect(users.findByUsername).not.toHaveBeenCalled();
+    expect(users.findByEmail).not.toHaveBeenCalled();
     expect(users.saveStaff).not.toHaveBeenCalled();
     expect(Logger.prototype.warn).toHaveBeenCalledWith(expect.stringContaining('ADMIN_PASSWORD is not set'));
     expect(Logger.prototype.warn).toHaveBeenCalledWith(expect.stringContaining('SUPPORT_PASSWORD is not set'));
   });
 
-  it('never promotes a trader who registered the admin username, and still starts', async () => {
-    users.findByUsername.mockResolvedValue({ ...(await admin('trader-password')), roles: ['USER'], accountId: 7 });
-    users.saveStaff.mockRejectedValue(new StaffNameTakenError('admin', 'ADMIN', ['USER']));
+  it('never promotes a trader who registered the admin email, and still starts', async () => {
+    users.findByEmail.mockResolvedValue({ ...(await admin('trader-password')), roles: ['USER'], accountId: 7 });
+    users.saveStaff.mockRejectedValue(new StaffEmailTakenError('admin@tns-capital.local', 'ADMIN', ['USER']));
 
     await expect(bootstrap({ ADMIN_PASSWORD: PASSWORD })).resolves.toBeUndefined();
 
-    expect(Logger.prototype.error).toHaveBeenCalledWith(expect.stringContaining("trader's username"));
+    expect(Logger.prototype.error).toHaveBeenCalledWith(expect.stringContaining("trader's email"));
   });
 });

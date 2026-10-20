@@ -36,16 +36,16 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a user and open their trading account' })
   @ApiResponse({ status: 201, description: 'User registered; the body carries the new accountId' })
-  @ApiResponse({ status: 409, description: 'Username already taken' })
+  @ApiResponse({ status: 409, description: 'Email already registered' })
   register(@Body() body: RegisterDto): Promise<RegisteredUser> {
-    return this.authService.register(body.username, body.password, body.email, body.holderName);
+    return this.authService.register(body.email, body.password, body.holderName);
   }
 
   /**
    * POST /auth/login - Authenticate user and issue an access and a refresh token
    *
    * Access token claims: exactly sub, roles, typ, jti, iss, iat, exp
-  * - sub: username; the trading API looks up the user's account by it
+   * - sub: email; the trading API looks up the user's account by it
    * - roles: ["USER"], ["SUPPORT"] or ["ADMIN"], from users.role
    * - typ: "access"
    * - jti: a random UUID
@@ -114,9 +114,9 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Missing, invalid or expired access token' })
   async me(
     @CurrentUser() claims: AccessTokenPayload,
-  ): Promise<Pick<AuthenticatedUser, 'username' | 'email' | 'roles' | 'accountId'>> {
+  ): Promise<Pick<AuthenticatedUser, 'email' | 'roles' | 'accountId'>> {
     const user = await this.authService.me(claims);
-    return { username: user.username, email: user.email, roles: user.roles, accountId: user.accountId };
+    return { email: user.email, roles: user.roles, accountId: user.accountId };
   }
 
   // Declared after the real handlers, so only the wrong methods reach it

@@ -50,8 +50,9 @@ export interface RefreshToken {
 export class TokenService {
   constructor(private readonly jwt: JwtService) {}
 
-  issue(user: { username: string; roles: (Role | ServiceRole)[] }): Promise<string> {
-    return this.jwt.signAsync({ sub: user.username, roles: user.roles, typ: 'access' }, { jwtid: randomUUID() });
+  /** @param subject the user's email, or "service:<clientId>" for a backend service */
+  issue(subject: string, roles: (Role | ServiceRole)[]): Promise<string> {
+    return this.jwt.signAsync({ sub: subject, roles, typ: 'access' }, { jwtid: randomUUID() });
   }
 
   /**

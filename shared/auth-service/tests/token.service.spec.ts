@@ -12,13 +12,13 @@ describe('TokenService', () => {
       signOptions: { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_TTL_SECONDS, issuer: JWT_ISSUER },
     }),
   );
-  const user = { username: 'trader', roles: ['USER' as const] };
+  const issue = () => tokens.issue('trader@example.com', ['USER']);
 
   describe('issue and verify', () => {
     it('verifies a token it issued', async () => {
-      const payload = await tokens.verify(await tokens.issue(user));
+      const payload = await tokens.verify(await issue());
 
-      expect(payload).toMatchObject({ sub: 'trader', roles: ['USER'], typ: 'access', iss: JWT_ISSUER });
+      expect(payload).toMatchObject({ sub: 'trader@example.com', roles: ['USER'], typ: 'access', iss: JWT_ISSUER });
       expect(payload.exp - payload.iat).toBe(15 * 60);
     });
 
@@ -27,8 +27,8 @@ describe('TokenService', () => {
     });
 
     it('gives every token a unique jti', async () => {
-      const first = await tokens.verify(await tokens.issue(user));
-      const second = await tokens.verify(await tokens.issue(user));
+      const first = await tokens.verify(await issue());
+      const second = await tokens.verify(await issue());
 
       expect(first.jti).toMatch(/^[0-9a-f-]{36}$/);
       expect(first.jti).not.toBe(second.jti);
@@ -40,7 +40,7 @@ describe('TokenService', () => {
     ])('rejects %s with AUTH-401', async (_case, kind) => {
       let token = kind;
       if (kind === 'tampered') {
-        const [header, , signature] = (await tokens.issue(user)).split('.');
+        const [header, , signature] = (await issue()).split('.');
         const forged = Buffer.from(JSON.stringify({ sub: 'admin', roles: ['ADMIN'], iss: JWT_ISSUER })).toString(
           'base64url',
         );
@@ -53,7 +53,7 @@ describe('TokenService', () => {
     });
 
     const signed = (claims: object) => jwt.sign(claims, SECRET, { issuer: JWT_ISSUER, expiresIn: 60 });
-    const valid = { sub: 'trader', roles: ['USER'], typ: 'access', jti: 'some-id' };
+    const valid = { sub: 'trader@example.com', roles: ['USER'], typ: 'access', jti: 'some-id' };
 
     it.each([
       ['a non-string subject', { ...valid, sub: 42 }],
@@ -65,15 +65,15 @@ describe('TokenService', () => {
     });
 
     it('accepts a correctly signed token with every required claim', async () => {
-      await expect(tokens.verify(signed(valid))).resolves.toMatchObject({ sub: 'trader' });
+      await expect(tokens.verify(signed(valid))).resolves.toMatchObject({ sub: 'trader@example.com' });
     });
   });
 
   describe('decode', () => {
     it('reads the claims without checking the signature', async () => {
-      const [header, payload] = (await tokens.issue(user)).split('.');
+      const [header, payload] = (await issue()).split('.');
 
-      expect(tokens.decode(`${header}.${payload}.invalid-signature`)).toMatchObject({ sub: 'trader' });
+      expect(tokens.decode(`${header}.${payload}.invalid-signature`)).toMatchObject({ sub: 'trader@example.com' });
     });
 
     it('returns null for something that is not a JWT', () => {
