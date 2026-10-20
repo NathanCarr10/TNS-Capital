@@ -47,7 +47,7 @@ class DatabaseRolesIT extends AbstractIntegrationTest {
             "tns_api    | INSERT INTO trade_event_log SELECT * FROM trade_event_log WHERE false",
             "tns_api    | INSERT INTO newsletter_issues (week_start, gainers, losers, news) VALUES ('2026-10-12', '[]', '[]', '[]')",
             "tns_api    | SELECT id, week_start, gainers FROM newsletter_issues ORDER BY week_start DESC",
-            "tns_auth   | INSERT INTO accounts (account_number, holder_name, cash_balance) VALUES ('T-1', 'T', 0) RETURNING id, account_number",
+            "tns_auth   | INSERT INTO accounts (account_number, holder_name, email, cash_balance) VALUES ('T-1', 'T', 't@example.com', 0) RETURNING id, account_number",
             "tns_auth   | INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ('t', 'h', NOW(), NOW()) RETURNING id",
             "tns_auth   | DELETE FROM refresh_tokens",
             "tns_etl    | SELECT o.id, a.account_number, o.symbol FROM orders o JOIN accounts a ON a.id = o.account_id",
