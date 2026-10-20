@@ -2,6 +2,7 @@
 
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
 import { of } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
@@ -42,6 +43,7 @@ describe('ShellComponent', () => {
       imports: [ShellComponent],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
         { provide: AuthService, useValue: authServiceSpy },
         { provide: TradingService, useValue: tradingService },
         { provide: StrategyLabService, useValue: strategyLab },
@@ -73,7 +75,7 @@ describe('ShellComponent', () => {
     ]);
   });
 
-  it('gives support Dead Letters instead of Trade and Settings, and no symbol search', () => {
+  it('gives support Dead Letters and Support Inbox instead of Trade and Settings, and no symbol search', () => {
     isSupport = true;
 
     const element = create();
@@ -84,6 +86,7 @@ describe('ShellComponent', () => {
       ['Strategy Lab', '/strategies'],
       ['Newsletter', '/newsletter'],
       ['Dead Letters', '/dead-letters'],
+      ['Support Inbox', '/support'],
     ]);
     expect(element.querySelector('app-symbol-search')).toBeNull();
   });
@@ -104,6 +107,12 @@ describe('ShellComponent', () => {
 
     expect(element.querySelector('.user-name')?.textContent).toContain('trader1');
     expect(element.querySelector('.user .badge')?.textContent).toContain('Support');
+  });
+
+  it('gives traders no Support Inbox link', () => {
+    const element = create();
+
+    expect(navLinks(element).map(([label]) => label)).not.toContain('Support Inbox');
   });
 
   it('shows whether the NYSE is open', () => {
