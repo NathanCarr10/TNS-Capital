@@ -69,7 +69,7 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
         '409':
-          description: Username already registered
+          description: Email already registered
           content:
             application/json:
               schema:
@@ -139,7 +139,7 @@ paths:
         traders who switched a strategy on while they are not logged in.
 
         The access token has the same seven claims as a user's, with sub
-        "service:<clientId>" (usernames cannot contain ":") and the client's
+        "service:<clientId>" (no registered email starts with it) and the client's
         service roles, e.g. [STRATEGY]. The trading API accepts a STRATEGY token
         only for placing and reading orders, and only on an account with an
         ACTIVE strategy. No refresh token is issued: the service asks for a new
@@ -305,22 +305,15 @@ components:
     RegisterRequest:
       type: object
       required:
-        - username
-        - password
         - email
+        - password
       properties:
         email:
           type: string
           format: email
           maxLength: 320
+          description: Sign-in identity; stored trimmed and in lower case
           example: trader1@example.com
-        username:
-          type: string
-          minLength: 3
-          maxLength: 100
-          pattern: '^[A-Za-z0-9._-]+$'
-          description: Letters, digits, dot, underscore and hyphen only
-          example: trader1
         password:
           type: string
           minLength: 8
@@ -333,21 +326,19 @@ components:
           maxLength: 255
           pattern: "^[\\p{L}\\p{M}\\p{N} .,'-]+$"
           description: >-
-            Name on the trading account; defaults to the username. Letters in
+            Name on the trading account; defaults to the part of the email
+            before the "@". Letters in
             any language, digits, spaces and . , ' - only
           example: Ada Lovelace
       additionalProperties: false
 
     RegisterResponse:
       type: object
-      required: [id, username, email, createdAt, accountId, accountNumber]
+      required: [id, email, createdAt, accountId, accountNumber]
       properties:
         id:
           type: integer
           example: 4
-        username:
-          type: string
-          example: trader1
         email:
           type: string
           format: email
@@ -416,8 +407,8 @@ components:
       properties:
         sub:
           type: string
-          description: Username; the trading API resolves the user's account from it. A backend service's token has "service:<clientId>"
-          example: trader1
+          description: The user's email; the trading API resolves the user's account from it. A backend service's token has "service:<clientId>"
+          example: trader1@example.com
         roles:
           type: array
           items:
@@ -490,16 +481,12 @@ components:
 
     CurrentUser:
       type: object
-      required: [username, email, roles, accountId]
+      required: [email, roles, accountId]
       properties:
         email:
           type: string
           format: email
-          nullable: true
           example: trader1@example.com
-        username:
-          type: string
-          example: trader1
         roles:
           type: array
           items:
@@ -562,7 +549,7 @@ components:
             $ref: '#/components/schemas/PlatformErrorResponse'
           example:
             errorCode: VAL-422
-            message: missing username or password
+            message: missing email or password
             timestamp: '2026-10-08T15:00:00.000Z'
 
     InvalidAccessToken:
