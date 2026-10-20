@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { interval } from 'rxjs';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, interval, map } from 'rxjs';
 
 import { AuthService } from '../../core/auth/auth.service';
 import { StrategyActivityService } from '../../core/strategy/strategy-activity.service';
@@ -69,6 +69,16 @@ export class ShellComponent {
         { label: 'Market Movers', link: '/market-movers', icon: 'newsletter' },
         { label: 'Settings', link: '/settings', icon: 'settings' },
       ];
+
+  // The support inbox already shows the conversations, so the floating launcher is hidden there
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event) => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects)
+    ),
+    { initialValue: this.router.url }
+  );
+  readonly showSupportWidget = computed(() => !this.url().startsWith('/support'));
 
   private readonly now = signal(new Date());
   readonly market = computed(() => nyseStatus(this.now()));

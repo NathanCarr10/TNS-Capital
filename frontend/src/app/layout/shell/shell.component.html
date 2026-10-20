@@ -78,5 +78,5 @@
       <router-outlet />
     </main>
   </div>
-  <app-support-widget />
+  @if (showSupportWidget()) { <app-support-widget /> }
 </div>
