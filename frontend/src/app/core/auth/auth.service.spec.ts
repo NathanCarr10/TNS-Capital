@@ -46,6 +46,7 @@ describe('AuthService', () => {
     const request = httpMock.expectOne('/auth/register');
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toEqual({
+      email: 'ada@example.com',
       username: 'newtrader',
       password: 'password123',
       holderName: 'Ada Lovelace',
