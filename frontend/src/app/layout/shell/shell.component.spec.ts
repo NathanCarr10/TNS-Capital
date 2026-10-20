@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { StrategyLabService } from '../../core/strategy/strategy-lab.service';
 import { ThemeService } from '../../core/theme/theme.service';
+import { MarketDataService } from '../../core/trading/market-data.service';
 import { tradingServiceStub } from '../../core/trading/testing/trading-fixtures';
 import { TradingService } from '../../core/trading/trading.service';
 import { ShellComponent } from './shell.component';
@@ -32,6 +33,10 @@ describe('ShellComponent', () => {
     tradingService.getAccounts.and.returnValue(of([]));
     strategyLab = jasmine.createSpyObj<StrategyLabService>('StrategyLabService', ['activity']);
     strategyLab.activity.and.returnValue(of([]));
+    // The ticker tape quotes prices on every page
+    const marketData = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars']);
+    marketData.getQuotes.and.returnValue(of([]));
+    marketData.getBars.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
@@ -40,6 +45,7 @@ describe('ShellComponent', () => {
         { provide: AuthService, useValue: authServiceSpy },
         { provide: TradingService, useValue: tradingService },
         { provide: StrategyLabService, useValue: strategyLab },
+        { provide: MarketDataService, useValue: marketData },
       ],
     }).compileComponents();
   });
