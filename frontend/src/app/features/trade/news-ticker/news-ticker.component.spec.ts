@@ -51,43 +51,25 @@ describe('NewsTickerComponent', () => {
     create();
 
     expect(marketData.getNews).toHaveBeenCalledWith('AMZN');
-    expect(element().querySelector('.news-ticker')?.getAttribute('aria-label')).toBe('Latest news about AMZN');
-    const [first] = headlines('li:not(.copy) .headline');
-    expect(first.textContent).toBe('Amazon opens its <b>AI chips</b> to every developer');
-    expect(first.querySelector('b')).toBeNull();
+    expect(element().querySelector('.news')?.getAttribute('aria-label')).toBe('Latest news about AMZN');
+    const [first] = headlines('.news-card');
+    const text = first.querySelector('.headline')!;
+    expect(text.textContent).toBe('Amazon opens its <b>AI chips</b> to every developer');
+    expect(text.querySelector('b')).toBeNull();
     expect(first.getAttribute('href')).toBe('https://www.benzinga.com/news/1');
     expect(first.getAttribute('target')).toBe('_blank');
     expect(first.getAttribute('rel')).toBe('noopener noreferrer');
     discardPeriodicTasks();
   }));
 
-  it('repeats the headlines for the loop, hidden from screen readers and the keyboard', fakeAsync(() => {
+  it('shows each headline as its own card, with its source and time', fakeAsync(() => {
     create();
 
-    const copies = Array.from(element().querySelectorAll('li.copy'));
-    expect(headlines('li:not(.copy) .headline')).toHaveSize(2);
-    expect(copies).toHaveSize(2);
-    expect(copies.every((copy) => copy.getAttribute('aria-hidden') === 'true')).toBeTrue();
-    expect(headlines('li.copy .headline').every((link) => link.getAttribute('tabindex') === '-1')).toBeTrue();
-    expect(headlines('li:not(.copy) .headline').some((link) => link.hasAttribute('tabindex'))).toBeFalse();
-    discardPeriodicTasks();
-  }));
-
-  it('scrolls a longer list for longer, at the same speed', fakeAsync(() => {
-    marketData.getNews.and.returnValue(
-      of(
-        [...HEADLINES, ...HEADLINES, ...HEADLINES].map((item, index) => ({
-          ...item,
-          url: `${item.url}/${index}`,
-        })),
-      ),
-    );
-
-    create();
-
-    expect(element().querySelector<HTMLElement>('.track')!.style.animationDuration).toBe(
-      `${6 * NewsTickerComponent.SECONDS_PER_HEADLINE}s`,
-    );
+    const cards = headlines('.news-card');
+    expect(cards).toHaveSize(2);
+    expect(cards[0].querySelector('.meta')?.textContent).toContain('benzinga');
+    expect(cards[0].querySelector('.meta')?.textContent).toContain('Oct 19');
+    expect(cards[1].querySelector('.meta')?.textContent?.trim()).toBe('benzinga');
     discardPeriodicTasks();
   }));
 
@@ -96,7 +78,7 @@ describe('NewsTickerComponent', () => {
 
     create();
 
-    expect(element().querySelector('.news-ticker')).toBeNull();
+    expect(element().querySelector('.news')).toBeNull();
     discardPeriodicTasks();
   }));
 
@@ -105,7 +87,7 @@ describe('NewsTickerComponent', () => {
 
     create();
 
-    expect(element().querySelector('.news-ticker')).toBeNull();
+    expect(element().querySelector('.news')).toBeNull();
     discardPeriodicTasks();
   }));
 
@@ -117,7 +99,7 @@ describe('NewsTickerComponent', () => {
     fixture.detectChanges();
 
     expect(marketData.getNews).toHaveBeenCalledTimes(2);
-    expect(headlines('li:not(.copy) .headline')).toHaveSize(2);
+    expect(headlines('.news-card')).toHaveSize(2);
     discardPeriodicTasks();
   }));
 
@@ -129,25 +111,6 @@ describe('NewsTickerComponent', () => {
     tick(0);
 
     expect(marketData.getNews).toHaveBeenCalledWith('TSLA');
-    discardPeriodicTasks();
-  }));
-
-  it('pauses and plays with its button', fakeAsync(() => {
-    create();
-    const toggle = element().querySelector<HTMLButtonElement>('.toggle')!;
-
-    toggle.click();
-    fixture.detectChanges();
-
-    expect(element().querySelector('.news-ticker')!.classList).toContain('paused');
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
-    expect(toggle.getAttribute('aria-label')).toBe('Play the news ticker');
-
-    toggle.click();
-    fixture.detectChanges();
-
-    expect(element().querySelector('.news-ticker')!.classList).not.toContain('paused');
-    expect(toggle.getAttribute('aria-label')).toBe('Pause the news ticker');
     discardPeriodicTasks();
   }));
 });
