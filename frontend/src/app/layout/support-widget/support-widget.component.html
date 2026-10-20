@@ -7,7 +7,7 @@
 }
 
 @if (embedded() || open()) {
-  <section class="support-panel" [class.embedded-panel]="embedded()" role="dialog" aria-modal="false" aria-labelledby="support-title">
+  <dialog open class="support-panel" [class.embedded-panel]="embedded()" aria-labelledby="support-title">
     <header class="support-header">
       <div>
         <p class="eyebrow">TNS Capital support</p>
@@ -23,11 +23,17 @@
         <aside class="conversation-list" aria-label="Support conversations">
           @if (!conversations().length) { <p class="empty">No conversations yet.</p> }
           @for (conversation of conversations(); track conversation.id) {
-            <button type="button" class="conversation" [class.selected]="selectedId() === conversation.id" (click)="select(conversation.id)">
-              <strong>{{ conversation.subject }}</strong>
-              <span class="customer-link" role="link" tabindex="0" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerUsername }}</span>
-              <time>{{ conversation.updatedAt | date:'MMM d, h:mm a' }}</time>
-            </button>
+            <div class="conversation" [class.selected]="selectedId() === conversation.id">
+              <button type="button" class="conversation-select" (click)="select(conversation.id)">
+                <strong>{{ conversation.subject }}</strong>
+                <time>{{ conversation.updatedAt | date:'MMM d, h:mm a' }}</time>
+              </button>
+              @if (isSupport && conversation.accountId != null) {
+                <a class="customer-link" href="/portfolio" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerUsername }}</a>
+              } @else {
+                <span>{{ conversation.customerUsername }}</span>
+              }
+            </div>
           }
         </aside>
 
@@ -78,5 +84,5 @@
         </div>
       </div>
     }
-  </section>
+  </dialog>
 }

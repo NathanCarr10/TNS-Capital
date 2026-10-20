@@ -3,7 +3,7 @@ import { Component, computed, effect, inject, input, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 
 import { AuthService } from '../../core/auth/auth.service';
-import { SupportConversation, SupportService } from '../../core/support/support.service';
+import { SupportConversation, SupportMessage, SupportService } from '../../core/support/support.service';
 import { SupportWidgetStateService } from '../../core/support/support-widget-state.service';
 import { AccountStore } from '../../core/trading/account.store';
 import { Router } from '@angular/router';
@@ -43,16 +43,19 @@ export class SupportWidgetComponent {
     effect((onCleanup) => {
       const conversationId = this.selectedId();
       if (!conversationId) return;
-      const stream = this.service.connectToConversation(conversationId, (message) => {
-        this.conversations.update((items) => items.map((conversation) => {
-          if (conversation.id !== conversationId || conversation.messages.some((item) => item.id === message.id)) {
-            return conversation;
-          }
-          return { ...conversation, updatedAt: message.createdAt, messages: [...conversation.messages, message] };
-        }));
-      });
+      const stream = this.service.connectToConversation(conversationId, (message) => this.appendMessage(conversationId, message));
       onCleanup(() => stream.abort());
     });
+  }
+
+  /** Adds a message streamed into a conversation, once, even if the stream repeats it. */
+  private appendMessage(conversationId: string, message: SupportMessage): void {
+    this.conversations.update((items) => items.map((conversation) => {
+      if (conversation.id !== conversationId || conversation.messages.some((item) => item.id === message.id)) {
+        return conversation;
+      }
+      return { ...conversation, updatedAt: message.createdAt, messages: [...conversation.messages, message] };
+    }));
   }
 
   toggle(): void {
@@ -76,7 +79,8 @@ export class SupportWidgetComponent {
   }
 
   viewCustomerAccount(conversation: SupportConversation, event: Event): void {
-    event.stopPropagation();
+    // A real link for the keyboard and screen readers, but the account switch happens in the app
+    event.preventDefault();
     if (!this.isSupport || conversation.accountId == null) return;
     this.accountStore.viewAccount(conversation.accountId);
     void this.router.navigate(['/portfolio']);
