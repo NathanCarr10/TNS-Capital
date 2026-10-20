@@ -27,7 +27,7 @@ describe('AuthService', () => {
   });
 
   it('stores token pair on successful login', () => {
-    authService.login({ username: 'admin', password: 'adminPassword' }).subscribe();
+    authService.login({ email: 'admin@tns-capital.local', password: 'adminPassword' }).subscribe();
 
     const request = httpMock.expectOne('/auth/login');
     expect(request.request.method).toBe('POST');
@@ -41,7 +41,7 @@ describe('AuthService', () => {
   });
 
   it('posts registration details to the registration endpoint', () => {
-    authService.register({ username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).subscribe();
+    authService.register({ email: 'ada@example.com', username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).subscribe();
 
     const request = httpMock.expectOne('/auth/register');
     expect(request.request.method).toBe('POST');

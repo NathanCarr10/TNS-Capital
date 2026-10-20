@@ -21,6 +21,7 @@ export class RegisterComponent {
   readonly errorMessage = signal<string | null>(null);
 
   readonly registerForm = this.formBuilder.nonNullable.group({
+    email: ['', [Validators.required, Validators.email, Validators.maxLength(320)]],
     username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(100), Validators.pattern(USERNAME_PATTERN)]],
     password: ['', [Validators.required, Validators.minLength(8)]],
     confirmPassword: ['', [Validators.required]],
@@ -53,7 +54,7 @@ export class RegisterComponent {
       return;
     }
 
-    const { username, password, confirmPassword, holderName } = this.registerForm.getRawValue();
+    const { email, username, password, confirmPassword, holderName } = this.registerForm.getRawValue();
     if (password !== confirmPassword) {
       this.errorMessage.set('Passwords do not match.');
       return;
@@ -63,6 +64,7 @@ export class RegisterComponent {
     this.isSubmitting.set(true);
 
     this.authService.register({
+      email: email.trim().toLowerCase(),
       username,
       password,
       ...(holderName.trim() ? { holderName: holderName.trim() } : {}),

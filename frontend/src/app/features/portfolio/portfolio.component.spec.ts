@@ -87,7 +87,7 @@ describe('PortfolioComponent', () => {
   describe('for support', () => {
     beforeEach(() => {
       isSupport = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
+      tradingService.getCurrentUserProfile.and.returnValue(of({ email: null, username: 'support', roles: ['SUPPORT'], accountId: null }));
       tradingService.getAccounts.and.returnValue(of([otherAccount, ACCOUNT]));
     });
 

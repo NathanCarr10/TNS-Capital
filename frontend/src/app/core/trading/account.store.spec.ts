@@ -48,7 +48,7 @@ describe('AccountStore', () => {
   });
 
   it('says so when no account is linked to the user', () => {
-    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'nobody', roles: ['USER'], accountId: null }));
+    tradingService.getCurrentUserProfile.and.returnValue(of({ email: null, username: 'nobody', roles: ['USER'], accountId: null }));
 
     const store = createStore();
 
@@ -83,7 +83,7 @@ describe('AccountStore', () => {
 
     beforeEach(() => {
       isSupport = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
+      tradingService.getCurrentUserProfile.and.returnValue(of({ email: null, username: 'support', roles: ['SUPPORT'], accountId: null }));
     });
 
     it('lists every account by number and shows the first one', () => {

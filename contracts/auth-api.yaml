@@ -12,7 +12,7 @@ info:
     - Providing health checks for service availability
 
     **Authentication Flow:**
-    1. Client calls POST /auth/login with username and password
+    1. Client calls POST /auth/login with email and password
     2. Server returns an access token (JWT, 15 minutes) and a refresh token (opaque, single use)
     3. Client sends the access token as `Authorization: Bearer <accessToken>`
     4. The trading API and this service verify the access token locally with the
@@ -87,10 +87,10 @@ paths:
     post:
       summary: Authenticate and obtain an access token and a refresh token
       description: |
-        Validates the credentials and issues both tokens. Each login starts a
-        new session (refresh token family), so a user can be signed in on
-        several devices at once. A wrong username and a wrong password get the
-        same 401, so usernames cannot be probed.
+        Validates the email and password and issues both tokens. Each login
+        starts a new session (refresh token family), so a user can be signed in
+        on several devices at once. A wrong email and a wrong password get the
+        same 401, so accounts cannot be probed.
       operationId: login
       tags:
         - Authentication
@@ -104,7 +104,7 @@ paths:
               admin:
                 summary: Login as the admin (password from ADMIN_PASSWORD)
                 value:
-                  username: admin
+                  email: admin@tns-capital.local
                   password: your-admin-password
       responses:
         '200':
@@ -116,14 +116,14 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
-          description: Wrong username or password
+          description: Wrong email or password
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlatformErrorResponse'
               example:
                 errorCode: AUTH-401
-                message: invalid username or password
+                message: invalid email or password
                 timestamp: '2026-10-08T15:00:00.000Z'
         '429':
           $ref: '#/components/responses/TooManyRequests'
@@ -307,7 +307,13 @@ components:
       required:
         - username
         - password
+        - email
       properties:
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          example: trader1@example.com
         username:
           type: string
           minLength: 3
@@ -334,7 +340,7 @@ components:
 
     RegisterResponse:
       type: object
-      required: [id, username, createdAt, accountId, accountNumber]
+      required: [id, username, email, createdAt, accountId, accountNumber]
       properties:
         id:
           type: integer
@@ -342,6 +348,10 @@ components:
         username:
           type: string
           example: trader1
+        email:
+          type: string
+          format: email
+          example: trader1@example.com
         createdAt:
           type: string
           format: date-time
@@ -357,15 +367,16 @@ components:
       type: object
       description: User credentials for authentication
       required:
-        - username
+        - email
         - password
       properties:
-        username:
+        email:
           type: string
+          format: email
           minLength: 1
-          maxLength: 100
-          description: Username of the user
-          example: admin
+          maxLength: 320
+          description: Email address of the user
+          example: trader1@example.com
         password:
           type: string
           minLength: 1
@@ -479,8 +490,13 @@ components:
 
     CurrentUser:
       type: object
-      required: [username, roles, accountId]
+      required: [username, email, roles, accountId]
       properties:
+        email:
+          type: string
+          format: email
+          nullable: true
+          example: trader1@example.com
         username:
           type: string
           example: trader1
