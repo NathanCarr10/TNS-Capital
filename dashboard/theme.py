@@ -111,11 +111,7 @@ h1 {{ font-size: 1.85rem !important; letter-spacing: -0.01em; }}
 /* Alerts as soft notes, like .note in the trading app */
 [data-testid="stAlertContainer"] {{ border-radius: 8px; }}
 
-/* Sidebar: logo on a light tile, the view switcher as navigation */
-[data-testid="stSidebar"] [data-testid="stImage"] img {{
-  border-radius: 8px;
-  background: #ffffff;
-}}
+/* Sidebar: the view switcher as navigation */
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] button[kind$="Active"] {{
   box-shadow: inset 3px 0 0 var(--tns-accent);
 }}
