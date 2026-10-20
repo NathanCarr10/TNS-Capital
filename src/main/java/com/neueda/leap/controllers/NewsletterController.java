@@ -1,12 +1,10 @@
 package com.neueda.leap.controllers;
 
 import com.neueda.leap.dtos.NewsletterMoverResponse;
-import com.neueda.leap.dtos.NewsletterNewsResponse;
 import com.neueda.leap.dtos.NewsletterResponse;
 import com.neueda.leap.dtos.NewsletterSummaryResponse;
 import com.neueda.leap.model.NewsletterIssue;
 import com.neueda.leap.model.NewsletterMover;
-import com.neueda.leap.model.NewsletterNewsItem;
 import com.neueda.leap.services.NewsletterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -58,7 +56,7 @@ public class NewsletterController {
      * is saved, so a preview never replaces the issue the weekly job publishes.
      */
     @Operation(summary = "Preview this week's newsletter",
-            description = "Support only. Builds the week so far from the latest prices and news without publishing it; "
+            description = "Support only. Builds the week so far from the latest prices without publishing it; "
                     + "the preview has no id.")
     @ApiResponse(responseCode = "200", description = "This week's issue so far, not saved")
     @ApiResponse(responseCode = "403", description = "AUTH-403 Support only")
@@ -84,8 +82,7 @@ public class NewsletterController {
 
     private static NewsletterResponse toResponse(NewsletterIssue issue) {
         return new NewsletterResponse(issue.getId(), issue.getWeekStart(), issue.getGeneratedAt(),
-                toResponses(issue.getGainers()), toResponses(issue.getLosers()),
-                issue.getNews().stream().map(NewsletterController::toResponse).toList());
+                toResponses(issue.getGainers()), toResponses(issue.getLosers()));
     }
 
     private static List<NewsletterMoverResponse> toResponses(List<NewsletterMover> movers) {
@@ -93,10 +90,5 @@ public class NewsletterController {
                 .map(mover -> new NewsletterMoverResponse(mover.symbol(), mover.name(), mover.startClose(),
                         mover.endClose(), mover.changePct()))
                 .toList();
-    }
-
-    private static NewsletterNewsResponse toResponse(NewsletterNewsItem item) {
-        return new NewsletterNewsResponse(item.symbol(), item.headline(), item.source(), item.url(),
-                item.publishedAt());
     }
 }

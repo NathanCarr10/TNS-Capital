@@ -323,13 +323,11 @@ Live prices and price history both come from the [Alpaca market data API](https:
 ### Weekly newsletter
 
 Every Friday at 17:00 New York time, after the US market closes, the API publishes a newsletter
-that every signed-in user reads on the **Newsletter** page (`/newsletter`):
+that every signed-in user reads on the **Market Movers** page (`/market-movers`; `/newsletter` redirects there):
 
 - **Movers:** the 5 tradable instruments that rose the most this week and the 5 that fell the
   most, from Alpaca daily bars. A week's change runs from the close before Monday to the latest close.
-- **News:** up to 3 recent headlines about each mover from Alpaca's News API (Benzinga), using the
-  same keys. Only `https://` links are kept, and the page shows headlines as text. Without news the
-  issue is still published; without prices nothing is published and the API logs an error.
+  Without prices nothing is published and the API logs an error.
 - **One issue per week**, stored as a JSONB snapshot in `newsletter_issues` and never changed
   afterwards ([DECISIONS.md](docs/DECISIONS.md) #17).
 - **Support staff can preview** the week so far with **Preview this week's issue** on the page, or
@@ -341,7 +339,7 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
   keep it off in production. To undo a demo locally, delete the row from `newsletter_issues` as the
   database owner.
 - **Schedule:** `NEWSLETTER_CRON` in `.env` (a Spring cron in New York time; `-` switches it off).
-  The number of movers and headlines is set under `newsletter.*` in `application.yml`.
+  The number of movers is set under `newsletter.*` in `application.yml`.
 - **Existing database:** the table is created when the `postgres` volume is new. To add it to an
   existing one without losing data, run as the database owner:
 
@@ -349,6 +347,13 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
   source .env
   docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital < db/tables/13_newsletter_issues.sql
   docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "GRANT SELECT, INSERT ON newsletter_issues TO tns_api;"
+  ```
+
+  A database created before issues became movers-only still has a `news` column, which the API
+  no longer fills. Drop it, or publishing fails:
+
+  ```bash
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "ALTER TABLE newsletter_issues DROP COLUMN IF EXISTS news;"
   ```
 
 ---

@@ -20,7 +20,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.neueda.leap.model.NewsletterIssue;
 import com.neueda.leap.model.NewsletterMover;
-import com.neueda.leap.model.NewsletterNewsItem;
 import com.neueda.leap.repositories.NewsletterIssueRepository;
 
 /**
@@ -45,9 +44,7 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
                 List.of(new NewsletterMover("AAPL", "Apple Inc.", new BigDecimal("200.00"), new BigDecimal("210.00"),
                         new BigDecimal("5.00"))),
                 List.of(new NewsletterMover("TSLA", "Tesla, Inc.", new BigDecimal("250.00"), new BigDecimal("225.00"),
-                        new BigDecimal("-10.00"))),
-                List.of(new NewsletterNewsItem("AAPL", "Apple unveils new chip", "benzinga",
-                        "https://www.benzinga.com/news/1", Instant.parse("2026-10-14T09:30:00Z")))));
+                        new BigDecimal("-10.00")))));
     }
 
     @Test
@@ -67,7 +64,7 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Returns an issue with its movers and news")
+    @DisplayName("Returns an issue with its movers")
     void getsIssue() throws Exception {
         long id = saveIssue(WEEK_START).getId();
 
@@ -79,10 +76,7 @@ class NewsletterControllerIT extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.gainers[0].startClose", equalTo(200.00)))
                 .andExpect(jsonPath("$.gainers[0].changePct", equalTo(5.00)))
                 .andExpect(jsonPath("$.losers[0].changePct", equalTo(-10.00)))
-                .andExpect(jsonPath("$.news[0].symbol", equalTo("AAPL")))
-                .andExpect(jsonPath("$.news[0].headline", equalTo("Apple unveils new chip")))
-                .andExpect(jsonPath("$.news[0].url", equalTo("https://www.benzinga.com/news/1")))
-                .andExpect(jsonPath("$.news[0].publishedAt", equalTo("2026-10-14T09:30:00Z")));
+                .andExpect(jsonPath("$.news").doesNotExist());
     }
 
     @Test

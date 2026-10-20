@@ -1,7 +1,7 @@
 <header class="page-header">
   <div>
-    <p class="eyebrow">Newsletter</p>
-    <h1>Weekly market movers</h1>
+    <p class="eyebrow">Market movers</p>
+    <h1>This week's biggest movers</h1>
     @if (shown(); as current) {
       <!-- weekStart is a date without a time; UTC keeps it on the same day in every time zone -->
       <p class="muted">
@@ -71,44 +71,10 @@
       <ng-container *ngTemplateOutlet="moverTable; context: { $implicit: current.losers, empty: 'No instrument fell this week.' }" />
     </section>
   </div>
-
-  <section class="card" aria-labelledby="news-title">
-    <div class="card-header">
-      <h2 class="card-title" id="news-title">In the news</h2>
-    </div>
-    @if (news().length === 0) {
-      <p class="note">No news about this week's movers was available.</p>
-    } @else {
-      <div class="news">
-        @for (entry of news(); track entry.mover.symbol) {
-          <article class="news-group">
-            <h3>
-              <a class="symbol-link symbol" [routerLink]="['/trade', entry.mover.symbol]">{{ entry.mover.symbol }}</a>
-              <span class="muted">{{ entry.mover.name }}</span>
-            </h3>
-            <ul>
-              @for (item of entry.headlines; track item.url) {
-                <li>
-                  <!-- Third-party text: interpolated, so it is shown as text and never run as HTML -->
-                  <a class="headline" [href]="item.url" target="_blank" rel="noopener noreferrer">{{ item.headline }}</a>
-                  <span class="muted source">
-                    {{ item.source }}
-                    @if (item.publishedAt) {
-                      &middot; {{ item.publishedAt | date: 'MMM d, HH:mm' }}
-                    }
-                  </span>
-                </li>
-              }
-            </ul>
-          </article>
-        }
-      </div>
-    }
-  </section>
 } @else {
   <section class="card">
     <p class="note">
-      No newsletter yet. The first issue is published on Friday after the US market closes.
+      No market movers yet. The first ranking is published on Friday after the US market closes.
     </p>
   </section>
 }

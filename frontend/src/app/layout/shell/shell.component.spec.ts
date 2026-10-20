@@ -64,7 +64,7 @@ describe('ShellComponent', () => {
       ['Trade', '/trade'],
       ['Order History', '/orders'],
       ['Strategy Lab', '/strategies'],
-      ['Newsletter', '/newsletter'],
+      ['Market Movers', '/market-movers'],
       ['Settings', '/settings'],
     ]);
   });
@@ -78,7 +78,7 @@ describe('ShellComponent', () => {
       ['Portfolio', '/portfolio'],
       ['Order History', '/orders'],
       ['Strategy Lab', '/strategies'],
-      ['Newsletter', '/newsletter'],
+      ['Market Movers', '/market-movers'],
       ['Dead Letters', '/dead-letters'],
     ]);
     expect(element.querySelector('app-symbol-search')).toBeNull();

@@ -4,15 +4,12 @@ import com.neueda.leap.config.NewsletterProperties;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
 import com.neueda.leap.exceptions.NewsletterNotFoundException;
 import com.neueda.leap.exceptions.NewsletterPublishingDisabledException;
-import com.neueda.leap.marketdata.AlpacaRestClient;
 import com.neueda.leap.marketdata.BarTimeframe;
 import com.neueda.leap.marketdata.MarketDataService;
-import com.neueda.leap.marketdata.NewsArticle;
 import com.neueda.leap.marketdata.PriceBar;
 import com.neueda.leap.model.Instrument;
 import com.neueda.leap.model.NewsletterIssue;
 import com.neueda.leap.model.NewsletterMover;
-import com.neueda.leap.model.NewsletterNewsItem;
 import com.neueda.leap.repositories.InstrumentRepository;
 import com.neueda.leap.repositories.NewsletterIssueRepository;
 import com.neueda.leap.time.Clock;
@@ -25,53 +22,43 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * Publishes the weekly market newsletter: the tradable instruments that rose
- * and fell the most this week, with the latest news about each of them.
+ * and fell the most this week.
  *
  * A week's change runs from the close of the last trading day before its
  * Monday to the latest close since. The weekly job publishes, one issue per
  * week; a preview (for support staff, e.g. a demo) covers the week so far and is
  * never saved, so it cannot take the place of the week's real issue. Where
  * newsletter.early-publish is on (a demo), support may also publish the week
- * so far, and the job then skips that week.
- * News is optional: without it the issue is still published, without
- * headlines. Without prices there is nothing to rank and nothing is published.
+ * so far, and the job then skips that week. Without prices there is
+ * nothing to rank and nothing is published.
  */
 @Service
 @Slf4j
 public class NewsletterService {
     // Two weeks of daily bars hold the close before Monday even after a holiday
     static final int DAILY_BARS = 10;
-    // Alpaca's largest news page
-    static final int NEWS_LIMIT = 50;
 
     private final NewsletterIssueRepository issueRepository;
     private final InstrumentRepository instrumentRepository;
     private final MarketDataService marketDataService;
-    private final AlpacaRestClient alpacaRestClient;
     private final NewsletterProperties properties;
     private final Clock clock;
 
     public NewsletterService(NewsletterIssueRepository issueRepository, InstrumentRepository instrumentRepository,
-            MarketDataService marketDataService, AlpacaRestClient alpacaRestClient, NewsletterProperties properties,
-            Clock clock) {
+            MarketDataService marketDataService, NewsletterProperties properties, Clock clock) {
         this.issueRepository = Objects.requireNonNull(issueRepository);
         this.instrumentRepository = Objects.requireNonNull(instrumentRepository);
         this.marketDataService = Objects.requireNonNull(marketDataService);
-        this.alpacaRestClient = Objects.requireNonNull(alpacaRestClient);
         this.properties = Objects.requireNonNull(properties);
         this.clock = Objects.requireNonNull(clock);
     }
@@ -102,8 +89,8 @@ public class NewsletterService {
         NewsletterIssue issue = buildIssue(weekStart);
         try {
             NewsletterIssue saved = issueRepository.save(issue);
-            log.info("Published the newsletter for the week of {}: {} gainers, {} losers, {} headlines",
-                    weekStart, issue.getGainers().size(), issue.getLosers().size(), issue.getNews().size());
+            log.info("Published the newsletter for the week of {}: {} gainers, {} losers",
+                    weekStart, issue.getGainers().size(), issue.getLosers().size());
             return saved;
         } catch (DataIntegrityViolationException e) {
             // Published by another run in the meantime (week_start is unique)
@@ -130,7 +117,7 @@ public class NewsletterService {
     }
 
     /**
-     * Builds this week's issue from the latest prices and news without saving
+     * Builds this week's issue from the latest prices without saving
      * it, so it has no ID. The week's published issue is not affected.
      *
      * @throws MarketDataUnavailableException if no instrument has prices for the week
@@ -161,10 +148,7 @@ public class NewsletterService {
                         .thenComparing(NewsletterMover::symbol))
                 .limit(properties.moversPerSide())
                 .toList();
-        List<NewsletterNewsItem> news = newsAbout(Stream.concat(gainers.stream(), losers.stream()).toList(),
-                weekStart.atStartOfDay(properties.zone()).toInstant());
-
-        return new NewsletterIssue(weekStart, clock.now(), gainers, losers, news);
+        return new NewsletterIssue(weekStart, clock.now(), gainers, losers);
     }
 
     /**
@@ -220,39 +204,5 @@ public class NewsletterService {
                 .divide(startClose, 2, RoundingMode.HALF_UP);
         return Optional.of(new NewsletterMover(instrument.getSymbol(), instrument.getName(), startClose, endClose,
                 changePct));
-    }
-
-    /**
-     * Up to headlinesPerMover of the newest articles about each mover, gainers
-     * first. An article about several movers is shown under the first only.
-     */
-    private List<NewsletterNewsItem> newsAbout(List<NewsletterMover> movers, Instant since) {
-        if (movers.isEmpty()) {
-            return List.of();
-        }
-        List<NewsArticle> articles = alpacaRestClient.news(
-                movers.stream().map(NewsletterMover::symbol).toList(), since, NEWS_LIMIT).stream()
-                .sorted(Comparator.comparing(NewsArticle::publishedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-        if (articles.isEmpty()) {
-            log.warn("No news found for the newsletter's movers; publishing it without headlines");
-            return List.of();
-        }
-
-        Set<String> shown = new HashSet<>();
-        List<NewsletterNewsItem> news = new ArrayList<>();
-        for (NewsletterMover mover : movers) {
-            articles.stream()
-                    .filter(article -> article.symbols().contains(mover.symbol()))
-                    .filter(article -> !shown.contains(article.url()))
-                    .limit(properties.headlinesPerMover())
-                    .forEach(article -> {
-                        shown.add(article.url());
-                        news.add(new NewsletterNewsItem(mover.symbol(), article.headline(), article.source(),
-                                article.url(), article.publishedAt()));
-                    });
-        }
-        return news;
     }
 }

@@ -23,22 +23,6 @@ const ISSUE: NewsletterResponse = {
     { symbol: 'AMZN', name: 'Amazon.com Inc', startClose: 249.92, endClose: 258.17, changePct: 3.3 },
   ],
   losers: [{ symbol: 'META', name: 'Meta Platforms Inc', startClose: 709.42, endClose: 694.82, changePct: -2.06 }],
-  news: [
-    {
-      symbol: 'INTC',
-      headline: 'Intel analyst turns <b>bullish</b>',
-      source: 'benzinga',
-      url: 'https://www.benzinga.com/news/1',
-      publishedAt: '2026-10-15T12:38:12Z',
-    },
-    {
-      symbol: 'META',
-      headline: 'Meta slides on ad outlook',
-      source: 'benzinga',
-      url: 'https://www.benzinga.com/news/2',
-      publishedAt: '2026-10-14T10:00:00Z',
-    },
-  ],
 };
 
 describe('NewsletterComponent', () => {
@@ -100,26 +84,6 @@ describe('NewsletterComponent', () => {
     expect(element.querySelectorAll('tbody .change-down').length).toBe(1);
   });
 
-  it('shows each mover with its headlines, as text, opening in a new tab', () => {
-    const element = create();
-
-    expect(texts(element, '.news-group h3 .symbol')).toEqual(['INTC', 'META']);
-    const headline = element.querySelector<HTMLAnchorElement>('.headline')!;
-    expect(headline.textContent).toBe('Intel analyst turns <b>bullish</b>');
-    expect(headline.querySelector('b')).toBeNull();
-    expect(headline.getAttribute('href')).toBe('https://www.benzinga.com/news/1');
-    expect(headline.getAttribute('target')).toBe('_blank');
-    expect(headline.getAttribute('rel')).toBe('noopener noreferrer');
-  });
-
-  it('says so when an issue has no news', () => {
-    newsletterApi.getIssue.and.returnValue(of({ ...ISSUE, news: [] }) as never);
-
-    const element = create();
-
-    expect(texts(element, '.note')).toContain("No news about this week's movers was available.");
-  });
-
   it('lets the reader switch to a past issue', () => {
     const element = create();
     const router = TestBed.inject(Router);
@@ -130,7 +94,7 @@ describe('NewsletterComponent', () => {
     picker.dispatchEvent(new Event('change'));
 
     expect(texts(element, '.issue-picker option')).toEqual(['Week of Oct 12, 2026', 'Week of Oct 5, 2026']);
-    expect(router.navigate).toHaveBeenCalledWith(['/newsletter', '1']);
+    expect(router.navigate).toHaveBeenCalledWith(['/market-movers', '1']);
   });
 
   it('explains when nothing has been published yet', () => {
@@ -139,7 +103,7 @@ describe('NewsletterComponent', () => {
     const element = create();
 
     expect(newsletterApi.getIssue).not.toHaveBeenCalled();
-    expect(texts(element, '.note')[0]).toContain('No newsletter yet');
+    expect(texts(element, '.note')[0]).toContain('No market movers yet');
   });
 
   it('shows the API message when the issue cannot be loaded', () => {
@@ -231,7 +195,7 @@ describe('NewsletterComponent', () => {
     fixture.detectChanges();
 
     expect(newsletterApi.publishIssue).toHaveBeenCalled();
-    expect(router.navigate).toHaveBeenCalledWith(['/newsletter', 3]);
+    expect(router.navigate).toHaveBeenCalledWith(['/market-movers', 3]);
     expect(element.querySelector('.preview-banner')).toBeNull();
   });
 
