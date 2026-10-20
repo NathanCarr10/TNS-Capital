@@ -1,0 +1,19 @@
+meta {
+  name: Preview Issue
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{apiUrl}}/api/v1/newsletters/preview
+  body: none
+  auth: inherit
+}
+
+docs {
+  Support only: builds this week's issue so far from the latest prices and
+  news, without publishing it (the response has "id": null). Log in as support
+  first (set username to support and password to SUPPORT_PASSWORD); a trader
+  or an admin gets 403 (AUTH-403). Returns 503 (MKT-503) when there are no prices, for
+  example when the API runs without Alpaca keys.
+}

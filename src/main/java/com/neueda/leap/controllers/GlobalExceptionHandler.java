@@ -152,6 +152,19 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested order could not be found");
     }
 
+    @ExceptionHandler(NewsletterNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNewsletterNotFound(NewsletterNotFoundException e) {
+        logger.warn("Newsletter issue not found: {}", e.getMessage());
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested newsletter issue could not be found");
+    }
+
+    @ExceptionHandler(NewsletterPublishingDisabledException.class)
+    public ResponseEntity<ErrorResponse> handleNewsletterPublishingDisabled(NewsletterPublishingDisabledException e) {
+        logger.warn("Newsletter publishing refused: {}", e.getMessage());
+        return error(HttpStatus.FORBIDDEN, e.getErrorCode(),
+                "Publishing the newsletter before the weekly run is switched off");
+    }
+
     @ExceptionHandler(PositionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePositionNotFound(PositionNotFoundException e) {
         logger.warn("Position not found: {}", e.getMessage());

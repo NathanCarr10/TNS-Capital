@@ -116,15 +116,17 @@
       <app-portfolio-value-chart [positions]="positions()" [cashBalance]="cashBalance()" />
     </section>
     <section class="card">
-      <app-holdings [positions]="positions()" [error]="positionsError()" />
+      <app-holdings [positions]="positions()" [error]="positionsError()" [linkSymbols]="!isSupport" />
     </section>
   </div>
   <div class="column">
     <section class="card">
       <app-portfolio-split [positions]="positions()" [cashBalance]="cashBalance()" [error]="positionsError()" />
     </section>
-    <section class="card">
-      <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" [heldSymbols]="heldSymbols()" />
-    </section>
+    @if (!isSupport) {
+      <section class="card">
+        <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" [heldSymbols]="heldSymbols()" />
+      </section>
+    }
   </div>
 </div>

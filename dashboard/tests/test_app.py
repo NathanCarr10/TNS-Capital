@@ -13,6 +13,8 @@ import streamlit as st  # noqa: E402
 
 import auth  # noqa: E402
 import data  # noqa: E402
+import monitoring  # noqa: E402
+import sessions  # noqa: E402
 
 SECRET = "test-secret-of-at-least-32-bytes-long!!"
 
@@ -40,6 +42,9 @@ def fresh_cache(monkeypatch):
     # The page caches load() for 30 s; each test needs its own data
     st.cache_data.clear()
     monkeypatch.setenv("JWT_SECRET", SECRET)
+    # A fresh session store, and a browser with no session cookie unless a test sends one
+    monkeypatch.setattr(sessions, "STORE", sessions.SessionStore())
+    monkeypatch.setattr(sessions, "browser_cookie", lambda: None)
 
 
 def token(roles=("ADMIN",), sub="admin", expires_in=900):
@@ -72,7 +77,7 @@ def test_asks_for_sign_in_and_loads_no_data_without_a_token(monkeypatch):
 
 
 def test_admin_sign_in_opens_the_dashboard(monkeypatch):
-    monkeypatch.setattr(auth, "login", lambda username, password: token())
+    monkeypatch.setattr(auth, "login", lambda username, password: (token(), "refresh-1"))
     app = run_app(monkeypatch, FRAMES, signed_in_with="")
 
     app.text_input[0].input("admin")
@@ -261,3 +266,150 @@ def test_says_when_no_strategy_has_traded(monkeypatch):
     app = run_app(monkeypatch, FRAMES)
 
     assert any("No strategy has placed an order yet" in info.value for info in app.info)
+
+
+ALERTS = pd.DataFrame([{"name": "RefreshTokenReuse", "state": "firing", "severity": "critical", "owasp": "A09-1",
+                        "since": pd.Timestamp("2026-10-19 10:00"), "summary": "Reused", "action": "Check the logs"}])
+
+
+def fake_stack(monkeypatch, alerts=ALERTS):
+    monkeypatch.setattr(monitoring, "configured", lambda: True)
+    monkeypatch.setattr(monitoring, "alerts", lambda: alerts)
+    monkeypatch.setattr(monitoring, "value", lambda query, default=None: 3.0)
+    monkeypatch.setattr(monitoring, "instant", lambda query: pd.DataFrame(
+        [{"state": "STREAMING", "value": 1.0}] if "stream" in query else [{"job": "api", "value": 1.0}]))
+    monkeypatch.setattr(monitoring, "series", lambda query, minutes, label: pd.DataFrame(
+        {"time": [pd.Timestamp("2026-10-19 10:00")], label: ["x"], "value": [1.0]}))
+    monkeypatch.setattr(monitoring, "logs", lambda minutes, services, levels, text: pd.DataFrame(
+        [{"time": pd.Timestamp("2026-10-19 10:00"), "service": "auth-service", "level": "warn",
+          "message": f"matched {text!r}"}]))
+
+
+def test_monitoring_says_how_to_start_the_stack_when_it_is_not_running(monkeypatch):
+    monkeypatch.setattr(monitoring, "configured", lambda: False)
+    app = run_app(monkeypatch, FRAMES)
+    app.sidebar.get("button_group")[0].set_value("Monitoring").run()
+
+    assert not app.exception
+    assert "--profile observability" in app.info[0].value
+
+
+def test_monitoring_shows_alerts_metrics_and_logs(monkeypatch):
+    fake_stack(monkeypatch)
+    app = run_app(monkeypatch, FRAMES)
+
+    assert "1 alert(s) firing" in app.sidebar.error[0].value  # on the trading view too
+    app.sidebar.get("button_group")[0].set_value("Monitoring").run()
+
+    assert not app.exception
+    assert app.title[0].value == "Monitoring"
+    assert app.dataframe[0].value["name"].tolist() == ["RefreshTokenReuse"]
+    labels = {metric.label: metric.value for metric in app.metric}
+    assert labels["api"] == "✅ Up"
+    assert labels["Alpaca price stream"] == "Streaming"
+    assert labels["Failed logins"] == "3"
+    assert labels["Slowest 5% fill in over"] == "3.0 s"
+    assert not any(metric.label == "Orders" for metric in app.metric)  # no trading data loaded
+
+    app.selectbox(key="log_preset").select("Failed logins (A09-2)").run()
+    assert app.dataframe[-1].value["message"].tolist() == ["matched 'Login failed'"]
+
+
+def test_monitoring_reports_a_stack_that_does_not_answer(monkeypatch):
+    fake_stack(monkeypatch)
+
+    def down():
+        raise monitoring.Unavailable("http://vmalert:8880 did not answer. Is the observability profile running?")
+
+    monkeypatch.setattr(monitoring, "alerts", down)
+    app = run_app(monkeypatch, FRAMES)
+    app.sidebar.get("button_group")[0].set_value("Monitoring").run()
+
+    assert not app.exception
+    assert "did not answer" in app.error[0].value
+
+
+def cookie_scripts(app):
+    return [element.proto.body for element in app.get("html")]
+
+
+def test_sign_in_keeps_the_tokens_on_the_server_and_only_a_session_id_in_the_cookie(monkeypatch):
+    monkeypatch.setattr(auth, "login", lambda username, password: (token(), "refresh-1"))
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    app.text_input[0].input("admin")
+    app.text_input[1].input("secret")
+    app.button[0].click().run()
+
+    session_id = app.session_state["session_id"]
+    assert sessions.STORE.access_token(session_id) == app.session_state["token"]
+    [script] = cookie_scripts(app)
+    assert f"{sessions.COOKIE}={session_id}; Path=/analytics" in script
+    assert "refresh-1" not in script
+
+
+def test_a_reload_resumes_the_session_from_the_cookie(monkeypatch):
+    session_id = sessions.STORE.create(token(), "refresh-1")
+    monkeypatch.setattr(sessions, "browser_cookie", lambda: session_id)
+
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")  # a new connection: empty session state
+
+    assert not app.exception
+    assert any(metric.label == "Orders" for metric in app.metric)
+    assert app.session_state["session_id"] == session_id
+
+
+def test_an_unknown_or_ended_session_cookie_shows_the_sign_in_form(monkeypatch):
+    monkeypatch.setattr(sessions, "browser_cookie", lambda: "made-up")
+
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    assert [field.label for field in app.text_input] == ["Username", "Password"]
+
+
+def test_an_expired_access_token_is_refreshed_without_signing_out(monkeypatch):
+    expired = token(expires_in=-60)
+    session_id = sessions.STORE.create(expired, "refresh-1")
+    monkeypatch.setattr(sessions, "browser_cookie", lambda: session_id)
+    refreshed = token()
+    calls = []
+
+    def refresh(refresh_token):
+        calls.append(refresh_token)
+        return refreshed, "refresh-2"
+
+    monkeypatch.setattr(auth, "refresh", refresh)
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    assert calls == ["refresh-1"]
+    assert app.session_state["token"] == refreshed
+    assert any(metric.label == "Orders" for metric in app.metric)
+
+
+def test_a_refused_refresh_signs_out(monkeypatch):
+    session_id = sessions.STORE.create(token(expires_in=-60), "spent")
+    monkeypatch.setattr(sessions, "browser_cookie", lambda: session_id)
+
+    def refused(refresh_token):
+        raise auth.AuthError("Your session has expired. Please sign in again.")
+
+    monkeypatch.setattr(auth, "refresh", refused)
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    assert "expired" in app.warning[0].value
+    assert sessions.STORE.access_token(session_id) is None
+
+
+def test_sign_out_ends_the_server_session_and_clears_the_cookie(monkeypatch):
+    session_id = sessions.STORE.create(token(), "refresh-1")
+    monkeypatch.setattr(sessions, "browser_cookie", lambda: session_id)
+    revoked = []
+    monkeypatch.setattr(auth, "logout", revoked.append)
+    app = run_app(monkeypatch, FRAMES, signed_in_with="")
+
+    app.sidebar.button[0].click().run()
+
+    assert revoked == ["refresh-1"]
+    assert sessions.STORE.access_token(session_id) is None
+    assert any("Max-Age=0" in script for script in cookie_scripts(app))
+    assert [field.label for field in app.text_input] == ["Username", "Password"]

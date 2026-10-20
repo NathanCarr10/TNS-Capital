@@ -12,7 +12,7 @@ and what the team decided to do about it. Built from [OWASP_REVIEW_TEMPLATE.md](
 | Commit reviewed | `3c6b7eea` (Development, after PR #91) |
 | Review date | 2026-10-08 |
 | Reviewers | Nokuvimba |
-| Updated | 2026-10-15 (`fix/security-hardening`): A01-4, A01-5, A02-5, A04-1, A05-1, A05-2, A06-3, A06-4, A07-3, A07-4, A07-11, A08-4 and A09-2 marked Fixed with their evidence; `fix/review-gaps`: A09-4 Fixed, A01-8 added; 2026-10-16: A05-5 Fixed, A05-2 extended to the API, auth and dashboard ports, A07-3 per-client limit behind the proxy, A05-7 least-privilege database roles added |
+| Updated | 2026-10-15 (`fix/security-hardening`): A01-4, A01-5, A02-5, A04-1, A05-1, A05-2, A06-3, A06-4, A07-3, A07-4, A07-11, A08-4 and A09-2 marked Fixed with their evidence; `fix/review-gaps`: A09-4 Fixed, A01-8 added; 2026-10-16: A05-5 Fixed, A05-2 extended to the API, auth and dashboard ports, A07-3 per-client limit behind the proxy, A05-7 least-privilege database roles added; 2026-10-19: A09-5 Fixed (monitoring stack) |
 | Standard | [OWASP Top 10 (2021)](https://owasp.org/Top10/) |
 
 ## Keeping this review current
@@ -61,7 +61,7 @@ Never edit [OWASP_REVIEW_TEMPLATE.md](OWASP_REVIEW_TEMPLATE.md) to record findin
 | A06 Vulnerable and Outdated Components | No action, Fixed | 4 |
 | A07 Identification and Authentication Failures | No action, Accepted, Fixed | 12 |
 | A08 Software and Data Integrity Failures | Accepted, No action, Fixed | 4 |
-| A09 Security Logging and Monitoring Failures | No action, Fixed, Accepted | 6 |
+| A09 Security Logging and Monitoring Failures | No action, Fixed | 6 |
 | A10 Server-Side Request Forgery | Not applicable | 1 |
 
 ### Open findings, highest risk first
@@ -178,7 +178,7 @@ None. Every finding is Fixed, Accepted (with its residual risk), No action or No
 | A09-2 | **Logins are logged.** Every login logs `Login succeeded` or `Login failed` with the username and client IP, never the password or tokens. The username is JSON-quoted, so a crafted one cannot forge extra log lines. | `shared/auth-service/src/auth/auth.service.ts` (`login`); `src/auth/auth.controller.ts` (`@Ip()`); `tests/auth.service.spec.ts` (`logs a successful login...`, `logs a failed login...`) | Fixed | — |
 | A09-3 | **None.** Checked that logs carry no secrets. Searched both services for logged passwords, tokens or `Authorization` headers and found none. The trading API logs 403s with the account id only. | `src/main/java/com/neueda/leap/controllers/GlobalExceptionHandler.java` (`handleAccessDenied`); `shared/auth-service/src/` | No action | — |
 | A09-4 | **Failed orders wait for review.** With the old default, any DLQ message still `PENDING` after 10 seconds was marked `RESOLVED`, so a failed order left the pending queue before an admin could see or replay it. Auto-resolve is now off by default; `DLQ_AUTO_RESOLVE=true` turns it back on for a demo. | `src/main/resources/application.yml` (`dlq.auto-resolve.enabled: ${DLQ_AUTO_RESOLVE:false}`); `src/main/java/com/neueda/leap/services/DeadLetterService.java` (`autoResolveEnabled`, default `false`) | Fixed | — |
-| A09-5 | **No alerting.** Logs only go to container stdout. Nothing collects them or alerts on reuse warnings, 401 or 403 spikes, or SYS-500s. | `docker-compose.yml` (no logging driver or collector) | Accepted | **Residual risk:** an attack in progress is only noticed if someone happens to read the logs. **Why carried:** on a single developer machine a log pipeline costs more than it returns. A collector with alerts on the A09-1 and A09-2 events is required before any shared deployment. |
+| A09-5 | **Alerting.** Until 2026-10-19 logs only went to container stdout and nothing alerted on them. The `observability` Compose profile now collects every service's logs (Fluent Bit to VictoriaLogs, 7 days) and metrics (VictoriaMetrics, 15 days). vmalert alerts on reused refresh tokens (A09-1), failed login spikes and rate limiting (A09-2), API 401/403 spikes and 5xx (SYS-500), and pending dead letters (A09-4). Admins see firing alerts and search the logs in the dashboard's Monitoring view. The metrics ports are not published or proxied, and the monitoring services publish no port; the dashboard is their only UI, behind the admin sign-in. | `observability/vmalert/alerts.yml`; `docker-compose.yml` (profile `observability`); `shared/auth-service/src/common/metrics.ts`; `src/main/java/com/neueda/leap/metrics/`; `dashboard/monitoring.py`, `monitoring_page.py`; `dashboard/tests/test_app.py` (`test_monitoring_shows_alerts_metrics_and_logs`) | Fixed | **Residual:** the profile is off by default, and alerts show in the dashboard only; nobody is paged. Before a shared deployment, run the profile and add an Alertmanager receiver (`-notifier.url`). |
 | A09-6 | **Strategy activity is on record.** Every time a rule fires, the strategy service stores the signal with the order it placed or why the API refused it (`strategy_signals`), and logs strategy creation, switching on/off, deletion and each order. The API logs who started or stopped a replay. Admins see strategy orders in the analytics dashboard. | `strategy-service/.../engine/StrategyEngine.java`; `service/StrategyService.java`; `db/tables/12_strategy_signals.sql`; `MarketReplayService.java`; `dashboard/app.py` (Automated strategies) | No action | — |
 
 ## A10 Server-Side Request Forgery

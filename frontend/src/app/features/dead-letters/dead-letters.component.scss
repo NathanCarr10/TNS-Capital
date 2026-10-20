@@ -1,0 +1,68 @@
+:host {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 90rem;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  p.muted {
+    margin: 0.4rem 0 0;
+    max-width: 44rem;
+  }
+}
+
+.dlq-table {
+  min-width: 760px;
+}
+
+.failure {
+  display: grid;
+  gap: 0.2rem;
+  max-width: 32rem;
+}
+
+.failure-type {
+  font-weight: 700;
+}
+
+.failure-reason,
+.failure-notes {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.failure-notes {
+  font-style: italic;
+}
+
+.actions {
+  white-space: nowrap;
+  text-align: right;
+
+  .btn + .btn {
+    margin-left: 0.4rem;
+  }
+}
+
+.dismiss-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+
+  .field {
+    flex: 1 1 18rem;
+  }
+}

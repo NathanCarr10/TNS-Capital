@@ -1,0 +1,102 @@
+# Alert rules, evaluated by vmalert every 30 s against VictoriaMetrics. Firing alerts are
+# shown at the top of the dashboard's Monitoring view and in its sidebar (OWASP A09-5).
+# vmalert also writes them back as the ALERTS series, so their history can be charted.
+#
+# Each alert carries a severity (critical, warning) and, where it closes an OWASP finding,
+# the finding's id (docs/OWASP_REVIEW.md, A09).
+groups:
+  - name: security
+    interval: 30s
+    rules:
+      - alert: RefreshTokenReuse
+        expr: increase(auth_refresh_token_reuse_total[15m]) > 0
+        labels:
+          severity: critical
+          owasp: A09-1
+        annotations:
+          summary: "A spent refresh token was presented again; the session was revoked."
+          action: "Search the logs for \"Refresh token reuse\" to find the user id. The token may have been copied."
+
+      - alert: LoginFailureSpike
+        expr: increase(auth_logins_total{outcome="failure"}[5m]) >= 10
+        labels:
+          severity: warning
+          owasp: A09-2
+        annotations:
+          summary: "{{ $value | humanize }} failed logins in 5 minutes."
+          action: "Search the logs for \"Login failed\" to see the usernames and client IPs."
+
+      - alert: AuthRateLimited
+        expr: increase(auth_http_responses_total{status="429"}[5m]) > 0
+        labels:
+          severity: warning
+          owasp: A09-2
+        annotations:
+          summary: "The auth service rate-limited {{ $value | humanize }} requests in 5 minutes."
+          action: "One client is sending many login, register or refresh requests. Check the auth-service logs."
+
+      - alert: ApiAccessDeniedSpike
+        expr: sum(increase(http_server_requests_seconds_count{job="api", status=~"401|403"}[5m])) >= 20
+        labels:
+          severity: warning
+          owasp: A09-5
+        annotations:
+          summary: "{{ $value | humanize }} requests to the trading API were refused (401 or 403) in 5 minutes."
+          action: "Someone may be probing other traders' accounts. Search the app logs for \"Access denied\"."
+
+      - alert: ApiServerErrors
+        expr: sum(increase(http_server_requests_seconds_count{job="api", status=~"5.."}[5m])) > 0
+        labels:
+          severity: warning
+          owasp: A09-5
+        annotations:
+          summary: "The trading API answered {{ $value | humanize }} requests with a server error (SYS-500) in 5 minutes."
+          action: "Search the app logs at level error."
+
+  - name: order-pipeline
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} cannot be scraped."
+          action: "Check the container: docker compose ps, then its logs."
+
+      - alert: DeadLettersPending
+        expr: trading_dlq_pending > 0
+        for: 1m
+        labels:
+          severity: warning
+          owasp: A09-4
+        annotations:
+          summary: "{{ $value }} failed order message(s) are waiting for review in the dead-letter queue."
+          action: "Review them and retry or dismiss each one through the DLQ admin API."
+
+      - alert: KafkaConsumerLag
+        expr: max by (group, topic) (kafka_consumer_group_lag) > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} is {{ $value }} messages behind on {{ $labels.topic }}."
+          action: "Orders are queuing up. Check that the API's Kafka listeners are running."
+
+      - alert: SlowFills
+        expr: histogram_quantile(0.95, sum by (le) (rate(trading_order_fill_time_seconds_bucket[10m]))) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The slowest 5% of orders take over {{ $value | humanize }}s to fill."
+          action: "The broker simulator normally fills within 2 s. Check it and the executions topic's lag."
+
+      - alert: MarketDataStreamDown
+        expr: max_over_time(marketdata_stream_state{state=~"CONNECTING|FAILED"}[5m]) == 1 and min_over_time(marketdata_stream_state{state=~"CONNECTING|FAILED"}[5m]) == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: "The Alpaca price stream has been {{ $labels.state }} for 5 minutes; orders are priced over REST."
+          action: "Search the app logs for \"Alpaca price stream\"."

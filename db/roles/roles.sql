@@ -32,6 +32,8 @@ GRANT SELECT (username, account_id) ON users TO tns_api;
 -- ...and whether an account has an ACTIVE strategy, before taking an order from
 -- the strategy service (AccountAccessGuard)
 GRANT SELECT (account_id, status) ON strategies TO tns_api;
+-- Newsletter issues are published once and never changed
+GRANT SELECT, INSERT ON newsletter_issues TO tns_api;
 
 -- Auth service: users and their refresh tokens, and opening the account of a
 -- user who registers (RETURNING id, account_number)

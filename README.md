@@ -101,8 +101,9 @@ flowchart LR
    later is ignored.
 6. A failed order (insufficient funds or holdings, inactive account, broker unreachable,
    etc.) is saved as `REJECTED` with a reason and captured in the dead-letter queue
-   (`dlq_messages` table). Admins can inspect and replay these messages through
-   `/api/v1/dlq`; a replay sends the order to the broker again.
+   (`dlq_messages` table). Admins and support can inspect, replay and dismiss these
+   messages through `/api/v1/dlq` (support on the trading app's Dead Letters page); a
+   replay sends the order to the broker again.
 7. Clients poll `GET /api/v1/orders/{orderId}` to see the final status, and
    `GET /api/v1/orders/{orderId}/events` for its history.
 
@@ -155,6 +156,7 @@ TNS-Capital/
 ├── dashboard/                       Streamlit analytics dashboard (has its own README)
 ├── bruno/                           Bruno API collection for manual testing
 ├── contracts/                       OpenAPI contracts for the auth, trading and strategy APIs
+├── observability/                   Monitoring stack config: scrape targets, alert rules, log shipping
 ├── ci/                              Test scripts Jenkins runs (Python suites, e2e stack)
 ├── docs/                            Business logic, security guide, SonarQube, diagrams
 ├── docker-compose.yml               Full local stack
@@ -318,6 +320,37 @@ Live prices and price history both come from the [Alpaca market data API](https:
 - **Setup:** create free API keys at [alpaca.markets](https://alpaca.markets) and set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `.env`. Without keys, the pool is off and orders must include a price.
 - **Free plan limits:** the live feed is IEX only (about 2.5% of US volume), up to 30 streamed symbols, and one stream connection per account, so only one app instance can stream at a time. Set `ALPACA_FEED=sip` on a paid plan for all exchanges.
 
+### Weekly newsletter
+
+Every Friday at 17:00 New York time, after the US market closes, the API publishes a newsletter
+that every signed-in user reads on the **Newsletter** page (`/newsletter`):
+
+- **Movers:** the 5 tradable instruments that rose the most this week and the 5 that fell the
+  most, from Alpaca daily bars. A week's change runs from the close before Monday to the latest close.
+- **News:** up to 3 recent headlines about each mover from Alpaca's News API (Benzinga), using the
+  same keys. Only `https://` links are kept, and the page shows headlines as text. Without news the
+  issue is still published; without prices nothing is published and the API logs an error.
+- **One issue per week**, stored as a JSONB snapshot in `newsletter_issues` and never changed
+  afterwards ([DECISIONS.md](docs/DECISIONS.md) #17).
+- **Support staff can preview** the week so far with **Preview this week's issue** on the page, or
+  `GET /api/v1/newsletters/preview`. A preview is never saved, so it cannot take the place of the
+  Friday issue.
+- **Publishing early (demos):** with `NEWSLETTER_EARLY_PUBLISH=true` in `.env`, support can also
+  click **Publish this issue** on a preview (`POST /api/v1/newsletters/publish`). That issue is
+  then the week's issue and the Friday run skips the week. It is off by default (`403 NWS-403`);
+  keep it off in production. To undo a demo locally, delete the row from `newsletter_issues` as the
+  database owner.
+- **Schedule:** `NEWSLETTER_CRON` in `.env` (a Spring cron in New York time; `-` switches it off).
+  The number of movers and headlines is set under `newsletter.*` in `application.yml`.
+- **Existing database:** the table is created when the `postgres` volume is new. To add it to an
+  existing one without losing data, run as the database owner:
+
+  ```bash
+  source .env
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital < db/tables/13_newsletter_issues.sql
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "GRANT SELECT, INSERT ON newsletter_issues TO tns_api;"
+  ```
+
 ---
 
 ## Strategy Lab
@@ -357,7 +390,7 @@ and logout.
 
 | User | Password | Role | Access |
 |---|---|---|---|
-| `support` | `SUPPORT_PASSWORD` from `.env` | `SUPPORT` | The trading app's account viewer: every account read-only, suspending and reactivating them, opening accounts, adding and changing instruments |
+| `support` | `SUPPORT_PASSWORD` from `.env` | `SUPPORT` | The trading app's account viewer: every account read-only, suspending and reactivating them, opening accounts, adding and changing instruments, reviewing and closing dead letters |
 | `admin` | `ADMIN_PASSWORD` from `.env` | `ADMIN` | The analytics dashboard, the DLQ and the actuator's metrics; no traders' accounts (see [decision 10](docs/DECISIONS.md#10-roles)) |
 | A user you register | your own | `USER` | Only the account opened at registration |
 
@@ -412,7 +445,8 @@ All paths are under `/api/v1`. Swagger UI documents the request and response bod
 | Instruments | `GET /instruments` · `GET /instruments/{symbol}` · `POST /instruments` (SUPPORT) · `PUT /instruments/{symbol}` (SUPPORT) |
 | Market replay | `POST /market-data/replays` (replay a past day's 1-minute bars on `market-data`) · `GET /market-data/replays/current` · `DELETE /market-data/replays/current` |
 | Strategies (strategy service) | `GET/POST /strategies` · `GET/DELETE /strategies/{id}` · `PUT /strategies/{id}/status` (ACTIVE or PAUSED) · `GET /strategies/{id}/signals` · `GET /strategies/activity?since=` · `GET /strategies/performance` · `POST /strategies/backtests` |
-| Dead-letter queue (ADMIN) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
+| Newsletter | `GET /newsletters` · `GET /newsletters/{id}` · `GET /newsletters/preview` (SUPPORT) · `POST /newsletters/publish` (SUPPORT, demos only) |
+| Dead-letter queue (ADMIN, SUPPORT) | `GET /dlq/messages` · `GET /dlq/messages/{id}` · `POST /dlq/messages/{id}/replay` · `DELETE /dlq/messages/{id}` · `GET /dlq/statistics` |
 
 Non-admin users can only see and act on their own account. Errors use one format:
 
@@ -427,12 +461,18 @@ Elastic Common Schema), so tools such as Elasticsearch or CloudWatch can filter 
 logger or message. Read them with `docker compose logs app`, or pretty-print with
 `docker compose logs --no-log-prefix app | jq`. Set `LOG_FORMAT=logstash` (or `gelf`) in
 `.env` for another format. Running the API with `mvn spring-boot:run` keeps the usual
-plain-text lines.
+plain-text lines. The auth service logs JSON lines in Docker too (`AUTH_LOG_FORMAT`, default `json`).
+
+### Monitoring (optional)
+
+A small monitoring stack (~90 MB) of metrics, alerts and every service's logs starts with the
+rest of the stack, through `COMPOSE_PROFILES=observability` in `.env` (from `.env.example`). Admins see it in the analytics dashboard's
+**Monitoring** view. See [observability/README.md](observability/README.md).
 
 ### Bruno collection
 
 The `bruno/` folder is a ready-made [Bruno](https://www.usebruno.com/) collection covering
-the auth, account, order and price endpoints, plus **API Health** (no token needed).
+the auth, account, order, price and newsletter endpoints, plus **API Health** (no token needed).
 
 1. Open the `bruno/` folder as a collection in Bruno and select the **local** environment.
 2. Set the secret variables `password` (and `accountId` once you have one).
@@ -576,6 +616,7 @@ for the quality gate.
 | [contracts/trading-api.json](contracts/trading-api.json) | OpenAPI contract for the trading API, kept in step with the code by `ApiContractIT` (docs/DECISIONS.md #9) |
 | [etl/README.md](etl/README.md) | ETL pipeline, settings and the analytics schema |
 | [dashboard/README.md](dashboard/README.md) | Dashboard insights, data sources and how to run it |
+| [observability/README.md](observability/README.md) | Monitoring stack: metrics, alert rules, log collection |
 
 ---
 

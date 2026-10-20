@@ -6,7 +6,9 @@
       <p class="muted">{{ current.accountNumber }} &middot; {{ current.holderName }}</p>
     }
   </div>
-  <a class="btn btn-primary" routerLink="/trade">Place order</a>
+  @if (!isSupport) {
+    <a class="btn btn-primary" routerLink="/trade">Place order</a>
+  }
 </header>
 
 <section class="card">
@@ -63,7 +65,13 @@
           @for (row of visibleRows(); track row.id) {
             <tr>
               <td class="num">{{ row.dateTime | date:'MMM d, y, HH:mm:ss' }}</td>
-              <td><a class="symbol-link symbol" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a></td>
+              <td>
+                @if (isSupport) {
+                  <span class="symbol">{{ row.symbol }}</span>
+                } @else {
+                  <a class="symbol-link symbol" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a>
+                }
+              </td>
               <td>
                 <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
               </td>

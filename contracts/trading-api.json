@@ -419,6 +419,68 @@
         }
       }
     },
+    "/api/v1/newsletters/publish": {
+      "post": {
+        "tags": [
+          "newsletter-controller"
+        ],
+        "summary": "Publish this week's newsletter early",
+        "description": "Support only, where newsletter.early-publish is on (e.g. a demo). Publishes the week so far; the weekly run then skips this week. If this week's issue was published already, returns it.",
+        "operationId": "publishIssue",
+        "responses": {
+          "200": {
+            "description": "This week's published issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsletterResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AUTH-403 Support only; NWS-403 Early publishing is switched off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "MKT-503 No prices to rank the week's movers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/market-data/replays": {
       "post": {
         "tags": [
@@ -641,7 +703,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Replay a dead-letter message",
-        "description": "Admins only. Sends the order through the Trade Executor again.",
+        "description": "Admins and support. Sends the order through the Trade Executor again.",
         "operationId": "replayMessage",
         "parameters": [
           {
@@ -676,7 +738,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2162,6 +2224,185 @@
         }
       }
     },
+    "/api/v1/newsletters": {
+      "get": {
+        "tags": [
+          "newsletter-controller"
+        ],
+        "summary": "List newsletter issues",
+        "description": "Newest first, without their contents.",
+        "operationId": "listIssues",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NewsletterSummaryResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/newsletters/{id}": {
+      "get": {
+        "tags": [
+          "newsletter-controller"
+        ],
+        "summary": "Get a newsletter issue",
+        "operationId": "getIssue",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsletterResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NWS-404 Newsletter issue not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VAL-422 Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/newsletters/preview": {
+      "get": {
+        "tags": [
+          "newsletter-controller"
+        ],
+        "summary": "Preview this week's newsletter",
+        "description": "Support only. Builds the week so far from the latest prices and news without publishing it; the preview has no id.",
+        "operationId": "previewIssue",
+        "responses": {
+          "200": {
+            "description": "This week's issue so far, not saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewsletterResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTH-401 Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "AUTH-403 Support only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "SYS-500 Unexpected error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "MKT-503 No prices to rank the week's movers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/market-data/replays/current": {
       "get": {
         "tags": [
@@ -2268,7 +2509,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Dead-letter queue statistics",
-        "description": "Admins only.",
+        "description": "Admins and support.",
         "operationId": "getDLQStatistics",
         "responses": {
           "200": {
@@ -2292,7 +2533,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2313,7 +2554,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "List dead-letter messages",
-        "description": "Admins only. Filter by status and failure type.",
+        "description": "Admins and support. Filter by status and failure type.",
         "operationId": "getDLQMessages",
         "parameters": [
           {
@@ -2361,7 +2602,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2399,7 +2640,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Get a dead-letter message",
-        "description": "Admins only.",
+        "description": "Admins and support.",
         "operationId": "getDLQMessage",
         "parameters": [
           {
@@ -2434,7 +2675,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2473,7 +2714,7 @@
           "dead-letter-queue-controller"
         ],
         "summary": "Dismiss a dead-letter message",
-        "description": "Admins only. The order stays REJECTED.",
+        "description": "Admins and support. The order stays REJECTED.",
         "operationId": "dismissMessage",
         "parameters": [
           {
@@ -2509,7 +2750,7 @@
             }
           },
           "403": {
-            "description": "AUTH-403 Admins only",
+            "description": "AUTH-403 Admins and support only",
             "content": {
               "application/json": {
                 "schema": {
@@ -2982,6 +3223,116 @@
           }
         }
       },
+      "NewsletterMoverResponse": {
+        "required": [
+          "changePct",
+          "endClose",
+          "name",
+          "startClose",
+          "symbol"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "startClose": {
+            "type": "number",
+            "description": "Close of the last trading day before the week"
+          },
+          "endClose": {
+            "type": "number",
+            "description": "Latest close of the week"
+          },
+          "changePct": {
+            "type": "number",
+            "description": "Change over the week in percent, e.g. -4.25"
+          }
+        },
+        "description": "Biggest falls, worst first"
+      },
+      "NewsletterNewsResponse": {
+        "required": [
+          "headline",
+          "symbol",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "description": "The mover the headline is about"
+          },
+          "headline": {
+            "type": "string",
+            "description": "Plain text"
+          },
+          "source": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Link to the full article; always https"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Headlines about the movers; empty when no news was available"
+      },
+      "NewsletterResponse": {
+        "required": [
+          "gainers",
+          "generatedAt",
+          "id",
+          "losers",
+          "news",
+          "weekStart"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Null for a preview, which is not saved",
+            "format": "int64",
+            "nullable": true
+          },
+          "weekStart": {
+            "type": "string",
+            "description": "Monday of the week covered",
+            "format": "date"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gainers": {
+            "type": "array",
+            "description": "Biggest rises, best first",
+            "items": {
+              "$ref": "#/components/schemas/NewsletterMoverResponse"
+            }
+          },
+          "losers": {
+            "type": "array",
+            "description": "Biggest falls, worst first",
+            "items": {
+              "$ref": "#/components/schemas/NewsletterMoverResponse"
+            }
+          },
+          "news": {
+            "type": "array",
+            "description": "Headlines about the movers; empty when no news was available",
+            "items": {
+              "$ref": "#/components/schemas/NewsletterNewsResponse"
+            }
+          }
+        }
+      },
       "StartReplayRequest": {
         "required": [
           "date",
@@ -3377,6 +3728,29 @@
             "format": "date-time"
           },
           "deletedOn": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NewsletterSummaryResponse": {
+        "required": [
+          "generatedAt",
+          "id",
+          "weekStart"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "weekStart": {
+            "type": "string",
+            "description": "Monday of the week covered",
+            "format": "date"
+          },
+          "generatedAt": {
             "type": "string",
             "format": "date-time"
           }
