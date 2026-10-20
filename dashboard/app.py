@@ -26,7 +26,7 @@ import monitoring_page
 import sessions
 import theme
 
-st.set_page_config(page_title="TNS Capital Dashboard", page_icon=str(theme.LOGO), layout="wide")
+st.set_page_config(page_title="TNS Capital Dashboard", page_icon=str(theme.LOGO_FAVICON), layout="wide")
 theme.apply()
 
 
@@ -95,7 +95,7 @@ def require_admin():
     _, card, _ = st.columns([1, 1, 1])
     with card:
         theme.logo(width=260)
-        st.title("Analytics sign in")
+        st.title("Analytics")
         st.caption("Admins only. Sign in with your TNS Capital account.")
         if message := st.session_state.pop("auth_message", None):
             st.warning(message)

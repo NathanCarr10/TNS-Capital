@@ -11,6 +11,7 @@ from pathlib import Path
 import streamlit as st
 
 LOGO = Path(__file__).parent / "static" / "TNS_Capital_stacked_transparent.png"
+LOGO_FAVICON = Path(__file__).parent / "static" / "TNS_Capital_icon_transparent.png"
 
 # The trading app's tokens (styles.scss), for the parts config.toml has no option for
 TOKENS = {
@@ -131,6 +132,7 @@ SIGN_IN_CSS = """
 }}
 [data-testid="stHeader"] {{ background: transparent; border: none; }}
 [data-testid="stForm"] {{ padding: 1.5rem 1.6rem; border-radius: 1rem; box-shadow: 0 18px 45px rgba(47, 62, 70, 0.12); }}
+[data-testid="stForm"] [data-testid="InputInstructions"] {{ display: none; }}
 [data-testid="stElementContainer"]:has([data-testid="stImage"]) {{ align-self: center; }}
 [data-testid="stImage"] img {{ border-radius: 12px; }}
 """
