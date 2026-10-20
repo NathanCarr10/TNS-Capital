@@ -9,4 +9,5 @@ INSERT INTO accounts (account_number, holder_name, email, cash_balance, status) 
     ('ACC-1007', 'Eve Wilson',     'eve.wilson@example.com',     20000.00, 'ACTIVE'),
     ('ACC-1008', 'Frank Miller',   'frank.miller@example.com',   500.00, 'SUSPENDED'),
     ('ACC-1009', 'Grace Hopper',   'grace.hopper@example.com',   11000.00, 'ACTIVE'),
-    ('ACC-1010', 'Henry Foster',   'henry.foster@example.com',   7250.00, 'ACTIVE');
+    ('ACC-1010', 'Henry Foster',   'henry.foster@example.com',   7250.00, 'ACTIVE'),
+    ('ACC-DEMO-JANE', 'Jane Doe',  'jane.doe@example.com',    1000000.00, 'ACTIVE');

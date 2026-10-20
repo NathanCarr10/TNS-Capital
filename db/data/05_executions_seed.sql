@@ -6,5 +6,5 @@ SELECT gen_random_uuid(), o.id, o.quantity, o.price, 'SEED',
        o.created_on + INTERVAL '500 milliseconds' + random() * INTERVAL '1500 milliseconds'
   FROM orders o
  WHERE o.status = 'FILLED'
-   AND o.idempotency_key LIKE 'seed-key-%'
+  AND (o.idempotency_key LIKE 'seed-key-%' OR o.idempotency_key LIKE 'seed-demo-jane-%')
 ON CONFLICT (order_id) DO NOTHING;
