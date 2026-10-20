@@ -3,6 +3,7 @@ package com.neueda.leap.services;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,9 +34,9 @@ import com.neueda.leap.repositories.SupportNotificationRepository;
 class SupportServiceTest {
     private static final Instant CREATED_AT = Instant.parse("2026-10-19T12:00:00Z");
 
-    private final SupportConversationRepository conversations = org.mockito.Mockito.mock(SupportConversationRepository.class);
-    private final SupportMessageRepository messages = org.mockito.Mockito.mock(SupportMessageRepository.class);
-    private final SupportNotificationRepository notifications = org.mockito.Mockito.mock(SupportNotificationRepository.class);
+    private final SupportConversationRepository conversations = mock(SupportConversationRepository.class);
+    private final SupportMessageRepository messages = mock(SupportMessageRepository.class);
+    private final SupportNotificationRepository notifications = mock(SupportNotificationRepository.class);
     private final SupportService service = new SupportService(conversations, messages, notifications);
     private SupportConversation conversation;
     private UUID conversationId;

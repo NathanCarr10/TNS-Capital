@@ -183,8 +183,8 @@ class StrategyServiceIT {
 
     private long linkUser(String username, String accountNumber) {
         Long accountId = owner.queryForObject(
-                "INSERT INTO accounts (account_number, holder_name, cash_balance) VALUES (?, ?, 10000) RETURNING id",
-                Long.class, accountNumber, username);
+                "INSERT INTO accounts (account_number, holder_name, email, cash_balance) VALUES (?, ?, ?, 10000) RETURNING id",
+                Long.class, accountNumber, username, username + "@example.com");
         owner.update("INSERT INTO users (username, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
                 username, accountId);
         return accountId;

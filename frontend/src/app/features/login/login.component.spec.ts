@@ -71,7 +71,7 @@ describe('LoginComponent', () => {
     component.loginForm.setValue({ email: 'admin@tns-capital.local', password: 'wrong-password' });
     component.onSubmit();
 
-    expect(component.errorMessage()).toBe('invalid username or password');
+    expect(component.errorMessage()).toBe('invalid email or password');
   });
 
   it('sends traders to the portfolio page', () => {

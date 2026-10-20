@@ -1,0 +1,43 @@
+@if (!empty()) {
+  <section class="tape" aria-label="Market prices">
+    @if (loaded() && items().length > 0) {
+      <div class="track" [style.--ticker-duration]="duration()">
+        @for (copy of copies; track copy) {
+          <ul class="group" [attr.aria-hidden]="copy > 0 ? 'true' : null">
+            @for (item of items(); track item.symbol) {
+              <li>
+                <a
+                  class="item"
+                  [class.up]="item.direction === 'up'"
+                  [class.down]="item.direction === 'down'"
+                  [routerLink]="['/trade', item.symbol]"
+                  [attr.aria-label]="item.label"
+                  [attr.tabindex]="copy > 0 ? -1 : null"
+                >
+                  <span class="symbol">{{ item.symbol }}</span>
+                  @if (item.price !== null) {
+                    <span class="price num">{{ item.price.toFixed(2) }}</span>
+                  } @else {
+                    <span class="price">—</span>
+                  }
+                  @if (item.sparkline) {
+                    <svg class="sparkline" [attr.viewBox]="sparklineViewBox" preserveAspectRatio="none" aria-hidden="true">
+                      <polyline [attr.points]="item.sparkline" />
+                    </svg>
+                  }
+                  @if (item.change) {
+                    <span class="change num">{{ item.change }}</span>
+                  }
+                </a>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    } @else if (unavailable()) {
+      <p class="status">Prices are unavailable right now.</p>
+    } @else {
+      <p class="status">Loading prices…</p>
+    }
+  </section>
+}

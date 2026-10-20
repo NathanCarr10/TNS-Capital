@@ -12,7 +12,7 @@ test.describe('Signing in', () => {
     await expect(page).toHaveURL(/\/login\?returnUrl=%2Fportfolio$/);
     await expect(page.getByRole('heading', { name: 'Welcome Back' })).toBeVisible();
 
-    await submitLogin(page, trader.username, trader.password);
+    await submitLogin(page, trader.email, trader.password);
 
     await expect(page).toHaveURL(/\/portfolio$/);
     await expect(page.locator('.account-card')).toContainText(trader.holderName);
@@ -25,6 +25,7 @@ test.describe('Signing in', () => {
     await page.getByRole('link', { name: /Sign In to Trade/ }).click();
     await page.getByRole('link', { name: 'Create an account' }).click();
 
+    await page.getByLabel('Email').fill(trader.email);
     await page.getByLabel('Username').fill(trader.username);
     await page.getByLabel(/Account holder name/).fill(trader.holderName);
     await page.getByLabel('Password', { exact: true }).fill(trader.password);
@@ -33,7 +34,7 @@ test.describe('Signing in', () => {
 
     // Registering returns to login rather than signing in
     await expect(page).toHaveURL(/\/login$/);
-    await submitLogin(page, trader.username, trader.password);
+    await submitLogin(page, trader.email, trader.password);
 
     await expect(page).toHaveURL(/\/portfolio$/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Welcome, E2E');
@@ -46,7 +47,7 @@ test.describe('Signing in', () => {
   test('a wrong password keeps the trader on the login page with an error', async ({ page }) => {
     await page.goto('/login');
 
-    await submitLogin(page, 'admin', 'not-the-password');
+    await submitLogin(page, 'admin@tns-capital.local', 'not-the-password');
 
     await expect(page.locator('.server-error')).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);

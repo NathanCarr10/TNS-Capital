@@ -45,12 +45,12 @@ describe('DeadLettersComponent', () => {
   });
 
   it('shows the pending tickets first', () => {
-    expect(rows().length).toBe(1);
+    expect(rows()).toHaveSize(1);
     expect(rows()[0].textContent).toContain('aaaa1111');
 
     button('All 2').click();
     fixture.detectChanges();
-    expect(rows().length).toBe(2);
+    expect(rows()).toHaveSize(2);
   });
 
   it('dismisses a ticket with notes', () => {
@@ -65,7 +65,7 @@ describe('DeadLettersComponent', () => {
     fixture.detectChanges();
 
     expect(dlqApi.dismissMessage).toHaveBeenCalledWith('dlq-1', 'Duplicate order');
-    expect(rows().length).toBe(0);
+    expect(rows()).toHaveSize(0);
     expect(fixture.componentInstance.counts().IGNORED).toBe(1);
   });
 

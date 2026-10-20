@@ -24,8 +24,8 @@ pytestmark = pytest.mark.skipif(not os.getenv("DASHBOARD_IT"), reason="set DASHB
 REPO = Path(__file__).resolve().parents[3]
 
 TEST_DATA = """
-    INSERT INTO accounts (account_number, holder_name, cash_balance, status) VALUES
-        ('ACC-1001', 'John Doe', 5000.00, 'ACTIVE');
+    INSERT INTO accounts (account_number, holder_name, email, cash_balance, status) VALUES
+        ('ACC-1001', 'John Doe', 'john@example.com', 5000.00, 'ACTIVE');
     INSERT INTO instruments (symbol, name, asset_class, currency, tradable) VALUES
         ('ACME', 'Acme Corp', 'Equity', 'USD', TRUE);
     INSERT INTO orders (id, account_id, symbol, side, quantity, price, status, idempotency_key) VALUES
