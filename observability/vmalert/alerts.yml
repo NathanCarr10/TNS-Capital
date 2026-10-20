@@ -24,7 +24,7 @@ groups:
           owasp: A09-2
         annotations:
           summary: "{{ $value | humanize }} failed logins in 5 minutes."
-          action: "Search the logs for \"Login failed\" to see the usernames and client IPs."
+          action: "Search the logs for \"Login failed\" to see the emails and client IPs."
 
       - alert: AuthRateLimited
         expr: increase(auth_http_responses_total{status="429"}[5m]) > 0
