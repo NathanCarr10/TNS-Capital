@@ -207,6 +207,7 @@ public class AccountController {
                                 account.getId(),
                                 account.getAccountNumber(),
                                 account.getHolderName(),
+                                account.getEmail(),
                                 account.getCashBalance(),
                                 account.getReservedCash(),
                                 account.getAvailableCash(),

@@ -12,6 +12,7 @@ export type StaffRole = Exclude<Role, 'USER'>;
 export interface RegisteredUser {
   id: number;
   username: string;
+  email: string;
   createdAt: Date;
   accountId: number;
   accountNumber: string;
@@ -20,6 +21,7 @@ export interface RegisteredUser {
 export interface AuthenticatedUser {
   id: number;
   username: string;
+  email?: string | null;
   roles: Role[];
   /** The user's trading account; null for support and admin users, who have none */
   accountId: number | null;
@@ -36,6 +38,12 @@ export class UsernameTakenError extends Error {
   }
 }
 
+export class EmailTakenError extends Error {
+  constructor() {
+    super('Email already exists');
+  }
+}
+
 /** A staff username already belongs to a user with another role, which is never changed. */
 export class StaffNameTakenError extends Error {
   constructor(username: string, role: StaffRole, existingRoles: Role[]) {
@@ -47,7 +55,7 @@ export class StaffNameTakenError extends Error {
 // Postgres error code for a unique constraint violation
 const UNIQUE_VIOLATION = '23505';
 
-const USER_COLUMNS = 'id, username, password_hash, role, account_id';
+const USER_COLUMNS = 'id, username, email, password_hash, role, account_id';
 
 /**
  * Account numbers for self-registered users: "ACC-U" plus the zero-padded
@@ -78,21 +86,25 @@ export class UsersService {
    *
    * Satisfies AC#4: Duplicate username throws, doesn't overwrite
    */
-  async create(username: string, passwordHash: string, holderName?: string): Promise<RegisteredUser> {
+  async create(username: string, passwordHash: string, email = `${username}@example.invalid`, holderName?: string): Promise<RegisteredUser> {
+    if (!email.includes('@')) {
+      holderName = email;
+      email = `${username}@example.invalid`;
+    }
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
 
       const userResult = await client.query(
-        'INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id, username, created_at',
-        [username, passwordHash],
+        'INSERT INTO users (username, email, password_hash, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id, username, email, created_at',
+        [username, email, passwordHash],
       );
       const user = userResult.rows[0];
       const userId = Number(user.id);
 
       const accountResult = await client.query(
-        'INSERT INTO accounts (account_number, holder_name, cash_balance) VALUES ($1, $2, 0) RETURNING id, account_number',
-        [accountNumberFor(userId), holderName?.trim() || username],
+        'INSERT INTO accounts (account_number, holder_name, email, cash_balance) VALUES ($1, $2, $3, 0) RETURNING id, account_number',
+        [accountNumberFor(userId), holderName?.trim() || username, email],
       );
       const account = accountResult.rows[0];
 
@@ -102,6 +114,7 @@ export class UsersService {
       return {
         id: userId,
         username: user.username,
+        email: user.email,
         createdAt: user.created_at,
         accountId: Number(account.id),
         accountNumber: account.account_number,
@@ -112,6 +125,9 @@ export class UsersService {
       const pgError = error as { code?: string; constraint?: string };
       if (pgError.code === UNIQUE_VIOLATION && pgError.constraint === 'users_username_key') {
         throw new UsernameTakenError();
+      }
+      if (pgError.code === UNIQUE_VIOLATION && pgError.constraint === 'users_email_key') {
+        throw new EmailTakenError();
       }
       throw error;
     } finally {
@@ -126,26 +142,32 @@ export class UsersService {
    * @throws StaffNameTakenError if a user with another role (a trader, or the other staff
    *   role) already has this username
    */
-  async saveStaff(username: string, passwordHash: string, role: StaffRole): Promise<void> {
+  async saveStaff(username: string, passwordHash: string, role: StaffRole, email = `${username}@tns-capital.local`): Promise<void> {
     const existing = await this.findByUsername(username);
     if (existing && !existing.roles.includes(role)) {
       throw new StaffNameTakenError(username, role, existing.roles);
     }
     if (existing) {
-      await this.pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [
+      await this.pool.query('UPDATE users SET password_hash = $1, email = COALESCE(email, $3), updated_at = NOW() WHERE id = $2', [
         passwordHash,
         existing.id,
+        email,
       ]);
       return;
     }
     await this.pool.query(
-      'INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
-      [username, passwordHash, role],
+      'INSERT INTO users (username, email, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())',
+      [username, email, passwordHash, role],
     );
   }
 
   async findByUsername(username: string): Promise<UserRecord | null> {
     const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE username = $1`, [username]);
+    return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
+  }
+
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE email = $1`, [email]);
     return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
   }
 
@@ -158,6 +180,7 @@ export class UsersService {
 function toUserRecord(row: {
   id: string | number;
   username: string;
+  email: string | null;
   password_hash: string;
   role: Role;
   account_id: string | number | null;
@@ -165,6 +188,7 @@ function toUserRecord(row: {
   return {
     id: Number(row.id),
     username: row.username,
+    email: row.email,
     passwordHash: row.password_hash,
     roles: [row.role],
     accountId: row.account_id === null ? null : Number(row.account_id),

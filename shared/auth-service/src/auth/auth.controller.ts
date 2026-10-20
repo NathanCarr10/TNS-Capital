@@ -38,14 +38,14 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User registered; the body carries the new accountId' })
   @ApiResponse({ status: 409, description: 'Username already taken' })
   register(@Body() body: RegisterDto): Promise<RegisteredUser> {
-    return this.authService.register(body.username, body.password, body.holderName);
+    return this.authService.register(body.username, body.password, body.email, body.holderName);
   }
 
   /**
    * POST /auth/login - Authenticate user and issue an access and a refresh token
    *
    * Access token claims: exactly sub, roles, typ, jti, iss, iat, exp
-   * - sub: username; the trading API looks up the user's account by it
+  * - sub: username; the trading API looks up the user's account by it
    * - roles: ["USER"], ["SUPPORT"] or ["ADMIN"], from users.role
    * - typ: "access"
    * - jti: a random UUID
@@ -61,9 +61,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Log in and receive an access token and a refresh token' })
   @ApiResponse({ status: 200, description: 'accessToken (15 min) and refreshToken (7 days)' })
-  @ApiResponse({ status: 401, description: 'Invalid username or password' })
+  @ApiResponse({ status: 401, description: 'Invalid email or password' })
   login(@Body() body: LoginDto, @Ip() clientIp: string): Promise<LoginResult> {
-    return this.authService.login(body.username, body.password, clientIp);
+    return this.authService.login(body.email, body.password, clientIp);
   }
 
   /**
@@ -114,9 +114,9 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Missing, invalid or expired access token' })
   async me(
     @CurrentUser() claims: AccessTokenPayload,
-  ): Promise<Pick<AuthenticatedUser, 'username' | 'roles' | 'accountId'>> {
+  ): Promise<Pick<AuthenticatedUser, 'username' | 'email' | 'roles' | 'accountId'>> {
     const user = await this.authService.me(claims);
-    return { username: user.username, roles: user.roles, accountId: user.accountId };
+    return { username: user.username, email: user.email, roles: user.roles, accountId: user.accountId };
   }
 
   // Declared after the real handlers, so only the wrong methods reach it

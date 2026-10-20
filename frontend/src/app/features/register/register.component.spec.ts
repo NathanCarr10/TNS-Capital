@@ -38,6 +38,7 @@ describe('RegisterComponent', () => {
       of({
         id: 1,
         username: 'newtrader',
+        email: 'ada@example.com',
         createdAt: '2026-10-13T09:00:00Z',
         accountId: 1,
         accountNumber: 'ACC-U00001',
@@ -45,6 +46,7 @@ describe('RegisterComponent', () => {
     );
 
     component.registerForm.setValue({
+      email: 'ada@example.com',
       username: 'newtrader',
       password: 'password123',
       confirmPassword: 'password123',
@@ -53,6 +55,7 @@ describe('RegisterComponent', () => {
     component.onSubmit();
 
     expect(authServiceSpy.register).toHaveBeenCalledWith({
+      email: 'ada@example.com',
       username: 'newtrader',
       password: 'password123',
       holderName: 'Ada Lovelace',
@@ -62,6 +65,7 @@ describe('RegisterComponent', () => {
 
   it('rejects mismatched passwords without calling the API', () => {
     component.registerForm.setValue({
+      email: 'ada@example.com',
       username: 'newtrader',
       password: 'password123',
       confirmPassword: 'different123',
@@ -77,6 +81,7 @@ describe('RegisterComponent', () => {
     const payloads = ['<script>alert(1)</script>', '<img src=x onerror=alert(1)>', '"><svg onload=alert(1)>', 'javascript:alert(1)'];
     const fill = (overrides: Partial<{ username: string; holderName: string }>) =>
       component.registerForm.setValue({
+        email: 'ada@example.com',
         username: 'newtrader',
         password: 'password123',
         confirmPassword: 'password123',

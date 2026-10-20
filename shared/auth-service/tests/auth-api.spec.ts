@@ -20,23 +20,24 @@ const SECRET = process.env.JWT_SECRET as string;
 const ISSUER = 'urn:tns-capital:auth-service';
 const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-const TRADER = { username: 'trader', password: 'traderPass123' };
-const ADMIN = { username: 'admin', password: 'adminPassword' };
+const TRADER = { email: 'trader@example.com', password: 'traderPass123' };
+const ADMIN = { email: 'admin@example.com', password: 'adminPassword' };
 
 /** The users table, in memory */
 const store = new Map<string, UserRecord>();
 
 const fakeUsers = {
   findByUsername: jest.fn(async (username: string) => store.get(username) ?? null),
+  findByEmail: jest.fn(async (email: string) => [...store.values()].find((user) => user.email === email) ?? null),
   findById: jest.fn(async (id: number) => [...store.values()].find((u) => u.id === id) ?? null),
-  create: jest.fn(async (username: string): Promise<RegisteredUser> => {
+  create: jest.fn(async (username: string, _passwordHash: string, email: string): Promise<RegisteredUser> => {
     if (username === 'taken') {
       throw new UsernameTakenError();
     }
     if (username === 'explode') {
       throw new Error('connection refused at db.ts:42');
     }
-    return { id: 9, username, createdAt: new Date(), accountId: 42, accountNumber: 'ACC-U000009' };
+    return { id: 9, username, email, createdAt: new Date(), accountId: 42, accountNumber: 'ACC-U000009' };
   }),
 };
 
@@ -89,6 +90,7 @@ describe('Auth API contract', () => {
     store.set('trader', {
       id: 3,
       username: 'trader',
+      email: 'trader@example.com',
       passwordHash: await hashPassword(TRADER.password),
       roles: ['USER'],
       accountId: 7,
@@ -96,6 +98,7 @@ describe('Auth API contract', () => {
     store.set('admin', {
       id: 1,
       username: 'admin',
+      email: 'admin@example.com',
       passwordHash: await hashPassword(ADMIN.password),
       roles: ['ADMIN'],
       accountId: null,
@@ -119,7 +122,8 @@ describe('Auth API contract', () => {
 
   const post = (path: string, body: unknown) => request(app.getHttpServer()).post(path).send(body as object);
   const login = (body: unknown) => post('/auth/login', body);
-  const register = (body: unknown) => post('/auth/register', body);
+  const register = (body: Record<string, unknown>, withDefaultEmail = true) =>
+    post('/auth/register', withDefaultEmail && !('email' in body) ? { email: 'newtrader@example.com', ...body } : body);
   const refresh = (refreshToken: unknown) => post('/auth/refresh', { refreshToken });
   const logout = (refreshToken: unknown) => post('/auth/logout', { refreshToken });
   const me = (authorization?: string) => {
@@ -190,18 +194,18 @@ describe('Auth API contract', () => {
 
   describe('POST /auth/login - 401', () => {
     it('rejects a wrong password with AUTH-401 in the platform envelope', async () => {
-      const response = await login({ username: 'trader', password: 'wrong' }).expect(401);
+      const response = await login({ email: 'trader@example.com', password: 'wrong' }).expect(401);
 
       expect(response.body).toEqual({
         errorCode: 'AUTH-401',
-        message: 'invalid username or password',
+        message: 'invalid email or password',
         timestamp: expect.stringMatching(ISO_8601),
       });
     });
 
     it('gives the same answer for an unknown user, so usernames cannot be probed', async () => {
-      const unknown = await login({ username: 'nobody', password: 'wrong' }).expect(401);
-      const wrongPassword = await login({ username: 'trader', password: 'wrong' }).expect(401);
+      const unknown = await login({ email: 'nobody@example.com', password: 'wrong' }).expect(401);
+      const wrongPassword = await login({ email: 'trader@example.com', password: 'wrong' }).expect(401);
 
       expect(unknown.body.message).toBe(wrongPassword.body.message);
     });
@@ -209,29 +213,29 @@ describe('Auth API contract', () => {
 
   describe('POST /auth/login - 400 VAL-422 validation', () => {
     it.each([
-      ['username is missing', { password: 'test' }],
-      ['password is missing', { username: 'trader' }],
+      ['email is missing', { password: 'test' }],
+      ['password is missing', { email: 'trader@example.com' }],
       ['both are missing', {}],
     ])('reports missing credentials when %s', async (_case, body) => {
       const response = await login(body).expect(400);
 
       expect(response.body).toEqual({
         errorCode: 'VAL-422',
-        message: 'missing username or password',
+        message: 'missing email or password',
         timestamp: expect.stringMatching(ISO_8601),
       });
-      expect(fakeUsers.findByUsername).not.toHaveBeenCalled();
+      expect(fakeUsers.findByEmail).not.toHaveBeenCalled();
     });
 
     it.each([
-      ['username is a number', { username: 123, password: 'test' }],
-      ['password is a number', { username: 'trader', password: 123 }],
-      ['username is a boolean', { username: true, password: 'test' }],
-      ['password is a boolean', { username: 'trader', password: false }],
-      ['username is longer than 100 characters', { username: 'a'.repeat(101), password: 'test' }],
-      ['password is longer than 256 characters', { username: 'trader', password: 'p'.repeat(257) }],
-      ['username is empty', { username: '', password: 'test' }],
-      ['password is empty', { username: 'trader', password: '' }],
+      ['email is a number', { email: 123, password: 'test' }],
+      ['password is a number', { email: 'trader@example.com', password: 123 }],
+      ['email is a boolean', { email: true, password: 'test' }],
+      ['password is a boolean', { email: 'trader@example.com', password: false }],
+      ['email is longer than 320 characters', { email: `${'a'.repeat(309)}@example.com`, password: 'test' }],
+      ['password is longer than 256 characters', { email: 'trader@example.com', password: 'p'.repeat(257) }],
+      ['email is empty', { email: '', password: 'test' }],
+      ['password is empty', { email: 'trader@example.com', password: '' }],
     ])('rejects the body when %s', async (_case, body) => {
       const response = await login(body).expect(400);
 
@@ -248,7 +252,7 @@ describe('Auth API contract', () => {
 
     it.each([
       ['invalid JSON', '{ invalid json }'],
-      ['a trailing comma', '{"username": "trader", "password": "test",}'],
+      ['a trailing comma', '{"email": "trader@example.com", "password": "test",}'],
     ])('rejects a body with %s', async (_case, raw) => {
       const response = await request(app.getHttpServer())
         .post('/auth/login')
@@ -264,10 +268,16 @@ describe('Auth API contract', () => {
     });
 
     it.each([
-      ['a 1-character username', { username: 'a', password: 'test' }],
-      ['a 100-character username', { username: 'a'.repeat(100), password: 'test' }],
-      ['a 1-character password', { username: 'trader', password: 'x' }],
-      ['a 256-character password', { username: 'trader', password: 'p'.repeat(256) }],
+      ['a malformed email', { email: 'a', password: 'test' }],
+      ['an email longer than 320 characters', { email: `${'a'.repeat(309)}@example.com`, password: 'test' }],
+    ])('rejects %s with VAL-422', async (_case, body) => {
+      const response = await login(body).expect(400);
+      expect(response.body.errorCode).toBe('VAL-422');
+    });
+
+    it.each([
+      ['a 1-character password', { email: 'trader@example.com', password: 'x' }],
+      ['a 256-character password', { email: 'trader@example.com', password: 'p'.repeat(256) }],
     ])('accepts %s (then fails authentication)', async (_case, body) => {
       const response = await login(body).expect(401);
       expect(response.body.errorCode).toBe('AUTH-401');
@@ -275,17 +285,25 @@ describe('Auth API contract', () => {
   });
 
   describe('POST /auth/register', () => {
+    it('requires an email address', async () => {
+      const response = await register({ username: 'newtrader', password: 'password123' }, false).expect(400);
+
+      expect(response.body.errorCode).toBe('VAL-422');
+      expect(fakeUsers.create).not.toHaveBeenCalled();
+    });
+
     it('returns 201 with the new user and the account opened for them', async () => {
       const response = await register({ username: 'newtrader', password: 'password123' }).expect(201);
 
       expect(response.body).toEqual({
         id: 9,
         username: 'newtrader',
+        email: 'newtrader@example.com',
         createdAt: expect.stringMatching(ISO_8601),
         accountId: 42,
         accountNumber: 'ACC-U000009',
       });
-      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.stringMatching(/^\$argon2id\$/), undefined);
+      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.stringMatching(/^\$argon2id\$/), 'newtrader@example.com', undefined);
     });
 
     it('hashes the password before it reaches the database layer', async () => {
@@ -297,7 +315,7 @@ describe('Auth API contract', () => {
     it('passes the holder name through for the account', async () => {
       await register({ username: 'newtrader', password: 'password123', holderName: 'Ada Lovelace' }).expect(201);
 
-      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.any(String), 'Ada Lovelace');
+      expect(fakeUsers.create).toHaveBeenCalledWith('newtrader', expect.any(String), 'newtrader@example.com', 'Ada Lovelace');
     });
 
     it('says which characters are allowed when the holder name has script characters', async () => {
@@ -309,7 +327,12 @@ describe('Auth API contract', () => {
     it('accepts real names with accents, apostrophes and hyphens', async () => {
       await register({ username: 'zoe.oneill_1', password: 'password123', holderName: "Zoë O'Neill-Smith" }).expect(201);
 
-      expect(fakeUsers.create).toHaveBeenCalledWith('zoe.oneill_1', expect.any(String), "Zoë O'Neill-Smith");
+      expect(fakeUsers.create).toHaveBeenCalledWith(
+        'zoe.oneill_1',
+        expect.any(String),
+        'newtrader@example.com',
+        "Zoë O'Neill-Smith",
+      );
     });
 
     it('never returns the password or its hash', async () => {
@@ -562,7 +585,7 @@ describe('Auth API contract', () => {
     });
 
     it('does not let a user log in with their password as a client', async () => {
-      const response = await clientToken({ clientId: TRADER.username, clientSecret: TRADER.password }).expect(401);
+      const response = await clientToken({ clientId: 'trader', clientSecret: TRADER.password }).expect(401);
 
       expect(response.body.errorCode).toBe('AUTH-401');
     });
@@ -585,13 +608,13 @@ describe('Auth API contract', () => {
     it('returns the user the access token belongs to', async () => {
       const response = await me(`Bearer ${await tokenFor(TRADER)}`).expect(200);
 
-      expect(response.body).toEqual({ username: 'trader', roles: ['USER'], accountId: 7 });
+      expect(response.body).toEqual({ username: 'trader', email: 'trader@example.com', roles: ['USER'], accountId: 7 });
     });
 
     it('returns an admin with no account', async () => {
       const response = await me(`Bearer ${await tokenFor(ADMIN)}`).expect(200);
 
-      expect(response.body).toEqual({ username: 'admin', roles: ['ADMIN'], accountId: null });
+      expect(response.body).toEqual({ username: 'admin', email: 'admin@example.com', roles: ['ADMIN'], accountId: null });
     });
 
     it('gives the handler the verified claims; the only lookup is the handler\'s own', async () => {
@@ -705,7 +728,7 @@ describe('Auth API contract', () => {
 
     it('documents the request bodies and the bearer token', async () => {
       const response = await request(app.getHttpServer()).get('/docs-json').expect(200);
-      expect(response.body.components.schemas.LoginDto.required).toEqual(['username', 'password']);
+      expect(response.body.components.schemas.LoginDto.required).toEqual(['email', 'password']);
       expect(response.body.components.securitySchemes.bearer.scheme).toBe('bearer');
     });
   });

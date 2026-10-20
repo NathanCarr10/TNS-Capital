@@ -7,7 +7,7 @@ import { CashTransactionRequest, PlaceOrderRequest } from '../../api/trading';
 describe('Generated API types', () => {
   it('reject requests that break the contract', () => {
     // @ts-expect-error password is required by LoginRequest
-    const missingPassword: LoginRequest = { username: 'admin' };
+    const missingPassword: LoginRequest = { email: 'admin@tns-capital.local' };
 
     // @ts-expect-error amount is a number, not a string
     const stringAmount: CashTransactionRequest = { amount: '100' };
