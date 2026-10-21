@@ -345,6 +345,7 @@ Codes follow section 21 of the specification; the codes marked * extend it for c
 | `ReplayInProgressException`, `ReplayNotFoundException` | 409 / 404 | `MKT-409`* / `MKT-404`* | A market replay is already running / no bars for that day, or no replay running |
 | `OrderPublishException` | 503 | `SYS-503`* | Kafka did not acknowledge the order; it is stored as `REJECTED` |
 | `OptimisticLockingFailureException` | 409 | `SYS-409`* | Two requests changed the same account at once; retry |
+| `SupportConversationClosedException` | 409 | `SUP-409`* | "This support conversation is closed" |
 | `NewsletterNotFoundException` | 404 | `NWS-404`* | "The requested newsletter issue could not be found" |
 | `NewsletterPublishingDisabledException` | 403 | `NWS-403`* | "Publishing the newsletter before the weekly run is switched off" |
 | `MethodArgumentNotValidException`, malformed JSON, bad path variable | 422 | `VAL-422` | Field-specific validation messages |

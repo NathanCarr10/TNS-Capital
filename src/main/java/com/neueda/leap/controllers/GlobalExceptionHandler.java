@@ -165,6 +165,12 @@ public class GlobalExceptionHandler {
                 "Publishing the newsletter before the weekly run is switched off");
     }
 
+    @ExceptionHandler(SupportConversationClosedException.class)
+    public ResponseEntity<ErrorResponse> handleSupportConversationClosed(SupportConversationClosedException e) {
+        logger.warn("Support message refused: {}", e.getMessage());
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "This support conversation is closed");
+    }
+
     @ExceptionHandler(PositionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePositionNotFound(PositionNotFoundException e) {
         logger.warn("Position not found: {}", e.getMessage());
