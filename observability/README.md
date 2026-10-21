@@ -14,7 +14,7 @@ The end-to-end tests use their own env file without it, so the CI stack stays as
 
 It is built to fit next to the rest of the stack on a small machine: about 90 MB measured,
 at most 400 MB by its memory limits. Grafana, Prometheus, Loki and a tracing backend would
-need 0.8–1.5 GB (decision 16 in [docs/DECISIONS.md](../docs/DECISIONS.md)).
+need 0.8–1.5 GB (decision 18 in [docs/DECISIONS.md](../docs/DECISIONS.md)).
 
 | Service | Image | Memory (limit) | Does |
 |---|---|---|---|

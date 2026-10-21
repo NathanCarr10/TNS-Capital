@@ -11,17 +11,18 @@ To run it on its own (Node 22+):
 
 ```bash
 cd shared/auth-service
-npm install
+npm ci
 npm run build
-JWT_SECRET=<same value as in the project .env> DB_HOST=localhost DB_PASSWORD=... 
-npm start
+set -a; source ../../.env; set +a   # JWT_SECRET, the staff passwords, DB_USER and DB_PASSWORD
+DB_HOST=localhost npm start
 ```
 
-Listens on `http://localhost:4000`. It refuses to start without a `JWT_SECRET` of at least 32 bytes.
+Listens on `http://localhost:4000`. It refuses to start without a `JWT_SECRET` of at least 32
+bytes, or with an `ADMIN_PASSWORD` or `SUPPORT_PASSWORD` that is too short or shared by both.
 
-Refresh tokens live in their own table, `refresh_tokens` (`db/tables/09_refresh_tokens.sql`).
-The schema scripts only run on an empty database, so after pulling this change recreate
-yours with `db/recreate_db.sh`.
+The service owns the `users` and `refresh_tokens` tables (`db/tables/08_users.sql`,
+`db/tables/09_refresh_tokens.sql`). The schema scripts only run on an empty database, so after
+pulling a schema change recreate yours with `docker compose down -v` (or `db/recreate_db.sh`).
 
 | Endpoint | Needs an access token | Purpose |
 |---|---|---|
@@ -76,14 +77,19 @@ curl -X POST http://localhost:4000/auth/login \
 | any registered user | their own | `["USER"]` | only their own account |
 | `support@tns-capital.local` | `SUPPORT_PASSWORD` | `["SUPPORT"]` | every account in the trading app, suspending and reactivating them, opening accounts, instruments |
 | `admin@tns-capital.local` | `ADMIN_PASSWORD` | `["ADMIN"]` | the analytics dashboard, the DLQ, the actuator; no traders' accounts |
+| `jane.doe@example.com` (optional) | `DEMO_PASSWORD` | `["USER"]` | the seeded demo account `ACC-DEMO-JANE` |
 
 Roles come from `users.role`. Nothing is seeded with a known password: when the service
 starts, `src/users/staff-bootstrap.ts` creates the `admin@tns-capital.local` user (`ADMIN_EMAIL` to change it)
 from `ADMIN_PASSWORD` and the `support@tns-capital.local` user (`SUPPORT_EMAIL`) from `SUPPORT_PASSWORD`, or sets
 the password on one if it differs, so changing the variable and restarting rotates it. It never
 changes a role: a trader who registered one of those emails is never promoted, and the
-support user never becomes the admin. The two passwords must differ. The trading API resolves which account a USER owns from the
-token's `sub`.
+support user never becomes the admin. The two passwords must differ. The trading API resolves
+which account a USER owns from the token's `sub`.
+
+When `DEMO_PASSWORD` is set, `src/users/demo-bootstrap.ts` does the same for the demo trader
+`jane.doe@example.com`, linking it to the seeded `ACC-DEMO-JANE` account. Without it, the demo
+login is disabled and a warning is logged.
 
 ## Refresh and log out
 
@@ -120,7 +126,7 @@ them without calling this service.
 
 ## Service tokens (client credentials)
 
-Backend services log in with a client id and secret instead of a username and password. The
+Backend services log in with a client id and secret instead of an email and password. The
 only client is the strategy service (Strategy Lab), which places orders for traders who have
 switched a strategy on while they are not logged in (docs/DECISIONS.md 16).
 
@@ -134,8 +140,8 @@ curl -X POST http://localhost:4000/auth/token \
 - The secret is `STRATEGY_CLIENT_SECRET` from the project's `.env`: at least 32 characters, and
   the `change-me` placeholder is refused. Without it the client does not exist and every request
   gets `401 AUTH-401` "invalid client credentials", the same answer as a wrong secret.
-- The access token has the usual claims, with `sub` `service:strategy-service` (usernames cannot
-  contain `:`, so it never names a user) and `roles` `["STRATEGY"]`. It lasts 15 minutes and comes
+- The access token has the usual claims, with `sub` `service:strategy-service` (not an email
+  address, so it never names a user) and `roles` `["STRATEGY"]`. It lasts 15 minutes and comes
   with no refresh token: the service asks for a new one before it expires.
 - The trading API accepts `STRATEGY` only for placing and reading orders, and only on an account
   whose owner has an ACTIVE strategy.
@@ -226,6 +232,9 @@ npm test
 - `tests/metrics.spec.ts`: the counters and the `/metrics` server
 - `tests/auth.service.spec.ts`, `tests/token.service.spec.ts`, `tests/guards.spec.ts`: unit tests
 - `tests/password-hasher.spec.ts`: Argon2id hashing
+- `tests/env.validation.spec.ts`: the startup checks on `JWT_SECRET`, the staff passwords and
+  `STRATEGY_CLIENT_SECRET`
+- `tests/staff-bootstrap.spec.ts`: creating and rotating the admin and support users at startup
 - `tests/users.service.spec.ts`: the SQL of `UsersService` and `RefreshTokensService` against a real Postgres with the `db/` schema. Skipped
   unless `DB_HOST` is set (also set `DB_PORT`, `DB_USER`, `DB_PASSWORD`)
 
