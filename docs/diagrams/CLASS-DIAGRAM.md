@@ -221,7 +221,7 @@ classDiagram
 Every custom exception extends the abstract `TradingException`, which carries the spec error
 code (§21). `GlobalExceptionHandler` returns that code with an HTTP status and a fixed, safe
 message. The code's prefix names the part of the domain that failed (`ACC`, `INS`, `ORD`, `POS`,
-`PRC`/`MKT`, `NWS`, `BRK`, `SYS`). The two Kafka wrappers, `NonRetryableOrderException` and
+`PRC`/`MKT`, `NWS`, `SUP`, `BRK`, `SYS`). The two Kafka wrappers, `NonRetryableOrderException` and
 `SettlementException`, keep the code of the failure they wrap.
 
 The exceptions extend `TradingException` directly. `Throwable`, `Exception` and
@@ -258,6 +258,7 @@ classDiagram
     TradingException <|-- ReplayNotFoundException
     TradingException <|-- NewsletterNotFoundException
     TradingException <|-- NewsletterPublishingDisabledException
+    TradingException <|-- SupportConversationClosedException
     TradingException <|-- OrderPublishException
     TradingException <|-- BrokerUnavailableException
     TradingException <|-- NonRetryableOrderException
@@ -281,6 +282,7 @@ classDiagram
 | `MKT-404` | 404 | `ReplayNotFoundException`: no bars for the requested day, or no replay is running |
 | `NWS-404` | 404 | `NewsletterNotFoundException` |
 | `NWS-403` | 403 | `NewsletterPublishingDisabledException`: early publishing is switched off |
+| `SUP-409` | 409 | `SupportConversationClosedException`: a message posted to a closed support conversation |
 | `SYS-409` | 409 | Spring's `OptimisticLockingFailureException`: two requests changed the same account at once, and its `version` column (NFR-02) refused the later one |
 | `BRK-503` (internal) | | `BrokerUnavailableException`: the order is stored as REJECTED and can be replayed from the DLQ |
 | cause's code (internal) | | `NonRetryableOrderException`, `SettlementException`: raised in the Kafka consumers, where they decide whether an order goes to the DLQ |

@@ -22,8 +22,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.neueda.leap.dtos.SupportMessageRequest;
+import com.neueda.leap.exceptions.SupportConversationClosedException;
 import com.neueda.leap.model.SupportConversation;
 import com.neueda.leap.model.SupportMessage;
 import com.neueda.leap.model.SupportNotification;
@@ -107,6 +109,27 @@ class SupportServiceTest {
 
         assertThrows(AccessDeniedException.class, service::unreadSupportNotifications);
         assertThrows(AccessDeniedException.class, service::markSupportNotificationsRead);
+    }
+
+    @Test
+    void nobodyCanPostToAClosedConversation() {
+        conversation.close();
+        SupportMessageRequest reply = new SupportMessageRequest("One more thing");
+
+        assertThrows(SupportConversationClosedException.class, () -> service.addMessage(conversationId, reply));
+        signInAs("trader1@example.com", "ROLE_USER");
+        assertThrows(SupportConversationClosedException.class, () -> service.addMessage(conversationId, reply));
+        verify(messages, never()).save(any());
+        verify(notifications, never()).save(any());
+    }
+
+    @Test
+    void liveStreamEndsWithTheAccessTokensLifetime() {
+        signInAs("trader1@example.com", "ROLE_USER");
+
+        SseEmitter emitter = service.subscribe(conversationId);
+
+        assertEquals(15 * 60 * 1000L, emitter.getTimeout());
     }
 
     @Test

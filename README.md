@@ -485,7 +485,9 @@ Every error code is listed in [docs/SECURITY_GUIDE.md](docs/SECURITY_GUIDE.md#ex
 
 Traders open a conversation from the chat widget on any page of the trading app, and support
 staff answer in the **Support Inbox** (`/support`), which shows an unread count in the sidebar.
-New messages arrive live over Server-Sent Events. Only support staff can close a conversation.
+New messages arrive live over Server-Sent Events; each stream lasts up to 15 minutes, and the app
+reconnects with a fresh token. Only support staff can close a conversation, and a closed one
+accepts no more messages (`409 SUP-409`).
 
 ### Logs
 

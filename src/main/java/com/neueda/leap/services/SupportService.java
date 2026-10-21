@@ -2,6 +2,7 @@ package com.neueda.leap.services;
 
 import com.neueda.leap.dtos.SupportConversationRequest;
 import com.neueda.leap.dtos.SupportMessageRequest;
+import com.neueda.leap.exceptions.SupportConversationClosedException;
 import com.neueda.leap.model.SupportConversation;
 import com.neueda.leap.model.SupportMessage;
 import com.neueda.leap.model.SupportNotification;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -26,6 +28,9 @@ import java.util.UUID;
 @Service
 public class SupportService {
     private static final String CONVERSATION_NOT_FOUND = "Support conversation not found";
+    // A stream is authorised once, when it opens, so it ends with the access token's lifetime
+    // (15 minutes) and the client reconnects with its current token (OWASP review A01-13)
+    static final Duration STREAM_TIMEOUT = Duration.ofMinutes(15);
     private final SupportConversationRepository conversations;
     private final SupportMessageRepository messages;
     private final SupportNotificationRepository notifications;
@@ -56,6 +61,9 @@ public class SupportService {
         SupportConversation conversation = conversations.findById(conversationId)
                 .orElseThrow(() -> new IllegalArgumentException(CONVERSATION_NOT_FOUND));
         checkAccess(conversation);
+        if (conversation.getStatus() == SupportConversation.Status.CLOSED) {
+            throw new SupportConversationClosedException("Support conversation " + conversationId + " is closed");
+        }
         Instant now = Instant.now();
         SupportMessage.SenderRole role = isSupport() ? SupportMessage.SenderRole.SUPPORT : SupportMessage.SenderRole.CUSTOMER;
         addMessage(conversation, request.body(), role, now);
@@ -105,11 +113,12 @@ public class SupportService {
         SupportConversation conversation = conversations.findById(conversationId)
                 .orElseThrow(() -> new IllegalArgumentException(CONVERSATION_NOT_FOUND));
         checkAccess(conversation);
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT.toMillis());
         streams.computeIfAbsent(conversationId, ignored -> new CopyOnWriteArrayList<>()).add(emitter);
         Runnable remove = () -> removeStream(conversationId, emitter);
         emitter.onCompletion(remove);
-        emitter.onTimeout(remove);
+        // Ends the stream normally, so the client sees it close and reconnects
+        emitter.onTimeout(emitter::complete);
         emitter.onError(ignored -> remove.run());
         try {
             emitter.send(SseEmitter.event().name("connected").data("connected"));
