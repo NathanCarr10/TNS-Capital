@@ -265,21 +265,22 @@ Lab write-up; what was built, and why:
 
 ## 17. Newsletter issues as JSONB snapshots
 
-The weekly newsletter stores each issue as one row of `newsletter_issues`, with its gainers,
-losers and news as `JSONB` arrays, rather than in `newsletter_movers` and `newsletter_news`
-child tables. An issue is written once by the weekly job, never changed, and always read
-whole, so it is a document rather than relational data. It also has to show what was
-published: with no foreign keys to `instruments`, renaming or removing an instrument does not
-alter or block past issues. Nothing queries individual movers; if the dashboard ever needs to,
-`jsonb_array_elements` or the ETL can flatten them. Postgres only checks that each column is
-an array, so `NewsletterService` validates the contents. `tns_api` has `SELECT` and `INSERT`
-only, so the database itself keeps issues immutable.
+The weekly newsletter stores each issue as one row of `newsletter_issues`, with its gainers and
+losers as `JSONB` arrays, rather than in a `newsletter_movers` child table. An issue is written
+once by the weekly job, never changed, and always read whole, so it is a document rather than
+relational data. It also has to show what was published: with no foreign keys to `instruments`,
+renaming or removing an instrument does not alter or block past issues. Nothing queries
+individual movers; if the dashboard ever needs to, `jsonb_array_elements` or the ETL can
+flatten them. Postgres only checks that each column is an array, so `NewsletterService`
+validates the contents. `tns_api` has `SELECT` and `INSERT` only, so the database itself keeps
+issues immutable.
 
-The Friday job publishes. Support staff (the trading app's staff role, decision 10) get `GET /api/v1/newsletters/preview`, which builds the week
-so far and saves nothing: with one immutable issue per week, an early "publish" would take the
-place of that week's real issue. Demos before a Friday still need a published issue, so
-`POST /api/v1/newsletters/publish` lets support publish the week so far, but only where
-`NEWSLETTER_EARLY_PUBLISH=true` (a demo environment); elsewhere it answers `403 NWS-403`.
+The Friday job publishes. Support staff (the trading app's staff role, decision 10) get
+`GET /api/v1/newsletters/preview`, which builds the week so far and saves nothing: with one
+immutable issue per week, an early "publish" would take the place of that week's real issue.
+Demos before a Friday still need a published issue, so `POST /api/v1/newsletters/publish` lets
+support publish the week so far, but only where `NEWSLETTER_EARLY_PUBLISH=true` (a demo
+environment); elsewhere it answers `403 NWS-403`.
 
 ## 18. A small monitoring stack, shown in the dashboard
 

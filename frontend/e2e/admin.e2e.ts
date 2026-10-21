@@ -3,11 +3,11 @@ import { Page, expect, test } from '@playwright/test';
 import { ADMIN, SUPPORT, submitLogin } from './support';
 
 /** Streamlit renders its sign-in form after the page's WebSocket connects. */
-async function signInToAnalytics(page: Page, user: { username: string; password: string }): Promise<void> {
+async function signInToAnalytics(page: Page, user: { email: string; password: string }): Promise<void> {
   await expect(page.getByText('Admins only. Sign in with your TNS Capital account.')).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByLabel('Username').fill(user.username);
+  await page.getByLabel('Email').fill(user.email);
   // exact: Streamlit also has a "Show password" button
   await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -28,13 +28,14 @@ test.describe('Admin', () => {
     await expect(page).toHaveURL(/\/analytics\/$/);
     await signInToAnalytics(page, ADMIN);
 
-    await expect(page.getByText(`Signed in as ${ADMIN.username}`)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('Key insights')).toBeVisible();
+    await expect(page.getByText(`Signed in as ${ADMIN.email}`)).toBeVisible({ timeout: 30_000 });
+    // The dashboard opens on its Live view; Key insights moved to the Batch view
+    await expect(page.getByRole('heading', { name: 'Live trading' })).toBeVisible();
   });
 
   test('an admin logging in to the trading app is sent to the analytics dashboard instead', async ({ page }) => {
     await page.goto('/login');
-    await submitLogin(page, ADMIN.username, ADMIN.password);
+    await submitLogin(page, ADMIN.email, ADMIN.password);
 
     await expect(page).toHaveURL(/\/analytics\/$/);
     await expect(page.getByText('Admins only. Sign in with your TNS Capital account.')).toBeVisible({
@@ -50,7 +51,7 @@ test.describe('Support', () => {
 
   test('support sees the read-only account viewer and can suspend and reactivate an account', async ({ page }) => {
     await page.goto('/login');
-    await submitLogin(page, SUPPORT.username, SUPPORT.password);
+    await submitLogin(page, SUPPORT.email, SUPPORT.password);
 
     await expect(page).toHaveURL(/\/portfolio$/);
     await expect(page.getByRole('heading', { name: 'Account viewer' })).toBeVisible();
@@ -73,6 +74,6 @@ test.describe('Support', () => {
     await signInToAnalytics(page, SUPPORT);
 
     await expect(page.getByText('this dashboard is for admins only')).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText('Key insights')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Live trading' })).toHaveCount(0);
   });
 });

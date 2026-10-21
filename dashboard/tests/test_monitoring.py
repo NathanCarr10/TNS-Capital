@@ -143,7 +143,7 @@ def test_logsql_quotes_the_text_so_it_cannot_add_filters_or_pipes():
 def test_logs_become_a_table(stack):
     stack.answer_with("\n".join([
         json.dumps({"_time": "2026-10-19T13:17:20.789Z", "service": "auth-service", "level": "warn",
-                    "_msg": 'Login failed: username="bob" ip=1.2.3.4'}),
+                    "_msg": 'Login failed: email="bob@example.com" ip=1.2.3.4'}),
         "",
     ]))
 
@@ -153,4 +153,4 @@ def test_logs_become_a_table(stack):
     assert url == "http://vlogs:9428/select/logsql/query"
     assert '"Login failed"' in params["query"]
     assert frame.to_dict("records") == [{"time": pd.Timestamp("2026-10-19 13:17:20.789"), "service": "auth-service",
-                                         "level": "warn", "message": 'Login failed: username="bob" ip=1.2.3.4'}]
+                                         "level": "warn", "message": 'Login failed: email="bob@example.com" ip=1.2.3.4'}]

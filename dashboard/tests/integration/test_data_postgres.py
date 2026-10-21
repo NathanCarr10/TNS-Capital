@@ -11,6 +11,7 @@ against a throwaway database:
 """
 
 import os
+from datetime import date
 from pathlib import Path
 
 import psycopg2
@@ -24,8 +25,8 @@ pytestmark = pytest.mark.skipif(not os.getenv("DASHBOARD_IT"), reason="set DASHB
 REPO = Path(__file__).resolve().parents[3]
 
 TEST_DATA = """
-    INSERT INTO accounts (account_number, holder_name, cash_balance, status) VALUES
-        ('ACC-1001', 'John Doe', 5000.00, 'ACTIVE');
+    INSERT INTO accounts (account_number, holder_name, email, cash_balance, status) VALUES
+        ('ACC-1001', 'John Doe', 'john@example.com', 5000.00, 'ACTIVE');
     INSERT INTO instruments (symbol, name, asset_class, currency, tradable) VALUES
         ('ACME', 'Acme Corp', 'Equity', 'USD', TRUE);
     INSERT INTO orders (id, account_id, symbol, side, quantity, price, status, idempotency_key) VALUES
@@ -41,8 +42,8 @@ TEST_DATA = """
     INSERT INTO dlq_messages (original_order_id, original_message, failure_reason, failure_type, is_retryable)
         VALUES ('22222222-2222-2222-2222-222222222222', '{}', 'Insufficient funds for buy order',
                 'NON_RETRYABLE_InsufficientFundsException', FALSE);
-    INSERT INTO users (username, password_hash, role, account_id) VALUES
-        ('john', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
+    INSERT INTO users (email, password_hash, role, account_id) VALUES
+        ('john@example.com', 'not-a-real-hash', 'USER', (SELECT id FROM accounts));
     INSERT INTO strategies (account_id, name, symbol, rule_type, rule_params, quantity, status) VALUES
         ((SELECT id FROM accounts), 'MA 20/50', 'ACME', 'MA_CROSSOVER', '{}', 10, 'ACTIVE');
     INSERT INTO strategy_signals (strategy_id, side, price, bar_time, source, order_id, outcome)
@@ -65,21 +66,22 @@ def db():
 
 
 def test_live_source_loads_before_the_etl_has_run(db):
-    frames = data.load_all()
+    frames = data.load_live()
+    live = frames["trades"]
 
-    assert frames["has_batch"] is False
-    assert frames["batch"].empty
-    assert sorted(frames["live"]["status"]) == ["FILLED", "REJECTED"]
-    assert set(frames["live"]["username"]) == {"john"}
-    by_order = frames["live"].set_index("order_id")["strategy_name"]
+    assert data.load_batch()["available"] is False
+    assert data.load_batch()["trades"].empty
+    assert sorted(live["status"]) == ["FILLED", "REJECTED"]
+    assert set(live["email"]) == {"john@example.com"}
+    by_order = live.set_index("order_id")["strategy_name"]
     assert by_order["11111111-1111-1111-1111-111111111111"] == "MA 20/50"
     assert by_order["22222222-2222-2222-2222-222222222222"] is None
-    assert insights.rejection_reasons(frames["live"])["category"].tolist() == ["Insufficient funds"]
-    assert insights.fill_time_summary(frames["live"])["median"] == pytest.approx(2.0)
+    assert insights.rejection_reasons(live)["category"].tolist() == ["Insufficient funds"]
+    assert insights.fill_time_summary(live)["median"] == pytest.approx(2.0)
     assert insights.dlq_summary(frames["dlq"]).to_dict("records") == [
         {"failure_type": "NON_RETRYABLE_InsufficientFundsException", "messages": 1, "pending": 1, "retryable": 0}]
-    assert frames["live"]["notional"].sum() == pytest.approx(380.0)  # 10 x 25 + 5 x 26
-    assert insights.fill_rate(frames["live"]) == pytest.approx(0.5)
+    assert live["notional"].sum() == pytest.approx(380.0)  # 10 x 25 + 5 x 26
+    assert insights.fill_rate(live) == pytest.approx(0.5)
     assert frames["positions"].to_dict("records") == [
         {"symbol": "ACME", "asset_class": "Equity", "quantity": 10, "average_cost": 25.0}]
 
@@ -92,21 +94,29 @@ def test_batch_source_loads_once_the_etl_has_run(db):
         INSERT INTO analytics.dim_date VALUES (20261012, '2026-10-12', 2026, 4, 10, 'October', 12, 'Monday', FALSE);
         INSERT INTO analytics.fact_trades VALUES ('11111111-1111-1111-1111-111111111111', 'ACC-1001', 'ACME',
             20261012, 'BUY', 10, 10, 25.00, 250.00, 'FILLED', TRUE, '2026-10-12 09:00:00');
+        INSERT INTO analytics.fact_daily_prices (symbol, trade_date, open, high, low, close, volume)
+            VALUES ('ACME', '2026-10-12', 24.5, 25.5, 24.0, 25.25, 1000);
+        INSERT INTO analytics.etl_rejected_orders (order_id, symbol, quantity, reject_reason)
+            VALUES ('bad-1', 'NOPE', 'ten', 'unknown symbol');
     """)
 
-    frames = data.load_all()
+    batch = data.load_batch()
 
-    assert frames["has_batch"] is True
-    assert frames["batch"]["order_id"].tolist() == ["11111111-1111-1111-1111-111111111111"]
-    assert frames["batch"]["username"].tolist() == ["john"]
-    assert insights.rejection_reasons(frames["batch"]).empty  # reasons are only in the live source
-    assert insights.not_yet_in_batch(frames["live"], frames["batch"])["order_id"].tolist() == [
+    assert batch["available"] is True
+    assert batch["trades"]["order_id"].tolist() == ["11111111-1111-1111-1111-111111111111"]
+    assert batch["trades"]["email"].tolist() == ["john@example.com"]
+    assert batch["trades"]["strategy_name"].tolist() == ["MA 20/50"]
+    assert insights.rejection_reasons(batch["trades"]).empty  # reasons are only in the live source
+    assert insights.not_yet_in_batch(data.load_live()["trades"], batch["trades"])["order_id"].tolist() == [
         "22222222-2222-2222-2222-222222222222"]
+    assert batch["prices"].to_dict("records") == [
+        {"symbol": "ACME", "trade_date": date(2026, 10, 12), "close": 25.25}]
+    # Refused rows stay text, as the ETL read them
+    assert batch["etl_rejects"][["order_id", "quantity", "reject_reason"]].values.tolist() == [
+        ["bad-1", "ten", "unknown symbol"]]
 
 
 def test_accounts_without_a_login_are_labelled(db):
     db.execute("DELETE FROM users")
 
-    frames = data.load_all()
-
-    assert set(frames["live"]["username"]) == {"(no login)"}
+    assert set(data.load_live()["trades"]["email"]) == {"(no login)"}

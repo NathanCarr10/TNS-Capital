@@ -41,9 +41,9 @@ jwt:
 
 - `POST /register` on the auth service creates the user **and** opens their trading account
   (ACTIVE, cash balance 0), linked by `users.account_id`. The token's `roles` claim comes from
-  `users.role`: `["USER"]` for registered users, `["SUPPORT"]` for `support` and `["ADMIN"]` for
-  `admin`, both created by the auth service at startup.
-- **USER**: may only use the account linked to their username (the token's `sub`) — read it,
+  `users.role`: `["USER"]` for registered users, `["SUPPORT"]` for `support@tns-capital.local` and
+  `["ADMIN"]` for `admin@tns-capital.local`, both created by the auth service at startup.
+- **USER**: may only use the account linked to their email (the token's `sub`) — read it,
   move cash, place/cancel orders on it, see its positions and orders. Anything else is
   `403 AUTH-403`, including account IDs that do not exist (no probing for valid IDs).
   `GET /api/v1/accounts` and `GET /api/v1/orders` return only the user's own rows.
@@ -219,23 +219,24 @@ password_hash VARCHAR(255) NOT NULL  -- e.g., $argon2id$v=19$m=65540,t=3,p=4$abc
 
 **Registration Flow** (`POST /auth/register`):
 ```
-1. Client sends {username, password} in request body
-2. Server validates username (3-100 chars) and password (8-256 chars)
-3. Server checks for duplicate username → 409 USR-409 if exists
+1. Client sends {email, password} in request body
+2. Server validates email (a valid address, at most 320 chars) and password (8-256 chars),
+   then trims and lower-cases the email
+3. Server checks for a duplicate email → 409 USR-409 if exists
 4. Server hashes password with Argon2id → passwordHash
-5. Server inserts (username, passwordHash) into database
-6. Server returns {id, username, createdAt} (NO password or hash)
+5. Server inserts (email, passwordHash) into database and opens the trading account
+6. Server returns {id, email, createdAt, accountId, accountNumber} (NO password or hash)
 ```
 
 **Login Flow** (`POST /auth/login`):
 ```
-1. Client sends {username, password} in request body
-2. Server retrieves user record from database by username
+1. Client sends {email, password} in request body
+2. Server retrieves user record from database by email (trimmed, lower case)
 3. Server verifies plaintext password against stored hash
 4. If password matches: issue a 15-minute access token (JWT) and a 7-day refresh token,
    store the refresh token's SHA-256 hash in refresh_tokens under a new session family,
    return {accessToken, refreshToken}
-5. If password doesn't match: Return 401 AUTH-401 (no hint about username validity)
+5. If password doesn't match: Return 401 AUTH-401 (no hint about whether the email is registered)
 ```
 
 **Refresh and Logout** (`POST /auth/refresh`, `POST /auth/logout`):
@@ -257,7 +258,7 @@ usable tokens. Logout revokes the refresh token's session only; an access token 
 it expires (at most 15 minutes), because the trading API checks signatures without calling
 this service.
 
-**Why No Username Hint?**: Returning different errors for "user not found" vs "password wrong" reveals whether a username exists, enabling account enumeration attacks. Always return "invalid username or password" for both cases.
+**Why No Email Hint?**: Returning different errors for "user not found" vs "password wrong" reveals whether an email is registered, enabling account enumeration attacks. Always return "invalid email or password" for both cases.
 
 ### Verification & Testing
 
@@ -273,7 +274,7 @@ All password handling is tested in `shared/auth-service/tests/`:
 
 **users.service.spec.ts** — Integration tests for the SQL (needs Postgres; skipped unless `DB_HOST` is set):
 - ✅ Registration opens an ACTIVE account with a 0 cash balance, linked via `users.account_id`
-- ✅ Duplicate username is rejected without opening a second account
+- ✅ Duplicate email is rejected without opening a second account
 - ✅ A failed account insert rolls back the user
 - ✅ Refresh tokens rotate, a reused token revokes its family, concurrent refreshes cannot both win, tokens expire, and logout revokes the family
 

@@ -1,6 +1,6 @@
 /// <reference types="jasmine" />
 
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, discardPeriodicTasks, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
@@ -15,6 +15,7 @@ describe('PortfolioComponent', () => {
   let fixture: ComponentFixture<PortfolioComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
   let isSupport: boolean;
+  let getQuotes: jasmine.Spy;
 
   const otherAccount = { ...ACCOUNT, id: 12, accountNumber: 'ACC-U000012', holderName: 'Trader Two' };
 
@@ -26,7 +27,7 @@ describe('PortfolioComponent', () => {
         AccountStore,
         { provide: TradingService, useValue: tradingService },
         { provide: AuthService, useValue: { isSupport: () => isSupport } },
-        { provide: MarketDataService, useValue: { getQuotes: () => of([]), getBars: () => of([]) } },
+        { provide: MarketDataService, useValue: { getQuotes, getBars: () => of([]) } },
       ],
     });
     fixture = TestBed.createComponent(PortfolioComponent);
@@ -37,6 +38,7 @@ describe('PortfolioComponent', () => {
   beforeEach(() => {
     tradingService = tradingServiceStub();
     isSupport = false;
+    getQuotes = jasmine.createSpy('getQuotes').and.returnValue(of([]));
   });
 
   it('greets the trader and shows their account and cash', () => {
@@ -87,7 +89,7 @@ describe('PortfolioComponent', () => {
   describe('for support', () => {
     beforeEach(() => {
       isSupport = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'support', roles: ['SUPPORT'], accountId: null }));
+      tradingService.getCurrentUserProfile.and.returnValue(of({ email: 'support@tns-capital.local', roles: ['SUPPORT'], accountId: null }));
       tradingService.getAccounts.and.returnValue(of([otherAccount, ACCOUNT]));
     });
 
@@ -102,6 +104,18 @@ describe('PortfolioComponent', () => {
       expect(element.textContent).toContain("Support view: orders can only be placed by the account's owner.");
       expect(element.querySelector('.place-order')).toBeNull();
     });
+
+    it("quotes the shown account's holdings, as there is no market watch to do it", fakeAsync(() => {
+      tradingService.getAccountPositions.and.returnValue(
+        of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 150, marketValue: null }])
+      );
+      const element = create();
+      tick();
+
+      expect(getQuotes).toHaveBeenCalledWith(['AAPL']);
+      expect(element.querySelector('app-market-watch')).toBeNull();
+      discardPeriodicTasks();
+    }));
 
     it('switches to the chosen account', () => {
       tradingService.getAccount.and.returnValue(of(otherAccount));

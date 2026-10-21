@@ -27,12 +27,12 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
      * Finds the account owned by a user. The users table belongs to the auth
      * service, which links each registered user to the account it opens for them.
      *
-     * @param username the user's username (the JWT "sub" claim)
+     * @param email the user's email (the JWT "sub" claim)
      * @return the owned account's ID, empty if the user has none (e.g. admins)
      */
-    @Query(value = "SELECT account_id FROM users WHERE username = :username AND account_id IS NOT NULL",
+    @Query(value = "SELECT account_id FROM users WHERE email = :email AND account_id IS NOT NULL",
             nativeQuery = true)
-    Optional<Long> findAccountIdByUsername(@Param("username") String username);
+    Optional<Long> findAccountIdByEmail(@Param("email") String email);
 
     /**
      * Whether the account's owner has switched a strategy on. The strategy

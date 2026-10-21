@@ -80,7 +80,6 @@ newsletter:
   cron: ${NEWSLETTER_CRON:0 0 17 * * FRI}
   zone: America/New_York
   movers-per-side: 5
-  headlines-per-mover: 3
   # Lets support staff publish the week's issue before Friday, e.g. for a demo. The Friday run then skips
   # that week, so keep it off in production. NEWSLETTER_EARLY_PUBLISH=true switches it on
   early-publish: ${NEWSLETTER_EARLY_PUBLISH:false}

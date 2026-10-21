@@ -292,6 +292,13 @@ pipeline {
             // Each build tags a ~300MB image that nothing uses afterwards; remove it so
             // the agent's disk doesn't fill up.
             sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} ${STRATEGY_IMAGE_NAME}:${BUILD_NUMBER} || true"
+
+            // Every image build adds to Docker's build cache (about 3 GB a build), which filled
+            // the disk until SonarQube's index went read-only and failed the analysis. Keep only
+            // the newest 3 GB, so later builds still reuse the dependency layers, and drop the
+            // untagged images the builds leave behind.
+            sh 'docker builder prune -f --keep-storage 3GB > /dev/null || true'
+            sh 'docker image prune -f > /dev/null || true'
         }
         failure {
             // Notifies the team on build failure. Replace with your notification

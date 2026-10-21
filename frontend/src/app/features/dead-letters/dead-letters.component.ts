@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 
 import { DeadLetterMessageDTO, DeadLetterQueueControllerService } from '../../api/trading';
+import { DeadLetterCountService } from '../../core/support/dead-letter-count.service';
 import { readErrorMessage } from '../../core/trading/api-error';
 
 export type DeadLetterStatus = 'PENDING' | 'RESOLVED' | 'IGNORED';
@@ -19,6 +20,7 @@ export type DeadLetterFilter = 'ALL' | DeadLetterStatus;
 })
 export class DeadLettersComponent {
   private readonly dlqApi = inject(DeadLetterQueueControllerService);
+  private readonly deadLetterCount = inject(DeadLetterCountService);
 
   readonly messages = signal<DeadLetterMessageDTO[]>([]);
   readonly loading = signal(true);
@@ -65,6 +67,7 @@ export class DeadLettersComponent {
       next: (messages) => {
         this.messages.set(messages);
         this.loading.set(false);
+        this.deadLetterCount.pending.set(this.counts().PENDING);
       },
       error: (error: unknown) => {
         this.messages.set([]);
@@ -130,7 +133,14 @@ export class DeadLettersComponent {
   }
 
   statusLabel(status: string | undefined): string {
-    return status === 'IGNORED' ? 'Dismissed' : status === 'RESOLVED' ? 'Resolved' : 'Pending';
+    switch (status) {
+      case 'IGNORED':
+        return 'Dismissed';
+      case 'RESOLVED':
+        return 'Resolved';
+      default:
+        return 'Pending';
+    }
   }
 
   readonly shortId = shortId;
@@ -143,6 +153,8 @@ export class DeadLettersComponent {
 
   private replaceRow(updated: DeadLetterMessageDTO): void {
     this.messages.update((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+    // Keep support's nav badge in step with the tickets just closed
+    this.deadLetterCount.pending.set(this.counts().PENDING);
   }
 }
 

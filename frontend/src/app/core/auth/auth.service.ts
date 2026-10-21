@@ -152,7 +152,7 @@ export class AuthService {
     }
   }
 
-  static getErrorMessage(error: unknown, defaultMessage = 'Invalid username or password.'): string {
+  static getErrorMessage(error: unknown, defaultMessage = 'Invalid email or password.'): string {
 
     if (!error || typeof error !== 'object') {
       return defaultMessage;

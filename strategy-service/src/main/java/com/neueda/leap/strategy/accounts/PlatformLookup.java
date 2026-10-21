@@ -35,9 +35,9 @@ public class PlatformLookup {
     /**
      * @return the account linked to the user (opened when they registered); empty for support and admin users
      */
-    public Optional<Long> accountIdOf(String username) {
-        return jdbc.query("SELECT account_id FROM users WHERE username = ? AND account_id IS NOT NULL",
-                (row, n) -> row.getLong(1), username).stream().findFirst();
+    public Optional<Long> accountIdOf(String email) {
+        return jdbc.query("SELECT account_id FROM users WHERE email = ? AND account_id IS NOT NULL",
+                (row, n) -> row.getLong(1), email).stream().findFirst();
     }
 
     public boolean isTradable(String symbol) {

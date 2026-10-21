@@ -21,8 +21,8 @@ import { AuthenticatedUser } from '../src/users/users.service';
 
 const SECRET = 'guard-test-shared-secret-at-least-32-bytes';
 
-const TRADER: AuthenticatedUser = { id: 3, username: 'trader', roles: ['USER'], accountId: 7 };
-const ADMIN: AuthenticatedUser = { id: 1, username: 'admin', roles: ['ADMIN'], accountId: null };
+const TRADER: AuthenticatedUser = { id: 3, email: 'trader@example.com', roles: ['USER'], accountId: 7 };
+const ADMIN: AuthenticatedUser = { id: 1, email: 'admin@example.com', roles: ['ADMIN'], accountId: null };
 
 @Controller()
 class SampleController {
@@ -80,11 +80,11 @@ describe('JwtAuthGuard', () => {
     }),
   );
   const guard = new JwtAuthGuard(new Reflector(), tokens);
-  const issue = () => tokens.issue({ username: 'trader', roles: ['USER'] });
+  const issue = () => tokens.issue('trader@example.com', ['USER']);
 
   /** A token with the service's claims, then overrides; signed with SECRET unless told otherwise */
   const sign = (claims: object = {}, options: jwt.SignOptions = {}, secret = SECRET) =>
-    jwt.sign({ sub: 'trader', roles: ['USER'], typ: 'access', ...claims }, secret, {
+    jwt.sign({ sub: 'trader@example.com', roles: ['USER'], typ: 'access', ...claims }, secret, {
       algorithm: 'HS256',
       issuer: JWT_ISSUER,
       expiresIn: '15m',
@@ -108,7 +108,7 @@ describe('JwtAuthGuard', () => {
 
     expect(await guard.canActivate(context)).toBe(true);
     expect(request.user).toEqual({
-      sub: 'trader',
+      sub: 'trader@example.com',
       roles: ['USER'],
       typ: 'access',
       jti: expect.any(String),
@@ -140,7 +140,7 @@ describe('JwtAuthGuard', () => {
   it('rejects a token whose payload was tampered with', async () => {
     const [header, , signature] = (await issue()).split('.');
     const escalated = Buffer.from(
-      JSON.stringify({ sub: 'trader', roles: ['ADMIN'], typ: 'access', jti: 'x', iss: JWT_ISSUER }),
+      JSON.stringify({ sub: 'trader@example.com', roles: ['ADMIN'], typ: 'access', jti: 'x', iss: JWT_ISSUER }),
     ).toString('base64url');
 
     const error = await errorFrom(guard.canActivate(withToken(`Bearer ${header}.${escalated}.${signature}`).context));
@@ -152,7 +152,7 @@ describe('JwtAuthGuard', () => {
     ['is not typed as an access token', () => sign({ typ: 'refresh' })],
     [
       'uses alg "none"',
-      () => jwt.sign({ sub: 'trader', roles: ['ADMIN'], typ: 'access', jti: 'x', iss: JWT_ISSUER }, '', { algorithm: 'none' }),
+      () => jwt.sign({ sub: 'trader@example.com', roles: ['ADMIN'], typ: 'access', jti: 'x', iss: JWT_ISSUER }, '', { algorithm: 'none' }),
     ],
     ['is not a JWT', () => 'not-a-jwt'],
     ['has only two segments', () => 'abc.def'],

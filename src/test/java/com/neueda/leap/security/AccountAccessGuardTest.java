@@ -23,7 +23,7 @@ class AccountAccessGuardTest {
     void setUp() {
         accountRepository = mock(AccountRepository.class);
         guard = new AccountAccessGuard(accountRepository);
-        when(accountRepository.findAccountIdByUsername("trader")).thenReturn(Optional.of(7L));
+        when(accountRepository.findAccountIdByEmail("trader@example.com")).thenReturn(Optional.of(7L));
     }
 
     @AfterEach
@@ -31,15 +31,15 @@ class AccountAccessGuardTest {
         SecurityContextHolder.clearContext();
     }
 
-    private static void loginAs(String username, String... roles) {
+    private static void loginAs(String email, String... roles) {
         String[] authorities = java.util.Arrays.stream(roles).map(r -> "ROLE_" + r).toArray(String[]::new);
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(username, null, authorities));
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(email, null, authorities));
     }
 
     @Test
     @DisplayName("A user may access their own account")
     void ownerIsAllowed() {
-        loginAs("trader", "USER");
+        loginAs("trader@example.com", "USER");
 
         assertDoesNotThrow(() -> guard.checkAccess(7L));
         assertFalse(guard.isSupport());
@@ -49,7 +49,7 @@ class AccountAccessGuardTest {
     @Test
     @DisplayName("A user may not access another user's account")
     void otherAccountIsDenied() {
-        loginAs("trader", "USER");
+        loginAs("trader@example.com", "USER");
 
         assertThrows(AccessDeniedException.class, () -> guard.checkAccess(8L));
     }
@@ -57,8 +57,8 @@ class AccountAccessGuardTest {
     @Test
     @DisplayName("A user without a linked account is denied every account")
     void userWithoutAccountIsDenied() {
-        loginAs("stranger", "USER");
-        when(accountRepository.findAccountIdByUsername("stranger")).thenReturn(Optional.empty());
+        loginAs("stranger@example.com", "USER");
+        when(accountRepository.findAccountIdByEmail("stranger@example.com")).thenReturn(Optional.empty());
 
         assertThrows(AccessDeniedException.class, () -> guard.checkAccess(7L));
     }
@@ -66,7 +66,7 @@ class AccountAccessGuardTest {
     @Test
     @DisplayName("A null account ID is denied")
     void nullAccountIsDenied() {
-        loginAs("trader", "USER");
+        loginAs("trader@example.com", "USER");
 
         assertThrows(AccessDeniedException.class, () -> guard.checkAccess(null));
     }
@@ -78,14 +78,14 @@ class AccountAccessGuardTest {
 
         assertTrue(guard.isSupport());
         assertDoesNotThrow(() -> guard.checkAccess(8L));
-        verify(accountRepository, never()).findAccountIdByUsername(any());
+        verify(accountRepository, never()).findAccountIdByEmail(any());
     }
 
     @Test
     @DisplayName("An admin is not support: with no account of their own, every account is denied")
     void adminIsNotSupport() {
-        loginAs("admin", "ADMIN");
-        when(accountRepository.findAccountIdByUsername("admin")).thenReturn(Optional.empty());
+        loginAs("admin@tns-capital.local", "ADMIN");
+        when(accountRepository.findAccountIdByEmail("admin@tns-capital.local")).thenReturn(Optional.empty());
 
         assertFalse(guard.isSupport());
         assertThrows(AccessDeniedException.class, () -> guard.checkAccess(8L));
@@ -132,7 +132,7 @@ class AccountAccessGuardTest {
     @Test
     @DisplayName("Users trade under the usual ownership rule, whatever strategies exist")
     void usersTradeOnlyTheirOwnAccount() {
-        loginAs("trader", "USER");
+        loginAs("trader@example.com", "USER");
 
         assertDoesNotThrow(() -> guard.checkTradingAccess(7L));
         assertThrows(AccessDeniedException.class, () -> guard.checkTradingAccess(8L));

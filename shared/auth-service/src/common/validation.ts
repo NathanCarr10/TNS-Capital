@@ -1,7 +1,7 @@
 import { HttpStatus, ValidationError, ValidationPipe } from '@nestjs/common';
 import { ApiException } from './api.exception';
 
-export const MISSING_CREDENTIALS = 'missing username or password';
+export const MISSING_CREDENTIALS = 'missing email or password';
 
 /**
  * Validates request bodies against their DTOs. Unknown properties are

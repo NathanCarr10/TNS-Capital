@@ -56,7 +56,8 @@ loading, executor pools...) are dropped at scrape time ([victoriametrics/scrape.
 | `LoginFailureSpike` | 10+ failed logins in 5 min | warning | A09-2 |
 | `AuthRateLimited` | Any 429 from the auth service in 5 min | warning | A09-2 |
 | `ApiAccessDeniedSpike` | 20+ API 401/403 responses in 5 min | warning | A09-5 |
-| `ApiServerErrors` | Any API 5xx in 5 min | warning | A09-5 |
+| `ApiServerErrors` | Any API 5xx other than 503 in 5 min | warning | A09-5 |
+| `ApiUnavailable` | Any API 503 in 5 min (no price, market data or Kafka) | warning | A09-5 |
 | `ServiceDown` | A service cannot be scraped for 1 min | critical | |
 | `DeadLettersPending` | A dead letter waits over 1 min | warning | A09-4 |
 | `KafkaConsumerLag` | A group is over 50 messages behind for 2 min | warning | |
@@ -80,7 +81,7 @@ On Docker Desktop, or with a different Docker root directory, set `DOCKER_CONTAI
 to the host's containers directory.
 
 The Monitoring view searches them by text, service and level, with saved searches for failed logins,
-refresh token reuse, access denied and errors.
+refresh token reuse, access denied, errors and 503s (`Unavailable (503)`).
 
 ## Not included
 

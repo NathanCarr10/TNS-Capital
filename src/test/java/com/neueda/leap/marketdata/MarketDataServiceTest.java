@@ -2,6 +2,7 @@ package com.neueda.leap.marketdata;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
@@ -114,5 +115,47 @@ class MarketDataServiceTest {
                 .thenReturn(bars);
 
         assertEquals(bars, service.bars("AAPL", BarTimeframe.HOUR_1, 50));
+    }
+
+    private static NewsArticle article(String headline, String publishedAt) {
+        return new NewsArticle(headline, "benzinga", "https://example.com/" + headline.replace(' ', '-'),
+                Instant.parse(publishedAt), List.of("AAPL"));
+    }
+
+    @Test
+    @DisplayName("Asks for a week of news about the symbol and returns it newest first")
+    void returnsNewsNewestFirst() {
+        when(restClient.news(List.of("AAPL"), NOW.minus(MarketDataService.NEWS_LOOKBACK), MarketDataService.NEWS_LIMIT))
+                .thenReturn(List.of(article("Older", "2026-10-11T09:00:00Z"), article("Newer", "2026-10-12T09:00:00Z")));
+
+        assertEquals(List.of("Newer", "Older"), service.news("AAPL").stream().map(NewsArticle::headline).toList());
+    }
+
+    @Test
+    @DisplayName("Caches news per symbol and fetches it again once it is too old")
+    void cachesNews() {
+        when(restClient.news(any(), any(), anyInt())).thenReturn(List.of(article("Apple news", "2026-10-12T09:00:00Z")));
+
+        service.news("AAPL");
+        clock.setNow(NOW.plus(MarketDataService.NEWS_MAX_AGE));
+        service.news("AAPL");
+        verify(restClient, times(1)).news(any(), any(), anyInt());
+
+        service.news("MSFT");
+        verify(restClient, times(2)).news(any(), any(), anyInt());
+
+        clock.incrementSeconds(1);
+        service.news("AAPL");
+        verify(restClient, times(3)).news(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("Remembers a failed news call for a while instead of retrying it on every request")
+    void cachesNoNews() {
+        when(restClient.news(any(), any(), anyInt())).thenReturn(List.of());
+
+        assertTrue(service.news("AAPL").isEmpty());
+        assertTrue(service.news("AAPL").isEmpty());
+        verify(restClient, times(1)).news(any(), any(), anyInt());
     }
 }

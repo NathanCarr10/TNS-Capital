@@ -18,10 +18,18 @@ public record AccountResponse(
         @Schema(requiredMode = REQUIRED) Long id,
         @Schema(requiredMode = REQUIRED) String accountNumber,
         @Schema(requiredMode = REQUIRED) String holderName,
+        @Schema(requiredMode = REQUIRED, format = "email") String email,
         @Schema(requiredMode = REQUIRED) BigDecimal cashBalance,
         @Schema(requiredMode = REQUIRED) BigDecimal reservedCash,
         @Schema(requiredMode = REQUIRED) BigDecimal availableCash,
         @Schema(requiredMode = REQUIRED) AccountStatus status,
         @Schema(requiredMode = REQUIRED) Instant openedOn,
         @Schema(requiredMode = REQUIRED) Instant lastUpdated) {
+
+        public AccountResponse(Long id, String accountNumber, String holderName, BigDecimal cashBalance,
+                        BigDecimal reservedCash, BigDecimal availableCash, AccountStatus status, Instant openedOn,
+                        Instant lastUpdated) {
+                this(id, accountNumber, holderName, accountNumber.toLowerCase() + "@example.invalid", cashBalance,
+                                reservedCash, availableCash, status, openedOn, lastUpdated);
+        }
 }

@@ -1,21 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDefined, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsDefined, IsEmail, IsOptional, IsString, Length, Matches } from 'class-validator';
 import { MISSING_CREDENTIALS } from '../../common/validation';
 
 /**
- * Allow-lists, so characters used by script payloads (< > " / = ( )) are
+ * Allow-list, so characters used by script payloads (< > " / = ( )) are
  * rejected. Keep in step with frontend/src/app/core/validation/input-patterns.ts.
  */
-export const USERNAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 export const HOLDER_NAME_PATTERN = /^[\p{L}\p{M}\p{N} .,'-]+$/u;
 
 export class RegisterDto {
-  @ApiProperty({ example: 'trader1', minLength: 3, maxLength: 100, pattern: USERNAME_PATTERN.source })
+  @ApiProperty({ example: 'trader1@example.com', format: 'email', maxLength: 320 })
   @IsDefined({ message: MISSING_CREDENTIALS })
-  @IsString()
-  @Length(3, 100)
-  @Matches(USERNAME_PATTERN, { message: 'username can only contain letters, numbers, dots, underscores and hyphens' })
-  username: string;
+  @IsEmail()
+  @Length(1, 320)
+  email: string;
 
   @ApiProperty({ example: 'password123', format: 'password', minLength: 8 })
   @IsDefined({ message: MISSING_CREDENTIALS })
@@ -23,10 +21,10 @@ export class RegisterDto {
   @Length(8, 256)
   password: string;
 
-  /** Name on the trading account; defaults to the username */
+  /** Name on the trading account; defaults to the part of the email before the "@" */
   @ApiPropertyOptional({
     example: 'Ada Lovelace',
-    description: 'Name on the trading account; defaults to the username',
+    description: 'Name on the trading account; defaults to the part of the email before the "@"',
     pattern: HOLDER_NAME_PATTERN.source,
   })
   @IsOptional()

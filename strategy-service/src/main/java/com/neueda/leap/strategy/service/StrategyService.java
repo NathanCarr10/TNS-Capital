@@ -114,7 +114,7 @@ public class StrategyService {
         Strategy strategy = strategies.save(new Strategy(accountId, request.name().trim(), request.symbol(),
                 request.ruleType(), params, request.quantity()));
         String rule = strategy.rule().describe();
-        log.info("Strategy {} created by {} on account {}: {} {}", strategy.getId(), caller.username(), accountId,
+        log.info("Strategy {} created by {} on account {}: {} {}", strategy.getId(), caller.email(), accountId,
                 request.symbol(), rule);
         return toResponse(strategy);
     }
@@ -139,7 +139,7 @@ public class StrategyService {
         }
         strategy.setStatus(status);
         log.info("Strategy {} switched {} by {}", id, status == StrategyStatus.ACTIVE ? "on" : "off",
-                caller.username());
+                caller.email());
         return toResponse(strategies.save(strategy));
     }
 
@@ -152,7 +152,7 @@ public class StrategyService {
         Strategy strategy = owned(caller, id);
         strategy.setStatus(StrategyStatus.ARCHIVED);
         strategies.save(strategy);
-        log.info("Strategy {} deleted (archived) by {}", id, caller.username());
+        log.info("Strategy {} deleted (archived) by {}", id, caller.email());
     }
 
     /**

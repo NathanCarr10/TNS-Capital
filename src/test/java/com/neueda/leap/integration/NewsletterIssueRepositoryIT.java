@@ -15,12 +15,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.neueda.leap.model.NewsletterIssue;
 import com.neueda.leap.model.NewsletterMover;
-import com.neueda.leap.model.NewsletterNewsItem;
 import com.neueda.leap.repositories.NewsletterIssueRepository;
 
 /**
- * Newsletter issues against the real newsletter_issues table: the movers and
- * news survive the round trip through JSONB, and are stored as readable JSON.
+ * Newsletter issues against the real newsletter_issues table: the movers
+ * survive the round trip through JSONB, and are stored as readable JSON.
  */
 @DisplayName("Newsletter issue storage")
 class NewsletterIssueRepositoryIT extends AbstractIntegrationTest {
@@ -37,13 +36,11 @@ class NewsletterIssueRepositoryIT extends AbstractIntegrationTest {
                 List.of(new NewsletterMover("AAPL", "Apple Inc.", new BigDecimal("200.00"), new BigDecimal("210.00"),
                         new BigDecimal("5.00"))),
                 List.of(new NewsletterMover("TSLA", "Tesla, Inc.", new BigDecimal("250.00"), new BigDecimal("225.00"),
-                        new BigDecimal("-10.00"))),
-                List.of(new NewsletterNewsItem("AAPL", "Apple unveils new chip", "benzinga",
-                        "https://www.benzinga.com/news/1", Instant.parse("2026-10-14T09:30:00Z"))));
+                        new BigDecimal("-10.00"))));
     }
 
     @Test
-    @DisplayName("Reads back the movers and news as they were saved")
+    @DisplayName("Reads back the movers as they were saved")
     void roundTrip() {
         Long id = repository.save(issue(WEEK_START)).getId();
 
@@ -54,17 +51,17 @@ class NewsletterIssueRepositoryIT extends AbstractIntegrationTest {
         assertEquals(expected.getGeneratedAt(), read.getGeneratedAt());
         assertEquals(expected.getGainers(), read.getGainers());
         assertEquals(expected.getLosers(), read.getLosers());
-        assertEquals(expected.getNews(), read.getNews());
     }
 
     @Test
-    @DisplayName("Stores dates as ISO-8601 text in the JSON")
+    @DisplayName("Stores each mover as readable JSON with exact prices")
     void storesReadableJson() {
         repository.save(issue(WEEK_START));
 
-        String news = jdbcTemplate.queryForObject("SELECT news ->> 0 FROM newsletter_issues", String.class);
+        String gainer = jdbcTemplate.queryForObject("SELECT gainers ->> 0 FROM newsletter_issues", String.class);
 
-        assertTrue(news.contains("\"publishedAt\": \"2026-10-14T09:30:00Z\""), news);
+        assertTrue(gainer.contains("\"symbol\": \"AAPL\""), gainer);
+        assertTrue(gainer.contains("\"changePct\": 5.00"), gainer);
     }
 
     @Test
@@ -81,7 +78,8 @@ class NewsletterIssueRepositoryIT extends AbstractIntegrationTest {
     @DisplayName("Refuses a second issue for the same week")
     void oneIssuePerWeek() {
         repository.save(issue(WEEK_START));
+        NewsletterIssue sameWeek = issue(WEEK_START);
 
-        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(issue(WEEK_START)));
+        assertThrows(DataIntegrityViolationException.class, () -> repository.saveAndFlush(sameWeek));
     }
 }

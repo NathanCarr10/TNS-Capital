@@ -53,17 +53,17 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
     void setUp() {
         ownAccount = accountRepository.save(new Account("ACC-U000001", "Trader", new BigDecimal("1000.00"), clock));
         otherAccount = accountRepository.save(new Account("ACC-U000002", "Someone Else", new BigDecimal("500.00"), clock));
-        linkUser("trader", ownAccount);
-        linkUser("someone", otherAccount);
+        linkUser("trader@example.com", ownAccount);
+        linkUser("someone@example.com", otherAccount);
 
         instrumentRepository.save(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true));
         otherOrder = orderRepository.save(new Order(otherAccount.getId(), "AAPL", OrderSide.BUY, 1,
                 new BigDecimal("100.00"), UUID.randomUUID().toString(), clock));
     }
 
-    private void linkUser(String username, Account account) {
-        jdbcTemplate.update("INSERT INTO users (username, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
-                username, account.getId());
+    private void linkUser(String email, Account account) {
+        jdbcTemplate.update("INSERT INTO users (email, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
+                email, account.getId());
     }
 
     private static String cash(String amount) {
@@ -78,7 +78,7 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
 
     @Nested
     @DisplayName("as a user")
-    @WithMockUser(username = "trader", roles = "USER")
+    @WithMockUser(username = "trader@example.com", roles = "USER")
     class AsUser {
 
         @Test

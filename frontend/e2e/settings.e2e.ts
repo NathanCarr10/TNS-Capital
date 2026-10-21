@@ -10,7 +10,7 @@ test.describe('Settings', () => {
     await expect(page).toHaveURL(/\/settings$/);
     const details = page.locator('.details');
     await expect(details).toContainText(trader.holderName);
-    await expect(details).toContainText(trader.username);
+    await expect(details).toContainText(trader.email);
     await expect(details).toContainText('ACTIVE');
     await expect(details.locator('.opened-on')).not.toBeEmpty();
 

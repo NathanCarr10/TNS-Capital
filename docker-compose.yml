@@ -66,9 +66,14 @@ services:
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       # The staff accounts are created from these at startup; nothing is seeded (OWASP A07-4).
-      # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app
+      # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app.
+      # Each signs in with its email, admin@tns-capital.local and support@tns-capital.local by default
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tns-capital.local}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@tns-capital.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env (at least 12 characters)}
       SUPPORT_PASSWORD: ${SUPPORT_PASSWORD:?set SUPPORT_PASSWORD in .env (at least 12 characters, not the ADMIN_PASSWORD)}
+      # Optional local demo trader; the password is hashed at startup and never stored in the image
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: tns_capital
@@ -150,6 +155,8 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+      # Kafka must be up first: a Kafka consumer whose broker name does not resolve yet
+      # fails at startup instead of retrying, and the container exits
       kafka:
         condition: service_healthy
       broker-simulator:
@@ -185,6 +192,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # As for app: the price stream's Kafka consumer cannot start before Kafka exists
       kafka:
         condition: service_healthy
       auth-service:

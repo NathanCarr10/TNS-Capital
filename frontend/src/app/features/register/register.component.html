@@ -1,17 +1,17 @@
 <section class="register-page">
   <div class="register-card">
-    <img class="auth-logo" src="brand/company-logo.png" alt="TNS Capital" />
+    <img class="auth-logo logo-adaptive" src="brand/TNS_Capital_stacked_transparent.png" alt="TNS Capital" />
     <h1>Create Your Account</h1>
     <p>Register to access your account and trading tools.</p>
 
     <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" novalidate>
-      <label for="username">Username</label>
+      <label for="email">Email</label>
       <input
-        id="username"
-        type="text"
-        formControlName="username"
-        autocomplete="username"
-        placeholder="Choose a username"
+        id="email"
+        type="email"
+        formControlName="email"
+        autocomplete="email"
+        placeholder="you@example.com"
       />
 
       <label for="holderName">Account holder name <span>(optional)</span></label>

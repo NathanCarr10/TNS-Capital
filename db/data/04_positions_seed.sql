@@ -17,5 +17,15 @@ INSERT INTO positions (account_id, symbol, quantity, average_cost) VALUES
     ((SELECT id FROM accounts WHERE account_number = 'ACC-1007'), 'TSLA', 11, 248.18),
     ((SELECT id FROM accounts WHERE account_number = 'ACC-1009'), 'TSLA', 8, 244.68),
     ((SELECT id FROM accounts WHERE account_number = 'ACC-1010'), 'AMZN', 15, 180.35),
-    ((SELECT id FROM accounts WHERE account_number = 'ACC-1010'), 'KO', 15, 77.79)
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-1010'), 'KO', 15, 77.79),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'AAPL', 120, 185.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'MSFT', 80, 360.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'GOOGL', 100, 150.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'JPM', 90, 175.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'JNJ', 110, 155.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'XOM', 100, 105.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'SPY', 75, 430.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'VTI', 100, 225.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'TLT', 140, 92.00),
+    ((SELECT id FROM accounts WHERE account_number = 'ACC-DEMO-JANE'), 'GLD', 60, 185.00)
 ON CONFLICT (account_id, symbol) DO NOTHING;

@@ -75,7 +75,7 @@ flowchart LR
 | **Kafka** | Carries order events (`orders`), fills from the broker (`executions`), trade lifecycle events (`trade-events`), each with a `.dlq` topic, and prices (`market-data`: live prices and replayed days, read by the strategy service). An audit consumer stores every trade event in `trade_event_log`. The API creates the topics on startup. |
 | **PostgreSQL** | System of record. The `db/` image creates the schema, views, the services' login roles and seed data on first start. Each service connects with its own least-privilege role (`tns_api`, `tns_auth`, `tns_etl`, `tns_reader`, `tns_strategy`); the `DB_USER` owner is for administrators only. |
 | **ETL** (`etl/`) | Extracts trades every day, transforms them into a star schema and loads them into the `analytics` schema. |
-| **Dashboard** (`dashboard/`) | Streamlit page with business insights (fill rate, most active accounts, exposure, trade volume), read from the live tables or the ETL's `analytics` schema. |
+| **Dashboard** (`dashboard/`) | Streamlit admin dashboard: a Live view of the trading tables (what is happening now, what needs attention), a Batch view of the ETL's `analytics` schema (trends, per-user and strategy reports, data quality) and a Monitoring view. |
 
 ### Order lifecycle
 
@@ -270,7 +270,7 @@ curl http://localhost:4000/health
 source .env
 TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" \
+  -d "{\"email\":\"${ADMIN_EMAIL:-admin@tns-capital.local}\",\"password\":\"$ADMIN_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 
 # Trading API health: public; an admin token adds the details (database, disk)
@@ -282,7 +282,7 @@ curl -s http://localhost:3000/actuator/health -H "Authorization: Bearer $TOKEN"
 # Traders' accounts are support's, not the admin's: log in as support to read one
 SUPPORT_TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d "{\"username\":\"support\",\"password\":\"$SUPPORT_PASSWORD\"}" \
+  -d "{\"email\":\"${SUPPORT_EMAIL:-support@tns-capital.local}\",\"password\":\"$SUPPORT_PASSWORD\"}" \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 curl -s http://localhost:3000/api/v1/accounts/1/balance -H "Authorization: Bearer $SUPPORT_TOKEN"
 # -> {"balance":5000.00,"reservedCash":0.00,"availableCash":5000.00}
@@ -322,6 +322,7 @@ Live prices and price history both come from the [Alpaca market data API](https:
 - **`GET /api/v1/prices/{symbol}`** returns the latest price of an instrument.
 - **`GET /api/v1/prices?symbols=AAPL,MSFT`** returns dashboard quotes for up to 50 instruments: the latest price plus the previous close, daily change and percentage change. Previous closes come from Alpaca snapshots and are cached for 15 minutes. A symbol with no live price is returned with null price fields.
 - **`GET /api/v1/prices/{symbol}/bars?timeframe=1Day&limit=100`** returns the most recent OHLC bars (oldest first) for the candlestick chart. `timeframe` is `15Min`, `1Hour` or `1Day`; `limit` is 1 to 1000. If no bars are available, the API returns `503 MKT-503`.
+- **`GET /api/v1/prices/{symbol}/news`** returns up to 10 headlines about an instrument from the last 7 days, newest first, from Alpaca's News API (Benzinga) with the same keys. The **Trade page** shows them in a scrolling ticker above the breadcrumb, which pauses on hover, keyboard focus or its pause button, and becomes a still list with *Reduce motion* in Settings. News is cached for 5 minutes per symbol, only `https://` links are kept, and headlines are shown as text. Without news or market data keys the list is empty and the ticker is left out.
 - **Positions:** `marketValue` in the position endpoints is the quantity at the latest live price, or `null` when no live price is available.
 - **Setup:** create free API keys at [alpaca.markets](https://alpaca.markets) and set `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` in `.env`. Without keys, the pool is off and orders must include a price.
 - **Free plan limits:** the live feed is IEX only (about 2.5% of US volume), up to 30 streamed symbols, and one stream connection per account, so only one app instance can stream at a time. Set `ALPACA_FEED=sip` on a paid plan for all exchanges.
@@ -329,13 +330,11 @@ Live prices and price history both come from the [Alpaca market data API](https:
 ### Weekly newsletter
 
 Every Friday at 17:00 New York time, after the US market closes, the API publishes a newsletter
-that every signed-in user reads on the **Newsletter** page (`/newsletter`):
+that every signed-in user reads on the **Market Movers** page (`/market-movers`; `/newsletter` redirects there):
 
 - **Movers:** the 5 tradable instruments that rose the most this week and the 5 that fell the
   most, from Alpaca daily bars. A week's change runs from the close before Monday to the latest close.
-- **News:** up to 3 recent headlines about each mover from Alpaca's News API (Benzinga), using the
-  same keys. Only `https://` links are kept, and the page shows headlines as text. Without news the
-  issue is still published; without prices nothing is published and the API logs an error.
+  Without prices nothing is published and the API logs an error.
 - **One issue per week**, stored as a JSONB snapshot in `newsletter_issues` and never changed
   afterwards ([DECISIONS.md](docs/DECISIONS.md) #17).
 - **Support staff can preview** the week so far with **Preview this week's issue** on the page, or
@@ -347,7 +346,7 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
   keep it off in production. To undo a demo locally, delete the row from `newsletter_issues` as the
   database owner.
 - **Schedule:** `NEWSLETTER_CRON` in `.env` (a Spring cron in New York time; `-` switches it off).
-  The number of movers and headlines is set under `newsletter.*` in `application.yml`.
+  The number of movers is set under `newsletter.*` in `application.yml`.
 - **Existing database:** the table is created when the `postgres` volume is new. To add it to an
   existing one without losing data, run as the database owner:
 
@@ -355,6 +354,13 @@ that every signed-in user reads on the **Newsletter** page (`/newsletter`):
   source .env
   docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital < db/tables/13_newsletter_issues.sql
   docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "GRANT SELECT, INSERT ON newsletter_issues TO tns_api;"
+  ```
+
+  A database created before issues became movers-only still has a `news` column, which the API
+  no longer fills. Drop it, or publishing fails:
+
+  ```bash
+  docker compose exec -T postgres psql -U "$DB_USER" -d tns_capital -c "ALTER TABLE newsletter_issues DROP COLUMN IF EXISTS news;"
   ```
 
 ---
@@ -409,13 +415,13 @@ Register your own user instead.
 # 1. Register a user; this also opens a trading account with a zero balance
 curl -s -X POST http://localhost:4000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123","holderName":"Ada Lovelace"}'
-# -> {"id":4,"username":"trader1",...,"accountId":11,"accountNumber":"ACC-U000004"}
+  -d '{"email":"trader1@example.com","password":"password123","holderName":"Ada Lovelace"}'
+# -> {"id":4,"email":"trader1@example.com",...,"accountId":11,"accountNumber":"ACC-U000004"}
 
 # 2. Log in
 TOKEN=$(curl -s -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123"}' \
+  -d '{"email":"trader1@example.com","password":"password123"}' \
   | python3 -c 'import sys, json; print(json.load(sys.stdin)["accessToken"])')
 
 # 3. Deposit cash (use the accountId from step 1)

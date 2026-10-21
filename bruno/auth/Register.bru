@@ -12,7 +12,7 @@ post {
 
 body:json {
   {
-    "username": "{{username}}",
+    "email": "{{email}}",
     "password": "{{password}}"
   }
 }
@@ -28,6 +28,6 @@ assert {
 }
 
 docs {
-  Run once per username. Username needs 3+ characters, password 8+.
-  Optional field: "holderName" (defaults to the username).
+  Run once per email. Email must be a valid address, password 8+ characters.
+  Optional field: "holderName" (defaults to the part of the email before the "@").
 }

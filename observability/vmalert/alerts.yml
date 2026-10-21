@@ -24,7 +24,7 @@ groups:
           owasp: A09-2
         annotations:
           summary: "{{ $value | humanize }} failed logins in 5 minutes."
-          action: "Search the logs for \"Login failed\" to see the usernames and client IPs."
+          action: "Search the logs for \"Login failed\" to see the emails and client IPs."
 
       - alert: AuthRateLimited
         expr: increase(auth_http_responses_total{status="429"}[5m]) > 0
@@ -44,14 +44,25 @@ groups:
           summary: "{{ $value | humanize }} requests to the trading API were refused (401 or 403) in 5 minutes."
           action: "Someone may be probing other traders' accounts. Search the app logs for \"Access denied\"."
 
+      # 500 is a bug, logged at error. 503 is a dependency that is down (no Alpaca price or
+      # bars, Kafka not taking orders), logged at warn, or at error for Kafka.
       - alert: ApiServerErrors
-        expr: sum(increase(http_server_requests_seconds_count{job="api", status=~"5.."}[5m])) > 0
+        expr: sum(increase(http_server_requests_seconds_count{job="api", status=~"5..", status!="503"}[5m])) > 0
         labels:
           severity: warning
           owasp: A09-5
         annotations:
           summary: "The trading API answered {{ $value | humanize }} requests with a server error (SYS-500) in 5 minutes."
-          action: "Search the app logs at level error."
+          action: "Search the app logs at level error for \"Unexpected exception\"."
+
+      - alert: ApiUnavailable
+        expr: sum(increase(http_server_requests_seconds_count{job="api", status="503"}[5m])) > 0
+        labels:
+          severity: warning
+          owasp: A09-5
+        annotations:
+          summary: "The trading API answered {{ $value | humanize }} requests with 503 in 5 minutes: a price, market data or Kafka was unavailable."
+          action: "Use the saved log search \"Unavailable (503)\". With Alpaca off, price and bar lookups get no answer; \"Order could not be queued\" means Kafka is down."
 
   - name: order-pipeline
     interval: 30s
