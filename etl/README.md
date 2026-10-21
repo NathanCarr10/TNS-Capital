@@ -9,6 +9,9 @@ accounts, instruments, orders ──► EXTRACT ──► TRANSFORM ──► LO
 (the app's tables)                                                   analytics.dim_instrument
                                                                      analytics.dim_date
                                                                      analytics.fact_trades
+                                                                     analytics.etl_rejected_orders
+
+Alpaca daily bars ───────────────► EXTRACT ──► TRANSFORM ──► LOAD ──► analytics.fact_daily_prices
 ```
 
 ## Files
@@ -16,9 +19,9 @@ accounts, instruments, orders ──► EXTRACT ──► TRANSFORM ──► LO
 | File | What it does |
 |---|---|
 | [extract.py](extract.py) | **Extract**: reads accounts, instruments and orders from PostgreSQL into DataFrames |
-| [transform.py](transform.py) | **Transform**: cleans the orders, removes invalid ones and builds the four reporting tables |
-| [load.py](load.py) | **Load**: saves the tables into the `analytics` schema in one transaction |
-| [pipeline.py](pipeline.py) | Runs the three stages in order, with retries, error handling and a daily schedule |
+| [transform.py](transform.py) | **Transform**: cleans the orders, sets invalid ones aside with the rule they broke, and builds the reporting tables |
+| [load.py](load.py) | **Load**: saves the tables into the `analytics` schema in one transaction, and replaces `etl_rejected_orders` with this run's rejects |
+| [pipeline.py](pipeline.py) | Runs the trade stages and then the price stages, with retries, error handling and a daily schedule |
 | [config.py](config.py) | Settings, such as the database connection, schedule time and retry count |
 | [schema.sql](schema.sql) | Creates the `analytics` tables if they don't exist |
 | [tests/](tests/) | Unit tests, plus integration tests that need a database |
@@ -36,8 +39,9 @@ accounts, instruments, orders ──► EXTRACT ──► TRANSFORM ──► LO
   transaction, so a failed load saves nothing.
 - **Retry:** if the database can't be reached, `with_retry()` tries again up to 3 times,
   waiting 2s and then 4s between tries.
-- **Scheduled:** `python pipeline.py --schedule` runs it every day at 02:00. It runs as the
-  `etl` service in `docker-compose.yml`.
+- **Scheduled:** `python pipeline.py --schedule` runs it every day at `ETL_SCHEDULE_TIME`
+  (default 02:00, in the container's time zone, UTC). It runs as the `etl` service in
+  `docker-compose.yml`.
 
 ## Running it
 
@@ -50,9 +54,16 @@ python pipeline.py --schedule    # run every day at ETL_SCHEDULE_TIME
 python -m pytest                 # run the unit tests
 ```
 
-The database password is read from the repo's `.env` file. With Docker, run
-`docker-compose up -d etl`. The source tables are created by the Spring app, so the `app`
-service needs to be running too.
+The database user and password are read from the repo's `.env` file. With Docker, the `etl`
+service starts with the stack and waits for its daily run. To run it once straight away, for
+example to load the price history after a fresh start:
+
+```bash
+docker compose run --rm etl python pipeline.py
+```
+
+The source tables are created by the `postgres` image from `db/`, so only the `postgres` service
+needs to be running. In Docker the ETL connects as its own least-privilege role, `tns_etl`.
 
 ### Settings
 

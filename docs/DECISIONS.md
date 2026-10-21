@@ -16,7 +16,7 @@ be explained at the showcase and revisited later.
 | 8 | No TLS, SASL or Kafka ACLs in the local stack | §5 | Deployment concern |
 | 9 | Trading API contract generated from the code; the committed copy is checked by `ApiContractIT` | §9.2 task 2 | In place |
 | 10 | Separate SUPPORT and ADMIN roles: support works on traders' accounts in the trading app, admins run analytics and operations | §22 | Team decision |
-| 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
+| 11 | Accepted vulnerabilities: two Spring CVEs until the Spring Boot 4 upgrade, one Pillow CVE until Streamlit allows Pillow 13 | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
@@ -151,14 +151,15 @@ and are kept apart, so neither one does the other's job:
 | Role | Where | Can do |
 |---|---|---|
 | `USER` | Trading app | Only the account opened when they registered |
-| `SUPPORT` | Trading app (account viewer) | View every account and order read-only; suspend or reactivate accounts; open accounts; add and change instruments; review, replay and dismiss dead letters (the DLQ endpoints) |
+| `SUPPORT` | Trading app (account viewer) | View every account and order read-only; suspend or reactivate accounts; open accounts; add and change instruments; answer and close support conversations; review, replay and dismiss dead letters (the DLQ endpoints) |
 | `ADMIN` | Analytics dashboard (`/analytics/`) | The analytics dashboard, the DLQ endpoints (shared with support), the actuator's metrics, info and health details (observability) |
 
 An admin is not support: the trading API gives `ADMIN` no access to traders' accounts, and the
 Angular app sends an admin who signs in there to the analytics dashboard (`notAdminGuard`).
 Support is turned away by the analytics dashboard. The auth service creates both accounts at
-startup, `admin` from `ADMIN_PASSWORD` and `support` from `SUPPORT_PASSWORD`, refuses the same
-password for both, and never changes an existing user's role. A user holds one role
+startup, the admin (`ADMIN_EMAIL`, default `admin@tns-capital.local`) from `ADMIN_PASSWORD` and
+the support user (`SUPPORT_EMAIL`, default `support@tns-capital.local`) from `SUPPORT_PASSWORD`,
+refuses the same password for both, and never changes an existing user's role. A user holds one role
 (`users.role`).
 
 `STRATEGY` is a service role, never a user's: only the strategy service's client-credentials
@@ -169,10 +170,16 @@ in the analytics dashboard only.
 
 ## 11. Accepted vulnerabilities
 
-`.trivyignore` accepts CVE-2026-47884 (XSLT views) and CVE-2026-47890 (Server-Sent Events) in
-`spring-webmvc` 6.2.19. The API uses neither feature, and the only fixes are in Spring 7
-(Spring Boot 4), a major upgrade to plan separately. Each entry has an owner and a review
-date.
+`.trivyignore` accepts three findings. Each entry has an owner and a review date.
+
+- **CVE-2026-47884 and CVE-2026-47890** in `spring-webmvc` 6.2.19: flaws in XSLT views and in
+  Server-Sent Events rendered through views. The API has no XSLT views, and its only SSE
+  endpoint (the support chat's `/api/v1/support/conversations/{id}/events`) sends plain strings
+  and JSON, never a view. The only fixes are in Spring 7 (Spring Boot 4), a major upgrade to
+  plan separately.
+- **CVE-2026-112403** in Pillow 12.3.0, pulled in by Streamlit for the dashboard: a flaw in the
+  JPEG decoder. The dashboard decodes no images from users. The fix is only in Pillow 13, which
+  no Streamlit release accepts yet; upgrade once one does.
 
 ## 12. Admin analytics sign-in
 
@@ -297,8 +304,9 @@ need 0.8–1.5 GB: Prometheus (~300 MB), Grafana (~200 MB), Loki (300–500 MB) 
   behind the admin sign-in it already has. No second UI with its own users or published port.
 - **No tracing.** A tracing backend and a tracer in each JVM would cost more than the rest of the
   stack together. The fill time histogram and the consumer lag show where an order is waiting.
-- **Off by default** (Compose profile `observability`), as it costs ~90 MB measured, 400 MB at
-  its limits.
+- **Its own Compose profile** (`observability`): about 90 MB measured, 400 MB at its limits.
+  `.env.example` turns it on with `COMPOSE_PROFILES=observability`; removing that line leaves it
+  out, and the CI end-to-end stack runs without it.
 
 The stack closes OWASP A09-5: alerts on reused refresh tokens (A09-1), failed login spikes
 (A09-2), refused and failing API requests, and dead letters waiting for review (A09-4).

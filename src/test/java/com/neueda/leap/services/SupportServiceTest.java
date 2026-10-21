@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,6 +74,42 @@ class SupportServiceTest {
     }
 
     @Test
+    void customerCannotReadPostToOrFollowAnotherCustomersConversation() {
+        signInAs("trader2@example.com", "ROLE_USER");
+        SupportMessageRequest reply = new SupportMessageRequest("Let me in");
+
+        assertThrows(AccessDeniedException.class, () -> service.messages(conversationId));
+        assertThrows(AccessDeniedException.class, () -> service.addMessage(conversationId, reply));
+        assertThrows(AccessDeniedException.class, () -> service.subscribe(conversationId));
+        verify(messages, never()).save(any());
+    }
+
+    @Test
+    void adminIsNotSupportForConversations() {
+        signInAs("admin@tns-capital.local", "ROLE_ADMIN");
+
+        assertThrows(AccessDeniedException.class, () -> service.messages(conversationId));
+        assertThrows(AccessDeniedException.class, () -> service.closeConversation(conversationId));
+    }
+
+    @Test
+    void customerListsOnlyTheirOwnConversations() {
+        signInAs("trader1@example.com", "ROLE_USER");
+        when(conversations.findByCustomerEmailOrderByUpdatedAtDesc("trader1@example.com")).thenReturn(List.of(conversation));
+
+        assertEquals(List.of(conversation), service.listConversations());
+        verify(conversations, never()).findAllByOrderByUpdatedAtDesc();
+    }
+
+    @Test
+    void customerCannotReadOrClearSupportNotifications() {
+        signInAs("trader1@example.com", "ROLE_USER");
+
+        assertThrows(AccessDeniedException.class, service::unreadSupportNotifications);
+        assertThrows(AccessDeniedException.class, service::markSupportNotificationsRead);
+    }
+
+    @Test
     void messageCreatesSupportNotification() {
         SupportMessage saved = new SupportMessage(conversationId, "support@tns-capital.local", SupportMessage.SenderRole.SUPPORT,
                 "We are looking into this", CREATED_AT);
@@ -84,5 +121,10 @@ class SupportServiceTest {
         verify(notifications).save(notification.capture());
         assertEquals("CUSTOMER", notification.getValue().getRecipientRole());
         assertEquals("trader1@example.com", notification.getValue().getRecipientEmail());
+    }
+
+    private static void signInAs(String email, String role) {
+        SecurityContextHolder.getContext().setAuthentication(
+            new TestingAuthenticationToken(email, "password", List.of(new SimpleGrantedAuthority(role))));
     }
 }

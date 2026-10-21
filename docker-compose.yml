@@ -300,8 +300,8 @@ services:
   # Monitoring stack, shown in the admin dashboard's Monitoring view. Profile "observability":
   # starts with the rest when .env sets COMPOSE_PROFILES=observability (as .env.example does),
   # or on request with: docker compose --profile observability up -d
-  # About 150-200 MB in all. None of it publishes a port: the dashboard is the only UI, and
-  # it is admins only (observability/README.md).
+  # About 90 MB measured, at most 400 MB by the memory limits. None of it publishes a port:
+  # the dashboard is the only UI, and it is admins only (observability/README.md).
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.153.0
     profiles: [observability]

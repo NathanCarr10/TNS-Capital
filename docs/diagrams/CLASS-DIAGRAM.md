@@ -17,13 +17,17 @@ classDiagram
         -Long id
         -String accountNumber
         -String holderName
+        -String email
         -BigDecimal cashBalance
+        -BigDecimal reservedCash
         -AccountStatus status
         -Integer version
         -Instant openedOn
         -Instant lastUpdated
         +debit(BigDecimal amount)
         +credit(BigDecimal amount)
+        +reserve(BigDecimal amount)
+        +release(BigDecimal amount)
         +isActive() boolean
     }
 
@@ -47,14 +51,18 @@ classDiagram
         -String idempotencyKey
         -Instant createdOn
         -String statusReason
+        -boolean reserved
     }
 
     class Position {
         -Long accountId
         -String symbol
         -Integer quantity
+        -Integer reservedQuantity
         -BigDecimal averageCost
         +apply(Integer quantity, BigDecimal price)
+        +reserve(int shares)
+        +release(int shares)
         +marketValue(BigDecimal currentPrice) BigDecimal
     }
 
@@ -105,6 +113,9 @@ classDiagram
 
 - `Account.debit` throws `InsufficientFundsException` rather than letting the balance go below
   zero; `version` is the optimistic lock (NFR-02).
+- `reserve` and `release` hold cash (`Account.reservedCash`) or shares
+  (`Position.reservedQuantity`) for an accepted order until it fills, is rejected or is
+  cancelled; `Order.reserved` says whether the order still holds them (`ReservationService`).
 - `Position.apply` adds a fill to the holding and recomputes `averageCost`; a negative quantity
   is a sale.
 - An `Order` is `NEW` from the moment the API accepts it until the broker's fill settles it
@@ -210,7 +221,7 @@ classDiagram
 Every custom exception extends the abstract `TradingException`, which carries the spec error
 code (§21). `GlobalExceptionHandler` returns that code with an HTTP status and a fixed, safe
 message. The code's prefix names the part of the domain that failed (`ACC`, `INS`, `ORD`, `POS`,
-`PRC`/`MKT`, `BRK`, `SYS`). The two Kafka wrappers, `NonRetryableOrderException` and
+`PRC`/`MKT`, `NWS`, `BRK`, `SYS`). The two Kafka wrappers, `NonRetryableOrderException` and
 `SettlementException`, keep the code of the failure they wrap.
 
 The exceptions extend `TradingException` directly. `Throwable`, `Exception` and
@@ -243,6 +254,10 @@ classDiagram
     TradingException <|-- PositionNotFoundException
     TradingException <|-- PriceUnavailableException
     TradingException <|-- MarketDataUnavailableException
+    TradingException <|-- ReplayInProgressException
+    TradingException <|-- ReplayNotFoundException
+    TradingException <|-- NewsletterNotFoundException
+    TradingException <|-- NewsletterPublishingDisabledException
     TradingException <|-- OrderPublishException
     TradingException <|-- BrokerUnavailableException
     TradingException <|-- NonRetryableOrderException
@@ -262,6 +277,10 @@ classDiagram
 | `ORD-422` | 422 | `LimitNotMarketableException`: a BUY limit below the live price or a SELL limit above it |
 | `POS-404` | 404 | `PositionNotFoundException` |
 | `PRC-503`, `MKT-503`, `SYS-503` | 503 | `PriceUnavailableException`, `MarketDataUnavailableException`, `OrderPublishException` |
+| `MKT-409` | 409 | `ReplayInProgressException`: a market replay is already running |
+| `MKT-404` | 404 | `ReplayNotFoundException`: no bars for the requested day, or no replay is running |
+| `NWS-404` | 404 | `NewsletterNotFoundException` |
+| `NWS-403` | 403 | `NewsletterPublishingDisabledException`: early publishing is switched off |
 | `SYS-409` | 409 | Spring's `OptimisticLockingFailureException`: two requests changed the same account at once, and its `version` column (NFR-02) refused the later one |
 | `BRK-503` (internal) | | `BrokerUnavailableException`: the order is stored as REJECTED and can be replayed from the DLQ |
 | cause's code (internal) | | `NonRetryableOrderException`, `SettlementException`: raised in the Kafka consumers, where they decide whether an order goes to the DLQ |

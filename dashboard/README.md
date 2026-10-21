@@ -16,7 +16,7 @@ the whole history, with trends, the per-user report, market prices and the ETL's
 
 ## Admins only
 
-The dashboard shows every user's trades, so only admins can open it. The page asks for a
+The dashboard shows every user's trades, so only admins can open it. The page asks for an
 email and password and signs in through the auth service (`POST /auth/login`). It then
 checks the access token itself, the same checks the auth service's guard makes: HS256
 signature with the shared `JWT_SECRET`, issuer `urn:tns-capital:auth-service`, `typ` "access"
@@ -30,7 +30,8 @@ The sidebar switches between the [Live](#live), [Batch](#batch) and [Monitoring]
 Admins who sign in through the Angular trading app are sent here. The admin signs in here
 separately, as Streamlit cannot read the Angular app's token; see decision 12.
 
-The admin is `admin`, with the `ADMIN_PASSWORD` from `.env`.
+The admin signs in as `ADMIN_EMAIL` (default `admin@tns-capital.local`) with the `ADMIN_PASSWORD`
+from `.env`.
 
 ### Staying signed in
 
@@ -123,6 +124,7 @@ query. `monitoring.py` holds the queries and turns the answers into DataFrames;
 | [live_page.py](live_page.py) | The Live view |
 | [batch_page.py](batch_page.py) | The Batch view |
 | [formats.py](formats.py) | How both views write money, percentages and durations |
+| [theme.py](theme.py) | Styles the page to match the trading app, and adds the sidebar logo |
 | [monitoring.py](monitoring.py) | Queries the monitoring stack: PromQL, alerts, LogsQL |
 | [monitoring_page.py](monitoring_page.py) | The Monitoring view |
 | [tests/](tests/) | pytest unit tests for every insight function |
@@ -133,7 +135,7 @@ With Docker, it runs as the `dashboard` service: `docker compose up -d dashboard
 open it through the trading app at http://localhost:8086/analytics/, or directly at
 http://localhost:8501/analytics/ (change the port with `DASHBOARD_PORT`). The `/analytics` base path
 is set in [.streamlit/config.toml](.streamlit/config.toml) so the app's nginx can forward that path here. Run the ETL once
-(`python etl/pipeline.py`) to fill the batch source.
+(`docker compose run --rm etl python pipeline.py`) to fill the Batch view.
 
 Locally:
 

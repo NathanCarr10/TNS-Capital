@@ -17,8 +17,8 @@ Trading API (settlement)  <--- executions topic --------+  ExecutionEvent
 `POST /api/v1/orders`
 
 ```json
-{ "orderId": "4f63fed9-6d52-424b-844b-504313595bb9", "accountId": 11, "symbol": "ACME",
-  "side": "BUY", "quantity": 10, "limitPrice": 30.00, "marketPrice": 29.87 }
+{ "orderId": "4f63fed9-6d52-424b-844b-504313595bb9", "accountId": 11, "symbol": "AAPL",
+  "side": "BUY", "quantity": 10, "limitPrice": 250.00, "marketPrice": 249.87 }
 ```
 
 `marketPrice` is optional: the trading API sends its live price when it has one.
@@ -46,8 +46,8 @@ invalid order. The fill arrives later on Kafka, not in this response.
 Keyed by account ID (so one account's fills arrive in order), 3 partitions:
 
 ```json
-{ "executionId": "…", "orderId": "…", "accountId": 11, "symbol": "ACME", "side": "BUY",
-  "quantity": 10, "price": 29.91, "venue": "SIM", "executedOn": "2026-10-12T10:00:01.234Z" }
+{ "executionId": "…", "orderId": "…", "accountId": 11, "symbol": "AAPL", "side": "BUY",
+  "quantity": 10, "price": 249.87, "venue": "SIM", "executedOn": "2026-10-12T10:00:01.234Z" }
 ```
 
 ## Running and testing

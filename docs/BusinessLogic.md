@@ -1,6 +1,6 @@
-# TNS Capital - Architecture & Design Documentation
+# Sprint 5 Domain Design
 
-This folder contains architectural and design diagrams for the TNS Capital trading system.
+This document holds the original domain design diagrams for the TNS Capital trading system.
 
 > **Sprint 5 design.** The diagrams below are the domain design from Sprint 5, before the
 > Spring Boot API and Kafka existed: they show an order validated, paid for and filled in one

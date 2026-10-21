@@ -16,11 +16,16 @@ erDiagram
     INSTRUMENTS ||--o{ STRATEGIES : "traded by"
     STRATEGIES ||--o{ STRATEGY_SIGNALS : "fired"
     STRATEGY_SIGNALS |o--o| ORDERS : "placed"
+    USERS ||--o{ SUPPORT_CONVERSATIONS : "opens"
+    SUPPORT_CONVERSATIONS ||--o{ SUPPORT_MESSAGES : "contains"
+    USERS ||--o{ SUPPORT_MESSAGES : "sends"
+    SUPPORT_MESSAGES ||--o{ SUPPORT_NOTIFICATIONS : "notifies"
 
     ACCOUNTS {
         BIGINT id PK "generated identity"
         VARCHAR(32) account_number UK "business identifier, e.g. ACC-1001"
         VARCHAR(255) holder_name
+        VARCHAR(320) email "the owner's email; seeded accounts get a placeholder"
         NUMERIC(18-2) cash_balance "CHECK >= 0"
         NUMERIC(18-2) reserved_cash "held for accepted BUY orders, <= cash_balance"
         VARCHAR(20) status "ACTIVE | SUSPENDED | CLOSED"
@@ -159,6 +164,42 @@ erDiagram
         VARCHAR detail
         TIMESTAMP created_on
     }
+
+    SUPPORT_CONVERSATIONS {
+        UUID id PK
+        VARCHAR(320) customer_email FK "users.email"
+        VARCHAR(120) subject
+        VARCHAR(20) status "OPEN | CLOSED"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    SUPPORT_MESSAGES {
+        BIGINT id PK
+        UUID conversation_id FK "ON DELETE CASCADE"
+        VARCHAR(320) sender_email FK "users.email"
+        VARCHAR(20) sender_role "CUSTOMER | SUPPORT"
+        VARCHAR(4000) body
+        TIMESTAMP created_at
+    }
+
+    SUPPORT_NOTIFICATIONS {
+        BIGINT id PK
+        VARCHAR(20) recipient_role "CUSTOMER | SUPPORT"
+        VARCHAR(320) recipient_email FK "NULL for the support team"
+        UUID conversation_id FK
+        BIGINT message_id FK
+        TIMESTAMP created_at
+        TIMESTAMP read_at "NULL until read"
+    }
+
+    NEWSLETTER_ISSUES {
+        BIGINT id PK
+        DATE week_start UK "a Monday: one issue per week"
+        TIMESTAMP generated_at
+        JSONB gainers "top gainers, best first"
+        JSONB losers "top losers, worst first"
+    }
 ```
 
 ## Notes
@@ -188,4 +229,11 @@ erDiagram
   `v_order_history`, `v_account_summary`) join these tables for dashboards. The
   ETL pipeline loads a star schema into the separate `analytics` schema
   (`dim_account`, `dim_instrument`, `dim_date`, `fact_trades`, plus
-  `etl_rejected_orders`); see `etl/schema.sql`.
+  `etl_rejected_orders` and the daily prices in `fact_daily_prices`); see `etl/schema.sql`.
+- **Strategy Lab.** The strategy service owns `strategies` and `strategy_signals`; a signal
+  records the order it placed without a foreign key, as orders belong to the trading API.
+- **Support chat.** `support_conversations`, `support_messages` and `support_notifications`
+  hold traders' conversations with support, keyed by the users' emails. Deleting a
+  conversation deletes its messages and notifications.
+- **Newsletter.** `newsletter_issues` keeps one immutable issue per week, its movers stored as
+  JSONB snapshots (docs/DECISIONS.md #17).
