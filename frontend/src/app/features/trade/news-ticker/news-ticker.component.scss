@@ -1,0 +1,156 @@
+// As wide as the page, never as wide as the cards: the Trade page is a grid,
+// and a grid item would otherwise grow to fit the whole row and widen the page
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.news {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  // Lets each copy of the cards be at least as wide as the row (100cqi)
+  container-type: inline-size;
+}
+
+.label {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.viewport {
+  overflow: hidden;
+  // Fade the edges so cards slide in and out rather than being cut off
+  mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: news-scroll var(--news-duration, 48s) linear infinite;
+}
+
+// Pause so a moving headline can be read or clicked
+.viewport:hover .track,
+.viewport:focus-within .track {
+  animation-play-state: paused;
+}
+
+.cards {
+  --card-gap: 0.75rem;
+
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(14rem, 18rem);
+  gap: var(--card-gap);
+  // On a page wider than the cards the copies still follow each other without a jump
+  min-width: 100cqi;
+  margin: 0;
+  // The trailing gap keeps the space between the copies the same as between cards,
+  // so moving by half the track lands exactly on the start of the copy
+  padding: 0 var(--card-gap) 0.25rem 0;
+  list-style: none;
+
+  li {
+    display: flex;
+  }
+}
+
+.news-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+
+    .headline {
+      text-decoration: underline;
+    }
+  }
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.headline {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+@keyframes news-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+// No motion: a still row the user can scroll sideways, without the looping copy.
+// The app's own setting wins; until it is set, the system preference decides.
+@mixin still-row {
+  .viewport {
+    overflow-x: auto;
+    mask-image: none;
+    scroll-snap-type: x proximity;
+  }
+
+  .track {
+    animation: none;
+  }
+
+  .cards {
+    min-width: 0;
+    padding-right: 0;
+
+    &[aria-hidden='true'] {
+      display: none;
+    }
+
+    li {
+      scroll-snap-align: start;
+    }
+  }
+
+  .news-card {
+    transition: none;
+  }
+}
+
+:host-context(:root[data-motion='reduced']) {
+  @include still-row;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :host-context(:root:not([data-motion='normal'])) {
+    @include still-row;
+  }
+}

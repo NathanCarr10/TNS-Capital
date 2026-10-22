@@ -24,7 +24,8 @@ sequenceDiagram
     UI->>API: POST /api/v1/orders (JWT, idempotencyKey)
     API->>API: AccountAccessGuard: the account is the caller's
     API->>OS: submitOrder(request)
-    OS->>DB: account and instrument exist?
+    OS->>DB: account exists and ACTIVE, instrument exists and tradable?
+    OS->>OS: limit marketable at the live price? (BUY limit >= market)
     OS->>DB: insert order, status NEW
     OS->>K: OrderEvent to "orders" (waits for the ack)
     API-->>UI: 202 Accepted, orderId
@@ -35,17 +36,18 @@ sequenceDiagram
     K->>OL: OrderEvent
     OL->>OS: processOrderEvent(event)
     OS->>OS: OrderValidator: account ACTIVE, instrument tradable
-    OS->>OS: checkAffordable: cash >= 2 x $100
-    OS->>B: POST /api/v1/orders
+    OS->>DB: lock the account, reserve 2 x $100 of its available cash
+    OS->>B: POST /api/v1/orders (limit $100, live market price)
     B-->>OS: 202 Accepted
     Note over B: simulated market delay (0.5 to 2 s)
-    B->>K: ExecutionEvent to "executions" (fill price at or below the limit)
+    B->>K: ExecutionEvent to "executions" (fill at the market price, never above the limit)
 
     K->>EL: ExecutionEvent
     EL->>OS: settleExecution(fill)
     rect rgba(127, 127, 127, 0.12)
         Note over OS,DB: one transaction, the order row locked
         OS->>DB: order still NEW?
+        OS->>OS: release the reserved 2 x $100
         OS->>OS: BuyOrderStrategy: Account.debit(cost)
         OS->>OS: Position.apply(+2, fill price)
         OS->>DB: save account, position, execution, order FILLED, order history
@@ -60,8 +62,11 @@ sequenceDiagram
   answers `409 ORD-409`, so a retried request cannot place the order twice.
 - **Audit (NFR-04):** every status change is published to `trade-events`, and
   `TradeEventAuditListener` stores it in `trade_event_log` (`GET /api/v1/orders/{id}/events`).
-- **Fail fast:** an unknown account or instrument is refused before anything is stored
-  (`404 ACC-404` / `INS-404`). If Kafka cannot take the order, it is stored `REJECTED` and the API
+- **Fail fast:** an unknown account or instrument, an account that is not `ACTIVE` or an
+  instrument that is not tradable is refused before anything is stored (`404 ACC-404`,
+  `403 ACC-403`, `404 INS-404`), and so is a limit that would not fill at the live price
+  (`422 ORD-422`: limit orders are immediate-or-cancel, DECISIONS #4). The Trade Executor checks again, in case either changes
+  while the order waits. If Kafka cannot take the order, it is stored `REJECTED` and the API
   answers `503 SYS-503`.
 
 ## 2. A SELL, and an order that is rejected
@@ -83,7 +88,7 @@ sequenceDiagram
 
     K->>OL: OrderEvent (SELL 5 MSFT, 3 held)
     OL->>OS: processOrderEvent(event)
-    OS->>OS: checkAffordable: held 3 < 5
+    OS->>OS: reserve 5 shares: 3 available < 5
     OS->>DB: order REJECTED, statusReason "Insufficient holdings"
     OS->>K: TradeEvent REJECTED to "trade-events"
     OS-->>OL: InsufficientHoldingsException
@@ -100,9 +105,10 @@ sequenceDiagram
 - **Retryable or not:** a missing account or instrument is `NonRetryableOrderException`, so its
   DLQ entry is marked non-retryable; a broker outage (`BrokerUnavailableException`) can be
   replayed once the broker is back.
-- **At settlement:** the funds or holdings are checked again inside the settlement transaction.
-  If they changed while the broker worked (for example, the trader withdrew cash), the fill is
-  recorded as `REJECTED` instead of overdrawing the account.
+- **Reservations:** an accepted order holds its cash or shares until it is filled, cancelled or
+  rejected, so a second order (or a withdrawal) only sees what is left and is the one refused;
+  the fill of the first one always settles. A rejection releases the hold, and a DLQ replay
+  reserves it again.
 
 ## 3. Cancelling an open order
 
@@ -121,6 +127,7 @@ sequenceDiagram
     API->>OS: cancelOrder(id)
     OS->>DB: lock the order row: still NEW?
     alt still NEW
+        OS->>DB: release its reserved cash or shares
         OS->>DB: order CANCELLED, order history
         OS-->>API: CANCELLED
         API-->>UI: 200, status CANCELLED
@@ -137,4 +144,5 @@ sequenceDiagram
 
 Both `cancelOrder` and `settleExecution` lock the order row, so a cancel and a fill can never
 both win: whichever takes the lock first decides, and the other sees the order is no longer
-`NEW`. Cash is only moved at settlement, so a cancelled order never spends anything.
+`NEW`. Cash is only moved at settlement, so a cancelled order never spends anything, and
+cancelling gives back what it reserved.

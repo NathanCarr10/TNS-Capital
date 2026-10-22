@@ -7,11 +7,11 @@ import com.neueda.leap.kafka.events.OrderEvent;
  * first), so the order was stored as REJECTED. Carries the order as an
  * OrderEvent so it can be captured in the DLQ and replayed.
  */
-public class SettlementException extends RuntimeException {
+public class SettlementException extends TradingException {
     private final transient OrderEvent orderEvent;
 
     public SettlementException(OrderEvent orderEvent, RuntimeException cause) {
-        super(cause.getMessage(), cause);
+        super(errorCodeOf(cause), cause.getMessage(), cause);
         this.orderEvent = orderEvent;
     }
 

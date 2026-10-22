@@ -1,0 +1,21 @@
+meta {
+  name: Get Issue
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{apiUrl}}/api/v1/newsletters/{{newsletterId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  One issue: the week's top gainers and losers.
+  Run List Issues first to set newsletterId. Returns 404 (NWS-404) for an
+  unknown id.
+}

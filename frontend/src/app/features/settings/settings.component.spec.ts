@@ -15,14 +15,14 @@ describe('SettingsComponent', () => {
   let fixture: ComponentFixture<SettingsComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
 
-  const create = (isAdmin = false): HTMLElement => {
+  const create = (isSupport = false): HTMLElement => {
     TestBed.configureTestingModule({
       imports: [SettingsComponent],
       providers: [
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     fixture = TestBed.createComponent(SettingsComponent);
@@ -51,13 +51,14 @@ describe('SettingsComponent', () => {
     tradingService = tradingServiceStub();
   });
 
-  it('shows the account number, holder, username, status and dates', () => {
+  it('shows the account number, holder, email, status and dates', () => {
     const element = create();
     const text = element.querySelector('.details')!.textContent!;
 
     expect(text).toContain('ACC-U000011');
     expect(text).toContain('Trader One');
-    expect(text).toContain('trader1');
+    expect(text).not.toContain('Username');
+    expect(text).toContain('ada@example.com');
     expect(text).toContain('ACTIVE');
     expect(element.querySelector('.opened-on')?.textContent).toContain('Sep 1, 2026');
     expect(element.querySelector('.last-updated')?.textContent).toContain('Oct 13, 2026');
@@ -136,12 +137,12 @@ describe('SettingsComponent', () => {
     expect(tradingService.updateAccount).not.toHaveBeenCalled();
   });
 
-  it('tells admins they have no account of their own', () => {
+  it('tells support staff they have no account of their own', () => {
     tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
 
     const element = create(true);
 
-    expect(element.querySelector('.note')?.textContent).toContain('Admins have no trading account');
+    expect(element.querySelector('.note')?.textContent).toContain('Support staff have no trading account');
     expect(element.querySelector('.details')).toBeNull();
   });
 });

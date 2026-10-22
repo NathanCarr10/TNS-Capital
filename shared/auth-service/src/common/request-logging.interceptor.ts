@@ -5,7 +5,7 @@ import type { AccessTokenPayload } from '../auth/token.service';
 
 /**
  * Logs one line per request: method, path, status, time taken and, once
- * JwtAuthGuard has verified a token, the username.
+ * JwtAuthGuard has verified a token, the token's subject (the user's email).
  *
  * Bodies and headers are never logged, so passwords and tokens stay out of
  * the logs. Failed credential checks (401 on /auth/login) are logged as

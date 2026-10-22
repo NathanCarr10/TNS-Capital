@@ -14,13 +14,16 @@ be explained at the showcase and revisited later.
 | 6 | Analytics in a PostgreSQL `analytics` schema, not Snowflake | §4.2, §18.2 | To confirm with tutor |
 | 7 | Jenkins instead of GitHub Actions | §4.1 | In place |
 | 8 | No TLS, SASL or Kafka ACLs in the local stack | §5 | Deployment concern |
-| 9 | Trading API contract generated live, not a hand-written OpenAPI file | §9.2 task 2 | In place |
-| 10 | Only admins open accounts and manage instruments | §22 | Team decision |
-| 11 | Two Spring CVEs accepted until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
+| 9 | Trading API contract generated from the code; the committed copy is checked by `ApiContractIT` | §9.2 task 2 | In place |
+| 10 | Separate SUPPORT and ADMIN roles: support works on traders' accounts in the trading app, admins run analytics and operations | §22 | Team decision |
+| 11 | Accepted vulnerabilities: two Spring CVEs until the Spring Boot 4 upgrade, one Pillow CVE until Streamlit allows Pillow 13 | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
 | 15 | The auth service runs on Node.js 22 LTS, not 20 | §4.2 | In place |
+| 16 | Strategy Lab: automated strategy execution in its own service | §13.2 | Team decision |
+| 17 | Newsletter issues stored as JSONB snapshots, not child tables | — (newsletter story) | Team decision |
+| 18 | Monitoring on VictoriaMetrics, VictoriaLogs and the Streamlit dashboard; no Grafana or tracing | §22 (observability) | In place |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -48,7 +51,8 @@ idempotency keys are still rejected synchronously (404, 422, 409).
 An order that fails after it was accepted (insufficient funds or holdings at the limit or
 fill price, inactive account, broker unreachable) is stored as `REJECTED` with a reason,
 published as a trade event, and captured in `dlq_messages` with an `is_retryable` flag. There
-are no automatic Kafka retries. Admins review and replay messages through `/api/v1/dlq`.
+are no automatic Kafka retries. Admins and support review, replay and dismiss messages through
+`/api/v1/dlq`; support does so on the trading app's Dead Letters page.
 
 Why: chosen by the team (PR #72) so every failure is visible and auditable, and so a
 business failure (e.g. insufficient funds) is never retried blindly.
@@ -61,10 +65,30 @@ each is filled in full at or better than its limit price and published to the `e
 topic. If a real broker simulator is supplied, only `BrokerSimulatorClient` (the HTTP call)
 and the `ExecutionEvent` contract need to change.
 
-Settlement re-checks funds and holdings at the fill price, because another order may have
-used them while the broker worked this one; funds are not reserved when the order is
-accepted. A fill for an order that was cancelled meanwhile is ignored. A real broker would
-also need to be told about the cancellation; the simulator has no cancel endpoint.
+**Limit orders are immediate-or-cancel.** The simulator used to fill every order at its limit,
+so a BUY of a $227 stock with a $1 limit filled at $1. Now, when a live price is available:
+
+- the trading API refuses a limit that would not fill at it when the order is placed (a BUY
+  limit below the market or a SELL limit above it: `422 ORD-422`, nothing stored);
+- the Trade Executor sends the live price with the order, and the simulator fills at it, or
+  at the limit if the market has moved past the limit since (never worse than the limit).
+
+Without a live price (no Alpaca keys, as in local development and CI) orders fill relative to
+their limit as before. Resting limit orders that wait for the market to reach them would need
+the price stream to drive fills; they are left for a later extension.
+
+**Cash and shares are held when an order is accepted.** When the Trade Executor accepts an
+order, it moves the order's cost at its limit (BUY) or its shares (SELL) into
+`accounts.reserved_cash` or `positions.reserved_quantity`; `orders.reserved` records that the
+order holds them. Another order or a withdrawal can only use what is left (`cash_balance -
+reserved_cash`), so two orders can no longer both pass the check and one then fail at
+settlement. The hold is released when the order is filled (settlement then moves the cash and
+shares at the fill price, which is never worse than the limit), cancelled or rejected; a DLQ
+replay of a rejected order takes it again. Reserving, releasing and settling lock the account
+row, so concurrent orders for one account take turns, and `accounts.version` still guards
+deposits and withdrawals. A fill for an order that was cancelled meanwhile is ignored. A real
+broker would also need to be told about the cancellation; the simulator has no cancel
+endpoint.
 
 ## 5. Live prices from Alpaca
 
@@ -75,8 +99,8 @@ fallback. Positions are valued at that price, and an order without a price is pr
 when accepted. Without Alpaca keys (local development, CI) there are no live prices: orders
 must include a price and `marketValue` is `null`.
 
-Prices are not yet republished on the `market-data` Kafka topic listed in §10.3; that would
-let other services (e.g. price alerts) consume them.
+The API republishes the prices it takes on the `market-data` Kafka topic listed in §10.3 (at
+most one per symbol per second), which the strategy service consumes (decision 16).
 
 ## 6. PostgreSQL `analytics` schema instead of Snowflake
 
@@ -109,30 +133,60 @@ environment (sprint 11: CloudFront terminates TLS for the UI).
 
 The auth service has a hand-written contract (`contracts/auth-api.yaml`). The trading API's
 OpenAPI document is generated from the code by springdoc and served at `/v3/api-docs` (Swagger
-UI at `/swagger-ui.html`), so it cannot drift from the implementation. The sprint 9 Angular
-clients can be generated from that URL.
+UI at `/swagger-ui.html`). Each endpoint documents its success status and its errors with
+`@Operation` / `@ApiResponse`; an error's description starts with its code from the spec's
+catalogue (§21), and `OpenApiConfig` gives every coded error the `ErrorResponse` body and adds
+the 401, 422 and 500 that all endpoints share.
+
+A copy is committed as `contracts/trading-api.json`, and the Angular clients are generated from
+it. `ApiContractIT` fails when the copy no longer matches `/v3/api-docs`, writing the live spec
+to `target/trading-api.json`; after reviewing the difference, update the copy with
+`python3 -m json.tool --indent 2 target/trading-api.json contracts/trading-api.json`.
 
 ## 10. Roles
 
-Users have the role `USER` or `ADMIN`. A user can use only the account opened when they
-registered; admins can use every account. Admin-only: opening accounts, creating or changing
-instruments, and the DLQ endpoints. Any further role rules are to be agreed by the team.
+Users have the role `USER`, `SUPPORT` or `ADMIN`. The two staff roles have no trading account
+and are kept apart, so neither one does the other's job:
+
+| Role | Where | Can do |
+|---|---|---|
+| `USER` | Trading app | Only the account opened when they registered |
+| `SUPPORT` | Trading app (account viewer) | View every account and order read-only; suspend or reactivate accounts; open accounts; add and change instruments; answer and close support conversations; review, replay and dismiss dead letters (the DLQ endpoints) |
+| `ADMIN` | Analytics dashboard (`/analytics/`) | The analytics dashboard, the DLQ endpoints (shared with support), the actuator's metrics, info and health details (observability) |
+
+An admin is not support: the trading API gives `ADMIN` no access to traders' accounts, and the
+Angular app sends an admin who signs in there to the analytics dashboard (`notAdminGuard`).
+Support is turned away by the analytics dashboard. The auth service creates both accounts at
+startup, the admin (`ADMIN_EMAIL`, default `admin@tns-capital.local`) from `ADMIN_PASSWORD` and
+the support user (`SUPPORT_EMAIL`, default `support@tns-capital.local`) from `SUPPORT_PASSWORD`,
+refuses the same password for both, and never changes an existing user's role. A user holds one role
+(`users.role`).
+
+`STRATEGY` is a service role, never a user's: only the strategy service's client-credentials
+token has it (decision 16). It may place and read orders and read prices, and only for an
+account whose owner has an ACTIVE strategy; every other endpoint refuses it. In Strategy Lab,
+support sees every trader's strategies read-only, like their accounts; admins see strategy orders
+in the analytics dashboard only.
 
 ## 11. Accepted vulnerabilities
 
-`.trivyignore` accepts CVE-2026-47884 (XSLT views) and CVE-2026-47890 (Server-Sent Events) in
-`spring-webmvc` 6.2.19. The API uses neither feature, and the only fixes are in Spring 7
-(Spring Boot 4), a major upgrade to plan separately. Each entry has an owner and a review
-date.
+`.trivyignore` accepts three findings. Each entry has an owner and a review date.
+
+- **CVE-2026-47884 and CVE-2026-47890** in `spring-webmvc` 6.2.19: flaws in XSLT views and in
+  Server-Sent Events rendered through views. The API has no XSLT views, and its only SSE
+  endpoint (the support chat's `/api/v1/support/conversations/{id}/events`) sends plain strings
+  and JSON, never a view. The only fixes are in Spring 7 (Spring Boot 4), a major upgrade to
+  plan separately.
+- **CVE-2026-112403** in Pillow 12.3.0, pulled in by Streamlit for the dashboard: a flaw in the
+  JPEG decoder. The dashboard decodes no images from users. The fix is only in Pillow 13, which
+  no Streamlit release accepts yet; upgrade once one does.
 
 ## 12. Admin analytics sign-in
 
 The admin analytics dashboard is the Streamlit app in `dashboard/` (spec §7 asks for a Python
-dashboard). The Angular login sends admins there, and its **Trading dashboard** button brings
-them back to the Angular app. Admins have no trading account of their own, so there the
-dashboard becomes a read-only account viewer: the admin picks any account (the API already lets
-admins read every account) and sees its balance, holdings and orders, without the order ticket.
-Whether admins may place orders for traders is left for the team to decide.
+dashboard). The Angular login sends admins there. The read-only account viewer in the Angular app
+belongs to support, not admins (see 10): support staff pick any account and see its balance,
+holdings and orders, without the order ticket or market data, and can suspend or reactivate it.
 
 Streamlit's session lives in its Python server and cannot read the Angular app's token, which
 is kept in the browser tab's `sessionStorage`, so the admin signs in on each (even though both
@@ -145,19 +199,17 @@ verifies the token it gets itself (HS256 signature, issuer, `typ`, expiry) and a
 `ADMIN` role.
 
 When a signed-out user opens a protected page, the login sends them back to it afterwards
-(`?returnUrl=`), admins included. That is how the Trading dashboard button, which opens a new
-tab without the Angular session, lands on the account viewer and not back on analytics.
+(`?returnUrl=`).
 
 ## 13. Analytics dashboard under `/analytics/`
 
 The Angular app's nginx (and `ng serve`'s `proxy.conf.json`) forwards `/analytics/` to the
 Streamlit container, which runs with the base path `analytics` (`dashboard/.streamlit/config.toml`),
-WebSocket included. The home page's admin link, the admin login and the Analytics button all go to that
+WebSocket included. The home page's admin link and the admin login both go to that
 relative path. Linking to `http://localhost:8501` only worked when the browser ran on the Docker
 host with that port open: through a forwarded or remote address it gave "page not found", and a
 browser in the end-to-end tests could not reach it either. The same pattern carries over to the
-sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. The
-Streamlit **Trading dashboard** button is the relative `/portfolio` for the same reason. Port 8501
+sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. Port 8501
 stays published for direct access (`http://localhost:8501/analytics/`).
 
 ## 14. Angular 19
@@ -176,3 +228,85 @@ fixes (docs/OWASP_REVIEW.md A06-3), so the auth service builds, tests (Jenkins) 
 `node:22-alpine`, the current LTS. NestJS 11, Argon2 and the test suite run unchanged on it. The
 runtime image also drops the npm CLI, which only the build needs; it carried every HIGH finding
 in Trivy's scan of the image (A06-4).
+
+## 16. Sprint 10 extension: Strategy Lab (automated strategy execution)
+
+The team chose **automated strategy execution** (§13.2): rules-based strategies that watch the
+real-time price stream and act through the Trade REST API. The proposal is in the team's Strategy
+Lab write-up; what was built, and why:
+
+- **Its own microservice.** `strategy-service/` (Spring Boot, port 8087) owns the `strategies` and
+  `strategy_signals` tables and logs in to Postgres as `tns_strategy`, which can read the price
+  history, who owns which account and the outcome of orders, but cannot change orders, accounts or
+  positions. nginx routes `/api/v1/strategies` to it.
+- **Rules are strategy classes.** `TradingRule` with `MovingAverageCrossoverRule` and
+  `BollingerBandRule`; the backtester and the live engine run any rule the same way. A rule signals
+  only on the bar where its condition starts (a cross), so a strategy trades once per move.
+- **Backtest on daily prices, trade live on 1-minute bars.** Five years of daily closes come from the
+  ETL's `analytics.fact_daily_prices`. A daily crossover fires a few times a year, so live trading uses
+  1-minute bars built from the `market-data` stream; the rule's settings mean bars in both cases.
+- **The service places orders through the trading API, as a trader would** (`POST /api/v1/orders`),
+  so every check still applies. It cannot use a trader's token (they expire after 15 minutes and the
+  trader may be logged out), and writing to the `orders` topic would skip every check (OWASP A01-5).
+  Instead the auth service issues it its own 15-minute token by client credentials
+  (`POST /auth/token`, `STRATEGY_CLIENT_SECRET`), with the service role `STRATEGY` (decision 10). The
+  API accepts that role only for placing and reading orders on an account with an ACTIVE strategy.
+- **Market orders only.** The strategy sends no price, so the API prices the order at the live market.
+  Without market data keys (CI, local) the API answers PRC-503 and the service resends the order at the
+  signal's price. Resting limit orders stay out of scope.
+- **Long only, one position per strategy.** A strategy buys its quantity when FLAT and sells it when
+  LONG, so it never sells the trader's own shares. It waits for each order to settle before the next bar
+  (up to 15 s): acting earlier sold shares whose purchase had not filled yet, which the API rejected.
+  Its position moves only on a fill.
+- **Replay for the demo.** Markets are closed for most of a UK day, so `POST /api/v1/market-data/replays`
+  publishes a past day's regular-session 1-minute bars on `market-data` at up to 50 a second, marked
+  `REPLAY` and kept apart from live bars. Any signed-in user may start one; only one runs at a time, as
+  every strategy on the symbol sees it. Orders are still priced at the live market price.
+- **Limits.** Up to 3 strategies per account can be on (`STRATEGY_MAX_ACTIVE_PER_ACCOUNT`; the MVP had
+  1). Support staff see every strategy and backtest but change none, as they only view traders'
+  accounts (decision 10); admins, who work in the analytics dashboard, see no strategies in the app.
+  Deleting a strategy archives it, so its signals stay on record.
+- **Reporting.** Traders get a toast whenever a strategy trades, and a comparison of their strategies'
+  realized P&L with their own (average cost). The admin analytics dashboard shows strategy orders next
+  to everyone else's.
+
+## 17. Newsletter issues as JSONB snapshots
+
+The weekly newsletter stores each issue as one row of `newsletter_issues`, with its gainers and
+losers as `JSONB` arrays, rather than in a `newsletter_movers` child table. An issue is written
+once by the weekly job, never changed, and always read whole, so it is a document rather than
+relational data. It also has to show what was published: with no foreign keys to `instruments`,
+renaming or removing an instrument does not alter or block past issues. Nothing queries
+individual movers; if the dashboard ever needs to, `jsonb_array_elements` or the ETL can
+flatten them. Postgres only checks that each column is an array, so `NewsletterService`
+validates the contents. `tns_api` has `SELECT` and `INSERT` only, so the database itself keeps
+issues immutable.
+
+The Friday job publishes. Support staff (the trading app's staff role, decision 10) get
+`GET /api/v1/newsletters/preview`, which builds the week so far and saves nothing: with one
+immutable issue per week, an early "publish" would take the place of that week's real issue.
+Demos before a Friday still need a published issue, so `POST /api/v1/newsletters/publish` lets
+support publish the week so far, but only where `NEWSLETTER_EARLY_PUBLISH=true` (a demo
+environment); elsewhere it answers `403 NWS-403`.
+
+## 18. A small monitoring stack, shown in the dashboard
+
+The monitoring stack ([observability/README.md](../observability/README.md)) has to fit next to
+the rest of the stack on a developer machine with little free memory. The usual stack would
+need 0.8–1.5 GB: Prometheus (~300 MB), Grafana (~200 MB), Loki (300–500 MB) and Tempo or Jaeger
+(300–500 MB). Instead:
+
+- **VictoriaMetrics, not Prometheus.** It scrapes the same `/metrics` endpoints and answers the
+  same PromQL in about 40 MB. vmalert evaluates the alert rules in about 20 MB.
+- **VictoriaLogs and Fluent Bit, not Loki and Promtail.** About 30 MB together. Promtail is end of
+  life. Fluent Bit reads Docker's log files read-only rather than through the Docker socket.
+- **No Grafana.** Admins see alerts, metrics and logs in the analytics dashboard's Monitoring view,
+  behind the admin sign-in it already has. No second UI with its own users or published port.
+- **No tracing.** A tracing backend and a tracer in each JVM would cost more than the rest of the
+  stack together. The fill time histogram and the consumer lag show where an order is waiting.
+- **Its own Compose profile** (`observability`): about 90 MB measured, 400 MB at its limits.
+  `.env.example` turns it on with `COMPOSE_PROFILES=observability`; removing that line leaves it
+  out, and the CI end-to-end stack runs without it.
+
+The stack closes OWASP A09-5: alerts on reused refresh tokens (A09-1), failed login spikes
+(A09-2), refused and failing API requests, and dead letters waiting for review (A09-4).

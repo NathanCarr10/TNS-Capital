@@ -85,7 +85,7 @@ export class CandlestickChartComponent {
       return 'No price history';
     }
     const first = bars[0];
-    const last = bars[bars.length - 1];
+    const last = bars.at(-1)!;
     const low = Math.min(...bars.map((bar) => bar.low));
     const high = Math.max(...bars.map((bar) => bar.high));
     return (

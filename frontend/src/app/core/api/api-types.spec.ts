@@ -7,7 +7,7 @@ import { CashTransactionRequest, PlaceOrderRequest } from '../../api/trading';
 describe('Generated API types', () => {
   it('reject requests that break the contract', () => {
     // @ts-expect-error password is required by LoginRequest
-    const missingPassword: LoginRequest = { username: 'admin' };
+    const missingPassword: LoginRequest = { email: 'admin@tns-capital.local' };
 
     // @ts-expect-error amount is a number, not a string
     const stringAmount: CashTransactionRequest = { amount: '100' };
@@ -24,6 +24,6 @@ describe('Generated API types', () => {
     // @ts-expect-error idempotencyKey is required by PlaceOrderRequest
     const missingKey: PlaceOrderRequest = { accountId: 7, symbol: 'AAPL', side: PlaceOrderRequest.SideEnum.BUY, quantity: 1 };
 
-    expect([missingPassword, stringAmount, badSide, missingKey].length).toBe(4);
+    expect([missingPassword, stringAmount, badSide, missingKey]).toHaveSize(4);
   });
 });

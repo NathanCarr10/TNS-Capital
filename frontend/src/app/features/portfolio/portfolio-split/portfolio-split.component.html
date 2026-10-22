@@ -11,11 +11,11 @@
       <p class="note">Nothing to split yet: no cash and no priced holdings.</p>
     } @else {
       <div class="split-chart">
-        <div class="split-bar" role="group" aria-label="Portfolio split" [class.has-active]="active()">
+        <fieldset class="split-bar" aria-label="Portfolio split" [class.has-active]="active()">
           @for (segment of portfolio.segments; track segment.key) {
-            <div
+            <button
+              type="button"
               class="segment"
-              tabindex="0"
               [class.active]="active()?.segment?.key === segment.key"
               [style.flex-grow]="segment.value"
               [style.background]="'var(--' + segment.color + ')'"
@@ -27,9 +27,9 @@
               (pointerleave)="hide()"
               (focus)="show(segment, $event)"
               (blur)="hide()"
-            ></div>
+            ></button>
           }
-        </div>
+        </fieldset>
 
         @if (active(); as current) {
           <div class="split-tooltip" role="tooltip" [style.left]="'clamp(5rem, ' + current.x + 'px, calc(100% - 5rem))'">

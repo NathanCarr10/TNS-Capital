@@ -95,7 +95,11 @@ public class AccountService {
      * so its orders, positions and history stay valid for the audit trail;
      * closed accounts cannot trade (business rule 2).
      *
-     * @throws AccountDeletionConflictException if the account has working (NEW) orders
+     * A closed account can no longer withdraw or sell either, so it must be
+     * empty first: anything left in it would be stranded.
+     *
+     * @throws AccountDeletionConflictException if the account has working (NEW)
+     *                                          orders, holdings or cash
      */
     public Account closeAccount(Long accountId) {
         Account account = getAccountById(accountId);
@@ -105,6 +109,15 @@ public class AccountService {
         if (workingOrders > 0) {
             throw new AccountDeletionConflictException(
                     "Cannot close account with " + workingOrders + " active order(s)");
+        }
+        int holdings = positionRepository.findByAccountId(accountId).size();
+        if (holdings > 0) {
+            throw new AccountDeletionConflictException(
+                    "Cannot close account with " + holdings + " holding(s); sell them first");
+        }
+        if (account.getCashBalance().signum() > 0) {
+            throw new AccountDeletionConflictException(
+                    "Cannot close account with a cash balance; withdraw it first");
         }
         account.setStatus(AccountStatus.CLOSED);
         return accountRepository.save(account);

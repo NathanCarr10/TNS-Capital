@@ -44,11 +44,11 @@ describe('LoginComponent', () => {
   it('submits valid credentials', () => {
     authServiceSpy.login.and.returnValue(of(undefined));
 
-    component.loginForm.setValue({ username: 'admin', password: 'adminPassword' });
+    component.loginForm.setValue({ email: 'admin@tns-capital.local', password: 'adminPassword' });
     component.onSubmit();
 
     expect(authServiceSpy.login).toHaveBeenCalledWith({
-      username: 'admin',
+      email: 'admin@tns-capital.local',
       password: 'adminPassword',
     });
   });
@@ -61,23 +61,23 @@ describe('LoginComponent', () => {
             status: 401,
             error: {
               errorCode: 'AUTH-401',
-              message: 'invalid username or password',
+              message: 'invalid email or password',
               timestamp: new Date().toISOString(),
             },
           })
       )
     );
 
-    component.loginForm.setValue({ username: 'admin', password: 'wrong-password' });
+    component.loginForm.setValue({ email: 'admin@tns-capital.local', password: 'wrong-password' });
     component.onSubmit();
 
-    expect(component.errorMessage()).toBe('invalid username or password');
+    expect(component.errorMessage()).toBe('invalid email or password');
   });
 
   it('sends traders to the portfolio page', () => {
     authServiceSpy.login.and.returnValue(of(undefined));
 
-    component.loginForm.setValue({ username: 'trader', password: 'traderPassword' });
+    component.loginForm.setValue({ email: 'trader@example.com', password: 'traderPassword' });
     component.onSubmit();
 
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/portfolio']);
@@ -86,7 +86,7 @@ describe('LoginComponent', () => {
   it('sends admins to the portfolio page too', () => {
     authServiceSpy.login.and.returnValue(of(undefined));
 
-    component.loginForm.setValue({ username: 'admin', password: 'adminPassword' });
+    component.loginForm.setValue({ email: 'admin@tns-capital.local', password: 'adminPassword' });
     component.onSubmit();
 
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/portfolio']);
@@ -96,7 +96,7 @@ describe('LoginComponent', () => {
     queryParams = { returnUrl: '/portfolio' };
     authServiceSpy.login.and.returnValue(of(undefined));
 
-    component.loginForm.setValue({ username: 'admin', password: 'adminPassword' });
+    component.loginForm.setValue({ email: 'admin@tns-capital.local', password: 'adminPassword' });
     component.onSubmit();
 
     expect(routerSpy.navigateByUrl).toHaveBeenCalledWith('/portfolio');
@@ -107,7 +107,7 @@ describe('LoginComponent', () => {
       queryParams = { returnUrl };
       authServiceSpy.login.and.returnValue(of(undefined));
   
-      component.loginForm.setValue({ username: 'trader', password: 'traderPassword' });
+      component.loginForm.setValue({ email: 'trader@example.com', password: 'traderPassword' });
       component.onSubmit();
 
       expect(routerSpy.navigateByUrl).not.toHaveBeenCalled();

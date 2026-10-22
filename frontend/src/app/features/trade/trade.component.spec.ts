@@ -49,9 +49,10 @@ describe('TradeComponent', () => {
     tradingService.getAccountPositions.and.returnValue(of(positions));
 
   beforeEach(async () => {
-    marketDataServiceSpy = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars']);
+    marketDataServiceSpy = jasmine.createSpyObj<MarketDataService>('MarketDataService', ['getQuotes', 'getBars', 'getNews']);
     marketDataServiceSpy.getQuotes.and.returnValue(of([aaplQuote]));
     marketDataServiceSpy.getBars.and.returnValue(of(bars));
+    marketDataServiceSpy.getNews.and.returnValue(of([]));
     tradingService = tradingServiceStub();
 
     await TestBed.configureTestingModule({
@@ -62,7 +63,7 @@ describe('TradeComponent', () => {
         OrderTrackerService,
         { provide: MarketDataService, useValue: marketDataServiceSpy },
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => false } },
+        { provide: AuthService, useValue: { isSupport: () => false } },
       ],
     }).compileComponents();
     router = TestBed.inject(Router);
@@ -103,7 +104,7 @@ describe('TradeComponent', () => {
   }));
 
   it('leaves out the position section when the user holds none of the symbol', fakeAsync(() => {
-    givenPositions([{ accountId: 11, symbol: 'MSFT', quantity: 5, averageCost: 300, marketValue: null }]);
+    givenPositions([{ accountId: 11, symbol: 'MSFT', quantity: 5, reservedQuantity: 0, availableQuantity: 5, averageCost: 300, marketValue: null }]);
 
     open('AAPL');
 
@@ -113,7 +114,7 @@ describe('TradeComponent', () => {
   }));
 
   it('leaves out the position section for a closed position', fakeAsync(() => {
-    givenPositions([{ accountId: 11, symbol: 'AAPL', quantity: 0, averageCost: 150, marketValue: null }]);
+    givenPositions([{ accountId: 11, symbol: 'AAPL', quantity: 0, reservedQuantity: 0, availableQuantity: 0, averageCost: 150, marketValue: null }]);
 
     open('AAPL');
 
@@ -122,7 +123,7 @@ describe('TradeComponent', () => {
   }));
 
   it('shows the position valued at the live price when the user holds the symbol', fakeAsync(() => {
-    givenPositions([{ accountId: 11, symbol: 'AAPL', quantity: 10, averageCost: 150, marketValue: null }]);
+    givenPositions([{ accountId: 11, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 150, marketValue: null }]);
 
     open('AAPL');
 
@@ -178,6 +179,7 @@ describe('TradeComponent', () => {
     expect(fixture.nativeElement.querySelector('app-candlestick-chart')).toBeNull();
 
     marketDataServiceSpy.getBars.and.returnValue(of(bars));
+    marketDataServiceSpy.getNews.and.returnValue(of([]));
     (fixture.nativeElement.querySelector('.chart-panel .error-banner button') as HTMLButtonElement).click();
     fixture.detectChanges();
 
@@ -202,7 +204,7 @@ describe('TradeComponent', () => {
   }));
 
   it('opens the first holding when no symbol is given', fakeAsync(() => {
-    givenPositions([{ accountId: 11, symbol: 'MSFT', quantity: 5, averageCost: 300, marketValue: null }]);
+    givenPositions([{ accountId: 11, symbol: 'MSFT', quantity: 5, reservedQuantity: 0, availableQuantity: 5, averageCost: 300, marketValue: null }]);
 
     open('');
 

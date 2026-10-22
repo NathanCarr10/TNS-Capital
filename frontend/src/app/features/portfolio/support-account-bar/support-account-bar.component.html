@@ -1,0 +1,11 @@
+<label for="support-account">Account</label>
+<select
+  id="support-account"
+  class="input"
+  [disabled]="accounts().length === 0"
+  (change)="onSelect($event)"
+>
+  @for (account of accounts(); track account.id) {
+    <option [value]="account.id" [selected]="account.id === selectedId()">{{ account.accountNumber }} - {{ account.holderName }}</option>
+  }
+</select>

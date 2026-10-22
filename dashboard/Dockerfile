@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py ./
 COPY .streamlit ./.streamlit
+COPY static ./static
 
 # Drop root: the dashboard only reads from Postgres
 RUN useradd --create-home --uid 10001 dashboard

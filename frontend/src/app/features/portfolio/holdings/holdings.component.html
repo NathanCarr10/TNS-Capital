@@ -20,19 +20,32 @@
       <tbody>
         @if (loading()) {
           @for (row of skeletonRows; track row) {
-            <tr class="skeleton-row" aria-hidden="true">
-              <td><span class="skeleton"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
-              <td class="numeric"><span class="skeleton"></span></td>
+            <tr class="skeleton-row">
+              <td><span class="skeleton" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
+              <td class="numeric"><span class="skeleton" aria-hidden="true"></span></td>
             </tr>
           }
         } @else {
           @for (row of rows(); track row.symbol) {
             <tr>
-              <td class="symbol"><a class="symbol-link" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a></td>
-              <td class="numeric">{{ row.quantity | number }}</td>
+              <td class="symbol">
+                @if (linkSymbols()) {
+                  <a class="symbol-link" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a>
+                } @else {
+                  {{ row.symbol }}
+                }
+              </td>
+              <td class="numeric">
+                {{ row.quantity | number }}
+                @if (row.reservedQuantity > 0) {
+                  <span class="reserved" title="Held for open sell orders until they fill or are cancelled">
+                    {{ row.reservedQuantity | number }} in open orders
+                  </span>
+                }
+              </td>
               @if (row.value != null) {
                 <td class="numeric value">{{ row.value | currency:'USD':'symbol':'1.2-2' }}</td>
               } @else {

@@ -1,19 +1,4 @@
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    mem_limit: 256m
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    # Infrastructure ports are for tools on this machine only (OWASP A05-2)
-    ports:
-      - "127.0.0.1:2181:2181"
-    healthcheck:
-      test: ["CMD", "echo", "stat", "|", "nc", "localhost", "2181"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     mem_limit: 1g
@@ -21,14 +6,19 @@ services:
     ports:
       - "127.0.0.1:9092:9092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # KRaft mode: this one node is both broker and controller, so no ZooKeeper
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # The storage is formatted with this ID on first start (a base64-encoded UUID, as from kafka-storage random-uuid)
+      CLUSTER_ID: bXr8gAgKTXCZkbGvyQu4gw
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-    depends_on:
-      zookeeper:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
       interval: 5s
@@ -44,6 +34,13 @@ services:
       POSTGRES_USER: ${DB_USER:-tns-capital-db-user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_USER: ${DB_USER:-tns-capital-db-user}
+      # Passwords of the services' own login roles (db/roles/roles.sql), set when
+      # the database is created; each defaults to DB_PASSWORD
+      DB_API_PASSWORD: ${DB_API_PASSWORD:-${DB_PASSWORD}}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-${DB_PASSWORD}}
+      DB_ETL_PASSWORD: ${DB_ETL_PASSWORD:-${DB_PASSWORD}}
+      DB_READER_PASSWORD: ${DB_READER_PASSWORD:-${DB_PASSWORD}}
+      DB_STRATEGY_PASSWORD: ${DB_STRATEGY_PASSWORD:-${DB_PASSWORD}}
     ports:
       - "127.0.0.1:5432:5432"
     command:
@@ -68,17 +65,35 @@ services:
     mem_limit: 256m
     environment:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      # The admin account is created from this at startup; nothing is seeded (OWASP A07-4)
+      # The staff accounts are created from these at startup; nothing is seeded (OWASP A07-4).
+      # admin (ADMIN) runs the analytics dashboard; support (SUPPORT) works in the trading app.
+      # Each signs in with its email, admin@tns-capital.local and support@tns-capital.local by default
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@tns-capital.local}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-support@tns-capital.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env (at least 12 characters)}
+      SUPPORT_PASSWORD: ${SUPPORT_PASSWORD:?set SUPPORT_PASSWORD in .env (at least 12 characters, not the ADMIN_PASSWORD)}
+      # Optional local demo trader; the password is hashed at startup and never stored in the image
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: tns_capital
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
+      # Least-privilege role: users, refresh tokens, opening accounts (db/roles/roles.sql)
+      DB_USER: tns_auth
+      DB_PASSWORD: ${DB_AUTH_PASSWORD:-${DB_PASSWORD}}
       PORT: 4000
+      # Login and token reuse counters for the monitoring stack (profile "observability"),
+      # on a port that is not published or proxied
+      METRICS_PORT: 9464
+      # One JSON object per log line, like the Java services' ECS lines
+      LOG_FORMAT: ${AUTH_LOG_FORMAT:-json}
       AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-10}
+      # Proxies whose X-Forwarded-For gives the client IP: nginx on the Docker network
+      AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-loopback, uniquelocal}
+      # The strategy service's client secret (POST /auth/token); without it, it cannot trade
+      STRATEGY_CLIENT_SECRET: ${STRATEGY_CLIENT_SECRET:-}
+    # Localhost only: browsers reach it through the frontend's /auth/ proxy
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,28 +128,81 @@ services:
     mem_limit: 512m
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-tns-capital-db-user}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Least-privilege role: the trading tables only (db/roles/roles.sql)
+      SPRING_DATASOURCE_USERNAME: tns_api
+      SPRING_DATASOURCE_PASSWORD: ${DB_API_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       BROKER_URL: http://broker-simulator:8085
       # One JSON object per log line (Elastic Common Schema), for log tools to parse
       LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      # Prometheus metrics for the monitoring stack (profile "observability"), on a port that
+      # is not published or proxied; the actuator on :3000 stays admin-only
+      METRICS_PORT: 9464
       ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
       ALPACA_FEED: ${ALPACA_FEED:-iex}
+      # When the weekly newsletter is published (Spring cron, New York time); - switches it off
+      NEWSLETTER_CRON: ${NEWSLETTER_CRON:-0 0 17 * * FRI}
+      # Lets support staff publish the week's issue before Friday (demos); off unless set to true
+      NEWSLETTER_EARLY_PUBLISH: ${NEWSLETTER_EARLY_PUBLISH:-false}
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:MaxHeapSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/dumps
+    # Localhost only: browsers reach it through the frontend's /api/ proxy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+      # Kafka must be up first: a Kafka consumer whose broker name does not resolve yet
+      # fails at startup instead of retrying, and the container exits
       kafka:
         condition: service_healthy
       broker-simulator:
         condition: service_healthy
+    healthcheck:
+      # /actuator/health is public and answers UP or DOWN without details
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  strategy-service:
+    build: ./strategy-service
+    mem_limit: 384m
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tns_capital
+      # Least-privilege role: its own tables, read-only lookups elsewhere (db/roles/roles.sql)
+      SPRING_DATASOURCE_USERNAME: tns_strategy
+      SPRING_DATASOURCE_PASSWORD: ${DB_STRATEGY_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # Strategies place their orders through the trading API, with a token from the auth service
+      TRADING_API_URL: http://app:3000
+      AUTH_URL: http://auth-service:4000
+      STRATEGY_CLIENT_SECRET: ${STRATEGY_CLIENT_SECRET:-}
+      STRATEGY_MAX_ACTIVE_PER_ACCOUNT: ${STRATEGY_MAX_ACTIVE_PER_ACCOUNT:-3}
+      LOGGING_STRUCTURED_FORMAT_CONSOLE: ${LOG_FORMAT:-ecs}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70
+    # Localhost only: browsers reach it through the frontend's /api/v1/strategies proxy
+    ports:
+      - "127.0.0.1:8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # As for app: the price stream's Kafka consumer cannot start before Kafka exists
+      kafka:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8087/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   frontend:
     build:
@@ -150,8 +218,11 @@ services:
         condition: service_started
       auth-service:
         condition: service_healthy
-      # nginx forwards /analytics/ to it, and won't start if it can't resolve the name
+      # nginx forwards /analytics/ and /api/v1/strategies to these, and won't start if it
+      # can't resolve their names
       dashboard:
+        condition: service_started
+      strategy-service:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/ || exit 1"]
@@ -165,8 +236,9 @@ services:
     mem_limit: 384m
     environment:
       ETL_DB_HOST: postgres
-      DB_USER: ${DB_USER:-tns-capital-db-user}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Least-privilege role: reads the trading tables, owns the analytics schema
+      DB_USER: tns_etl
+      DB_PASSWORD: ${DB_ETL_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       ETL_SCHEDULE_TIME: ${ETL_SCHEDULE_TIME:-02:00}
       ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
       ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
@@ -182,12 +254,20 @@ services:
     mem_limit: 384m
     environment:
       DASHBOARD_DB_HOST: postgres
-      DB_USER: ${DB_USER:-tns-capital-db-user}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      # Least-privilege role: read only (db/roles/roles.sql)
+      DB_USER: tns_reader
+      DB_PASSWORD: ${DB_READER_PASSWORD:-${DB_PASSWORD:?set DB_PASSWORD in .env}}
       DASHBOARD_AUTH_URL: http://auth-service:4000
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      # The monitoring stack (profile "observability"); without it the Monitoring view
+      # says how to start it
+      MONITORING_METRICS_URL: http://victoriametrics:8428
+      MONITORING_ALERTS_URL: http://vmalert:8880
+      MONITORING_LOGS_URL: http://victorialogs:9428
+    # Localhost only: browsers reach it through the frontend's /analytics/ proxy,
+    # which also adds the security headers
     ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
+      - "127.0.0.1:${DASHBOARD_PORT:-8501}:8501"
     depends_on:
       postgres:
         condition: service_healthy
@@ -217,5 +297,96 @@ services:
       - "127.0.0.1:${KAFKA_UI_PORT:-8090}:8080"
     restart: unless-stopped
 
+  # Monitoring stack, shown in the admin dashboard's Monitoring view. Profile "observability":
+  # starts with the rest when .env sets COMPOSE_PROFILES=observability (as .env.example does),
+  # or on request with: docker compose --profile observability up -d
+  # About 90 MB measured, at most 400 MB by the memory limits. None of it publishes a port:
+  # the dashboard is the only UI, and it is admins only (observability/README.md).
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.153.0
+    profiles: [observability]
+    mem_limit: 160m
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=15d
+      - -promscrape.config=/etc/victoriametrics/scrape.yml
+      # A few thousand series need small caches; the default is 60% of the memory limit
+      - -memory.allowedPercent=40
+      - -search.maxConcurrentRequests=4
+      # Show samples 5 s after they are scraped (default 30 s) so the dashboard keeps up with
+      # orders as they come in; the scrapes are the only writes, so nothing arrives late
+      - -search.latencyOffset=5s
+    volumes:
+      - vmdata:/storage
+      - ./observability/victoriametrics/scrape.yml:/etc/victoriametrics/scrape.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8428/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.153.0
+    profiles: [observability]
+    mem_limit: 64m
+    command:
+      - -rule=/etc/vmalert/alerts.yml
+      - -datasource.url=http://victoriametrics:8428
+      # Writes the ALERTS series back, and reads it at startup to keep alerts' start times
+      - -remoteWrite.url=http://victoriametrics:8428
+      - -remoteRead.url=http://victoriametrics:8428
+      - -evaluationInterval=30s
+      # No Alertmanager: firing alerts are read from vmalert by the dashboard
+      - -notifier.blackhole
+    volumes:
+      - ./observability/vmalert/alerts.yml:/etc/vmalert/alerts.yml:ro
+    depends_on:
+      victoriametrics:
+        condition: service_healthy
+    restart: unless-stopped
+
+  victorialogs:
+    image: victoriametrics/victoria-logs:v1.53.0
+    profiles: [observability]
+    mem_limit: 128m
+    command:
+      - -storageDataPath=/vlogs
+      - -retentionPeriod=7d
+      # Oldest days are dropped first if the logs outgrow this
+      - -retention.maxDiskSpaceUsageBytes=2GiB
+      - -memory.allowedPercent=40
+    volumes:
+      - vlogsdata:/vlogs
+    # No health check: the image has only the victoria-logs binary, no shell or wget to probe
+    # /health with. Fluent Bit retries its sends until it is up.
+    restart: unless-stopped
+
+  fluent-bit:
+    image: fluent/fluent-bit:5.1.3
+    profiles: [observability]
+    mem_limit: 48m
+    command: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+    environment:
+      DOCKER_CONTAINERS_DIR: /var/lib/docker/containers
+      # Only this project's containers are shipped
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME}
+    # Root, to read Docker's log files (owned by root), but with no capabilities and a
+    # read-only view of them; no Docker socket
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    volumes:
+      - ${DOCKER_CONTAINERS_DIR:-/var/lib/docker/containers}:/var/lib/docker/containers:ro
+      - ./observability/fluent-bit:/fluent-bit/etc:ro
+      - fluentbit-state:/fluent-bit/state
+    depends_on:
+      victorialogs:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  vmdata:
+  vlogsdata:
+  fluentbit-state:

@@ -29,7 +29,7 @@ export class TradingService {
     return this.authApi.me();
   }
 
-  /** Every account for an admin; a trader gets only their own. */
+  /** Every account for support; a trader gets only their own. */
   getAccounts(): Observable<AccountResponse[]> {
     return this.accountApi.getAllAccounts();
   }
@@ -47,7 +47,7 @@ export class TradingService {
     return this.accountApi.updateAccount(accountId, request);
   }
 
-  /** Admin only: suspend an account or reactivate it. */
+  /** Support only: suspend an account or reactivate it. */
   updateAccountStatus(accountId: number, request: UpdateAccountStatusRequest): Observable<AccountResponse> {
     return this.accountApi.updateAccountStatus(accountId, request);
   }

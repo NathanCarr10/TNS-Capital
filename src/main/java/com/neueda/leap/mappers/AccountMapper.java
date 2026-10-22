@@ -14,7 +14,7 @@ public interface AccountMapper {
          * @param id the account ID
          * @return the Account if found, null otherwise
          */
-        @Select("SELECT id, account_number, holder_name, cash_balance, status, version, opened_on, last_updated " +
+        @Select("SELECT id, account_number, holder_name, email, cash_balance, reserved_cash, status, version, opened_on, last_updated " +
                         "FROM accounts WHERE id = #{id}")
         Account findById(Long id);
 
@@ -23,8 +23,8 @@ public interface AccountMapper {
          *
          * @param account the account to persist
          */
-        @Insert("INSERT INTO accounts (account_number, holder_name, cash_balance, status, version, opened_on, last_updated) " +
-                        "VALUES (#{accountNumber}, #{holderName}, #{cashBalance}, #{status}, #{version}, #{openedOn}, #{lastUpdated}) "
+        @Insert("INSERT INTO accounts (account_number, holder_name, email, cash_balance, status, version, opened_on, last_updated) " +
+                        "VALUES (#{accountNumber}, #{holderName}, #{email}, #{cashBalance}, #{status}, #{version}, #{openedOn}, #{lastUpdated}) "
                         +
                         "ON CONFLICT (id) DO UPDATE SET " +
                         "cash_balance = #{cashBalance}, status = #{status}, version = #{version}, last_updated = #{lastUpdated}")

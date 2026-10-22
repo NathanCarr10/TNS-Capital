@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard } from './core/auth/auth.guard';
+import { authGuard, notAdminGuard, supportGuard } from './core/auth/auth.guard';
 import { HomeComponent } from './features/home/home.component';
 import { LoginComponent } from './features/login/login.component';
 import { RegisterComponent } from './features/register/register.component';
@@ -8,6 +8,8 @@ import { ShellComponent } from './layout/shell/shell.component';
 
 // The signed-in pages load on first visit, keeping the sign-in pages light
 const loadTrade = () => import('./features/trade/trade.component').then((m) => m.TradeComponent);
+const loadNewsletter = () =>
+	import('./features/newsletter/newsletter.component').then((m) => m.NewsletterComponent);
 
 export const routes: Routes = [
 	{ path: 'login', component: LoginComponent, title: 'Log in · TNS Capital' },
@@ -16,17 +18,25 @@ export const routes: Routes = [
 	{
 		path: '',
 		component: ShellComponent,
-		canActivate: [authGuard],
+		canActivate: [authGuard, notAdminGuard],
 		children: [
+			{ path: 'support', canActivate: [supportGuard], loadComponent: () => import('./features/support-inbox/support-inbox.component').then((m) => m.SupportInboxComponent), title: 'Support Inbox · TNS Capital' },
 			{ path: 'portfolio', loadComponent: () => import('./features/portfolio/portfolio.component').then((m) => m.PortfolioComponent), title: 'Portfolio · TNS Capital' },
 			// Without a symbol, the trade page opens the last symbol viewed or the first one available
 			{ path: 'trade', loadComponent: loadTrade, title: 'Trade · TNS Capital' },
 			{ path: 'trade/:symbol', loadComponent: loadTrade, title: 'Trade · TNS Capital' },
 			{ path: 'orders', loadComponent: () => import('./features/orders/order-history.component').then((m) => m.OrderHistoryComponent), title: 'Order History · TNS Capital' },
+			{ path: 'strategies', loadComponent: () => import('./features/strategy-lab/strategy-lab.component').then((m) => m.StrategyLabComponent), title: 'Strategy Lab · TNS Capital' },
+			{ path: 'dead-letters', canActivate: [supportGuard], loadComponent: () => import('./features/dead-letters/dead-letters.component').then((m) => m.DeadLettersComponent), title: 'Dead Letters · TNS Capital' },
+			// The weekly newsletter's page; without an id it opens the latest issue
+			{ path: 'market-movers', loadComponent: loadNewsletter, title: 'Market Movers · TNS Capital' },
+			{ path: 'market-movers/:id', loadComponent: loadNewsletter, title: 'Market Movers · TNS Capital' },
 			{ path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent), title: 'Settings · TNS Capital' },
 			// Old links
 			{ path: 'dashboard', redirectTo: 'portfolio' },
 			{ path: 'symbols/:symbol', redirectTo: 'trade/:symbol' },
+			{ path: 'newsletter', redirectTo: 'market-movers' },
+			{ path: 'newsletter/:id', redirectTo: 'market-movers/:id' },
 		],
 	},
 	{ path: '**', redirectTo: '' },

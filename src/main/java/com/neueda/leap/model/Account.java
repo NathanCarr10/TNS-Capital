@@ -26,8 +26,15 @@ public class Account {
     @Column(nullable = false)
     private String holderName;
 
+    @Column(nullable = false, length = 320)
+    private String email;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal cashBalance;
+
+    // Part of the cash balance held for accepted BUY orders; never more than the balance
+    @Column(nullable = false, precision = 19, scale = 2)
+    private BigDecimal reservedCash = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -46,9 +53,17 @@ public class Account {
     }
 
     public Account(String accountNumber, String holderName, BigDecimal cashBalance, Clock clock) {
+        this(accountNumber, holderName, accountNumber.toLowerCase() + "@example.invalid", cashBalance, clock);
+    }
+
+    public Account(String accountNumber, String holderName, String email, BigDecimal cashBalance, Clock clock) {
         validateConstructorArgs(accountNumber, holderName, cashBalance);
+        if (email == null || email.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
         this.accountNumber = accountNumber;
         this.holderName = holderName;
+        this.email = email.trim().toLowerCase();
         this.cashBalance = new BigDecimal(cashBalance.toPlainString());
         this.status = AccountStatus.ACTIVE;
         this.version = 0;
@@ -64,7 +79,9 @@ public class Account {
         this.id = null;
         this.accountNumber = other.accountNumber;
         this.holderName = other.holderName;
+        this.email = other.email;
         this.cashBalance = new BigDecimal(other.cashBalance.toPlainString());
+        this.reservedCash = new BigDecimal(other.reservedCash.toPlainString());
         this.status = other.status;
         this.version = other.version;
         this.openedOn = other.openedOn;
@@ -86,27 +103,60 @@ public class Account {
         }
     }
 
+    /**
+     * Takes cash out of the account. Only the available cash can be debited:
+     * cash reserved for accepted orders stays put until they release it.
+     */
     public void debit(BigDecimal amount) throws InsufficientFundsException {
-        if (amount == null) {
-            throw new IllegalArgumentException("Debit amount cannot be null");
-        }
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Debit amount must be positive");
-        }
-        if (cashBalance.compareTo(amount) < 0) {
+        requirePositive(amount, "Debit");
+        if (getAvailableCash().compareTo(amount) < 0) {
             throw new InsufficientFundsException("Insufficient funds");
         }
         this.cashBalance = cashBalance.subtract(amount);
     }
 
     public void credit(BigDecimal amount) {
+        requirePositive(amount, "Credit");
+        this.cashBalance = cashBalance.add(amount);
+    }
+
+    /**
+     * Holds cash for an accepted BUY order. The cash stays in the balance but
+     * can no longer be debited or reserved again until {@link #release} gives
+     * it back.
+     *
+     * @throws InsufficientFundsException if the available cash is less than the amount
+     */
+    public void reserve(BigDecimal amount) throws InsufficientFundsException {
+        requirePositive(amount, "Reserve");
+        if (getAvailableCash().compareTo(amount) < 0) {
+            throw new InsufficientFundsException("Insufficient funds");
+        }
+        this.reservedCash = reservedCash.add(amount);
+    }
+
+    /**
+     * Gives back cash held by {@link #reserve}, when the order is filled,
+     * cancelled or rejected.
+     *
+     * @throws IllegalStateException if more is released than is reserved
+     */
+    public void release(BigDecimal amount) {
+        requirePositive(amount, "Release");
+        if (reservedCash.compareTo(amount) < 0) {
+            throw new IllegalStateException(String.format(
+                    "Cannot release %s, only %s is reserved", amount.toPlainString(), reservedCash.toPlainString()));
+        }
+        this.reservedCash = reservedCash.subtract(amount);
+    }
+
+    private static void requirePositive(BigDecimal amount, String what) {
         if (amount == null) {
-            throw new IllegalArgumentException("Credit amount cannot be null");
+            throw new IllegalArgumentException(what + " amount cannot be null");
         }
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Credit amount must be positive");
+            throw new IllegalArgumentException(what + " amount must be positive");
         }
-        this.cashBalance = cashBalance.add(amount);
     }
 
     public boolean isActive() {
@@ -137,6 +187,10 @@ public class Account {
         return holderName;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
     public void setHolderName(String holderName) {
         if (holderName == null || holderName.trim().isEmpty()) {
             throw new IllegalArgumentException("Holder name cannot be null or empty");
@@ -146,6 +200,17 @@ public class Account {
 
     public BigDecimal getCashBalance() {
         return new BigDecimal(cashBalance.toPlainString());
+    }
+
+    public BigDecimal getReservedCash() {
+        return new BigDecimal(reservedCash.toPlainString());
+    }
+
+    /**
+     * @return the cash balance less the cash reserved for accepted orders
+     */
+    public BigDecimal getAvailableCash() {
+        return cashBalance.subtract(reservedCash);
     }
 
     public AccountStatus getStatus() {
@@ -193,6 +258,7 @@ public class Account {
                 ", accountNumber='" + accountNumber + '\'' +
                 ", holderName='" + holderName + '\'' +
                 ", cashBalance=" + cashBalance +
+                ", reservedCash=" + reservedCash +
                 ", status=" + status +
                 ", version=" + version +
                 ", openedOn=" + openedOn +

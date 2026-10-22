@@ -1,0 +1,30 @@
+meta {
+  name: Run Backtest
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{strategyUrl}}/api/v1/strategies/backtests
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "symbol": "SPY",
+    "ruleType": "MA_CROSSOVER",
+    "params": { "shortWindow": 20, "longWindow": 50 },
+    "initialCash": 10000
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Backtests a rule on the last five years of daily closes (run the ETL first, else PRC-404).
+  Returns the strategy's return against buying and holding, the max drawdown, the trades and
+  the equity curve.
+}

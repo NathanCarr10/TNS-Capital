@@ -1,10 +1,9 @@
 /// <reference types="jasmine" />
 
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, discardPeriodicTasks, fakeAsync, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
-import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountStore } from '../../core/trading/account.store';
 import { MarketDataService } from '../../core/trading/market-data.service';
@@ -15,8 +14,8 @@ import { PortfolioComponent } from './portfolio.component';
 describe('PortfolioComponent', () => {
   let fixture: ComponentFixture<PortfolioComponent>;
   let tradingService: jasmine.SpyObj<TradingService>;
-  let analyticsSpy: jasmine.SpyObj<AnalyticsDashboardService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
+  let getQuotes: jasmine.Spy;
 
   const otherAccount = { ...ACCOUNT, id: 12, accountNumber: 'ACC-U000012', holderName: 'Trader Two' };
 
@@ -27,9 +26,8 @@ describe('PortfolioComponent', () => {
         provideRouter([]),
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
-        { provide: AnalyticsDashboardService, useValue: analyticsSpy },
-        { provide: MarketDataService, useValue: { getQuotes: () => of([]), getBars: () => of([]) } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
+        { provide: MarketDataService, useValue: { getQuotes, getBars: () => of([]) } },
       ],
     });
     fixture = TestBed.createComponent(PortfolioComponent);
@@ -39,8 +37,8 @@ describe('PortfolioComponent', () => {
 
   beforeEach(() => {
     tradingService = tradingServiceStub();
-    analyticsSpy = jasmine.createSpyObj<AnalyticsDashboardService>('AnalyticsDashboardService', ['open']);
-    isAdmin = false;
+    isSupport = false;
+    getQuotes = jasmine.createSpy('getQuotes').and.returnValue(of([]));
   });
 
   it('greets the trader and shows their account and cash', () => {
@@ -50,6 +48,15 @@ describe('PortfolioComponent', () => {
     expect(element.querySelector('.account-number')?.textContent).toContain('ACC-U000011');
     expect(element.querySelector('.account-number .badge')?.textContent).toContain('ACTIVE');
     expect(element.querySelector('.cash strong')?.textContent).toContain('$5,000.00');
+  });
+
+  it('shows the cash left to trade and the cash held for open orders', () => {
+    tradingService.getAccount.and.returnValue(of({ ...ACCOUNT, reservedCash: 1500, availableCash: 3500 }));
+    const element = create();
+
+    expect(element.querySelector('.cash strong')?.textContent).toContain('$5,000.00');
+    expect(element.querySelector('.cash .available')?.textContent).toContain('$3,500.00 available to trade');
+    expect(element.querySelector('.cash .reserved')?.textContent).toContain('$1,500.00 in open orders');
   });
 
   it('links to the order history and the trade page', () => {
@@ -71,54 +78,56 @@ describe('PortfolioComponent', () => {
     expect(element.querySelector('img[src="x"]')).toBeNull();
   });
 
-  it('does not show admin controls to a trader', () => {
+  it('does not show support controls to a trader', () => {
     const element = create();
 
-    expect(element.querySelector('#admin-account')).toBeNull();
+    expect(element.querySelector('#support-account')).toBeNull();
     expect(element.querySelector('[role="switch"]')).toBeNull();
     expect(tradingService.getAccounts).not.toHaveBeenCalled();
   });
 
-  describe('for an admin', () => {
+  describe('for support', () => {
     beforeEach(() => {
-      isAdmin = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+      isSupport = true;
+      tradingService.getCurrentUserProfile.and.returnValue(of({ email: 'support@tns-capital.local', roles: ['SUPPORT'], accountId: null }));
       tradingService.getAccounts.and.returnValue(of([otherAccount, ACCOUNT]));
     });
 
     it('lists every account and shows the first one, read-only', () => {
       const element = create();
 
-      const options = Array.from(element.querySelectorAll('#admin-account option')).map((option) =>
+      const options = Array.from(element.querySelectorAll('#support-account option')).map((option) =>
         option.textContent?.trim()
       );
       expect(options).toEqual(['ACC-U000011 - Trader One', 'ACC-U000012 - Trader Two']);
       expect(element.querySelector('.account-number')?.textContent).toContain('ACC-U000011');
-      expect(element.textContent).toContain("Admin view: orders can only be placed by the account's owner.");
+      expect(element.textContent).toContain("Support view: orders can only be placed by the account's owner.");
       expect(element.querySelector('.place-order')).toBeNull();
     });
+
+    it("quotes the shown account's holdings, as there is no market watch to do it", fakeAsync(() => {
+      tradingService.getAccountPositions.and.returnValue(
+        of([{ accountId: ACCOUNT.id, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 150, marketValue: null }])
+      );
+      const element = create();
+      tick();
+
+      expect(getQuotes).toHaveBeenCalledWith(['AAPL']);
+      expect(element.querySelector('app-market-watch')).toBeNull();
+      discardPeriodicTasks();
+    }));
 
     it('switches to the chosen account', () => {
       tradingService.getAccount.and.returnValue(of(otherAccount));
       const element = create();
 
-      const select = element.querySelector<HTMLSelectElement>('#admin-account')!;
+      const select = element.querySelector<HTMLSelectElement>('#support-account')!;
       select.value = String(otherAccount.id);
       select.dispatchEvent(new Event('change'));
       fixture.detectChanges();
 
       expect(tradingService.getAccount).toHaveBeenCalledWith(otherAccount.id);
       expect(element.querySelector('.account-number')?.textContent).toContain('ACC-U000012');
-    });
-
-    it('opens the analytics dashboard', () => {
-      const element = create();
-
-      Array.from(element.querySelectorAll('button'))
-        .find((button) => button.textContent?.trim() === 'Analytics')!
-        .click();
-
-      expect(analyticsSpy.open).toHaveBeenCalled();
     });
 
     it('suspends the active account and reactivates it', () => {
@@ -197,7 +206,7 @@ describe('PortfolioComponent', () => {
       depositAmount(250);
 
       expect(tradingService.deposit).toHaveBeenCalledWith(ACCOUNT.id, { amount: 250 });
-      expect(element.querySelector('[role="status"]')!.textContent).toContain('Cash deposited successfully.');
+      expect(element.querySelector('.deposit-form output')!.textContent).toContain('Cash deposited successfully.');
       expect(element.querySelector('.account-card')!.textContent).toContain(
         (ACCOUNT.cashBalance + 250).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
       );
@@ -227,8 +236,8 @@ describe('PortfolioComponent', () => {
       );
     });
 
-    it('is not offered to admins, who view accounts read-only', () => {
-      isAdmin = true;
+    it('is not offered to support, who view accounts read-only', () => {
+      isSupport = true;
       tradingService.getAccounts.and.returnValue(of([ACCOUNT]));
       create();
 

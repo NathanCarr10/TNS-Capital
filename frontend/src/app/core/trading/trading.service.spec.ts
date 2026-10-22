@@ -34,7 +34,7 @@ describe('TradingService', () => {
   afterEach(() => httpMock.verify());
 
   it('gets the current user profile from the auth service', () => {
-    const profile: CurrentUser = { username: 'trader1', roles: ['USER'], accountId: 11 };
+    const profile: CurrentUser = { email: 'trader1@example.com', roles: ['USER'], accountId: 11 };
     let result: CurrentUser | undefined;
     service.getCurrentUserProfile().subscribe((response) => (result = response));
 
@@ -50,7 +50,10 @@ describe('TradingService', () => {
       id: 11,
       accountNumber: 'ACC-U000011',
       holderName: 'Trader One',
+      email: 'ada@example.com',
       cashBalance: 5000,
+      reservedCash: 0,
+      availableCash: 5000,
       status: 'ACTIVE',
       openedOn: '2026-09-01T09:30:00Z',
       lastUpdated: '2026-10-13T09:00:00Z',
@@ -84,7 +87,7 @@ describe('TradingService', () => {
 
   it('gets account positions, keeping a null market value', () => {
     const positions: PositionResponse[] = [
-      { accountId: 11, symbol: 'AAPL', quantity: 10, averageCost: 180.25, marketValue: null },
+      { accountId: 11, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 180.25, marketValue: null },
     ];
     let result: PositionResponse[] | undefined;
     service.getAccountPositions(11).subscribe((response) => (result = response));

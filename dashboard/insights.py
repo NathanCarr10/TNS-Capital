@@ -17,14 +17,35 @@ def filled(trades):
     return trades[trades["status"] == "FILLED"]
 
 
-def trade_volume_by_date(trades):
-    """Number and value of filled trades per day (spec 7.3: Trade Volume)."""
-    done = filled(trades)
-    if done.empty:
-        return pd.DataFrame(columns=["date", "trades", "value"])
-    by_day = done.groupby(pd.to_datetime(done["created_on"]).dt.date).agg(
-        trades=("order_id", "count"), value=("notional", "sum"))
-    return by_day.rename_axis("date").reset_index()
+def in_period(trades, now, period):
+    """Orders placed in the last `period` before now (a naive UTC timestamp, like created_on)."""
+    return trades[pd.to_datetime(trades["created_on"]) >= now - period].reset_index(drop=True)
+
+
+TREND_FREQUENCIES = {"Day": "D", "Week": "W", "Month": "M"}
+
+
+def trend(trades, frequency="D"):
+    """Orders per day, week or month (spec 7.3: Trade Volume): how many, the filled count and value,
+    the fill rate, and how many a strategy or the trader placed.
+
+    frequency is a pandas period ("D", "W" or "M"); period is the day each one starts.
+    fill_rate is NaN for a period with no finished orders.
+    """
+    columns = ["period", "orders", "filled", "fill_rate", "value", "strategy_orders", "trader_orders"]
+    if trades.empty:
+        return pd.DataFrame(columns=columns)
+    done = trades["status"] == "FILLED"
+    by_strategy = placed_by(trades) == "Strategy"
+    flagged = trades.assign(
+        period=pd.to_datetime(trades["created_on"]).dt.to_period(frequency).dt.start_time,
+        filled=done, finished=trades["status"].isin(FINAL_STATUSES), value=trades["notional"].where(done, 0),
+        strategy_orders=by_strategy, trader_orders=~by_strategy)
+    periods = flagged.groupby("period", as_index=False).agg(
+        orders=("order_id", "count"), filled=("filled", "sum"), finished=("finished", "sum"),
+        value=("value", "sum"), strategy_orders=("strategy_orders", "sum"), trader_orders=("trader_orders", "sum"))
+    periods["fill_rate"] = (periods["filled"] / periods["finished"]).where(periods["finished"] > 0)
+    return periods.sort_values("period").reset_index(drop=True)[columns]
 
 
 def most_active_accounts(trades, top=5):
@@ -47,12 +68,6 @@ def fill_rate(trades):
     if finished.empty:
         return None
     return float((finished["status"] == "FILLED").mean())
-
-
-def status_breakdown(trades):
-    """How many orders ended in each status."""
-    counts = trades["status"].value_counts().rename_axis("status").reset_index(name="orders")
-    return counts.sort_values("status").reset_index(drop=True)
 
 
 def exposure_by_instrument(positions):
@@ -85,6 +100,16 @@ def value_by_asset_class(trades):
     return mix.sort_values(["asset_class", "side"]).reset_index(drop=True)
 
 
+def value_by_instrument(trades, top=10):
+    """The instruments with the most filled value: value, filled trades and asset class, biggest first."""
+    done = filled(trades)
+    if done.empty:
+        return pd.DataFrame(columns=["symbol", "asset_class", "trades", "value"])
+    by_symbol = done.groupby(["symbol", "asset_class"], as_index=False).agg(
+        trades=("order_id", "count"), value=("notional", "sum"))
+    return by_symbol.sort_values(["value", "symbol"], ascending=[False, True]).head(top).reset_index(drop=True)
+
+
 def not_yet_in_batch(live_orders, batch_trades):
     """Live orders the nightly ETL has not loaded yet: the gap between the two sources."""
     return live_orders[~live_orders["order_id"].isin(batch_trades["order_id"])].reset_index(drop=True)
@@ -93,11 +118,11 @@ def not_yet_in_batch(live_orders, batch_trades):
 def trades_by_user(trades):
     """What each user has traded, for the admin view: one row per user, busiest first.
 
-    trades needs a username column (see data.py). fill_rate is NaN for a user
+    trades needs an email column (see data.py). fill_rate is NaN for a user
     with no finished orders yet; top_symbol is the instrument they filled the
     most value in, or None if nothing filled.
     """
-    columns = ["username", "holder_name", "account_number", "orders", "filled", "rejected", "fill_rate",
+    columns = ["email", "holder_name", "account_number", "orders", "filled", "rejected", "fill_rate",
                "buy_value", "sell_value", "top_symbol", "last_order"]
     if trades.empty:
         return pd.DataFrame(columns=columns)
@@ -109,7 +134,7 @@ def trades_by_user(trades):
         buy_value=trades["notional"].where(done & (trades["side"] == "BUY"), 0),
         sell_value=trades["notional"].where(done & (trades["side"] == "SELL"), 0),
     )
-    keys = ["username", "holder_name", "account_number"]
+    keys = ["email", "holder_name", "account_number"]
     users = flagged.groupby(keys, as_index=False).agg(
         orders=("order_id", "count"), filled=("filled", "sum"), rejected=("rejected", "sum"),
         finished=("finished", "sum"), buy_value=("buy_value", "sum"), sell_value=("sell_value", "sum"),
@@ -125,8 +150,51 @@ def trades_by_user(trades):
         users = users.merge(top[keys + ["symbol"]].rename(columns={"symbol": "top_symbol"}), on=keys, how="left")
         users["top_symbol"] = users["top_symbol"].astype(object).where(users["top_symbol"].notna(), None)
 
-    users = users.sort_values(["orders", "username"], ascending=[False, True]).reset_index(drop=True)
+    users = users.sort_values(["orders", "email"], ascending=[False, True]).reset_index(drop=True)
     return users[columns]
+
+
+def placed_by(trades):
+    """Who placed each order: "Strategy" (Strategy Lab) or "Trader" (by hand).
+
+    Uses the strategy_name column from data.py; without it every order counts as the trader's.
+    """
+    if "strategy_name" not in trades:
+        return pd.Series("Trader", index=trades.index)
+    return trades["strategy_name"].notna().map({True: "Strategy", False: "Trader"})
+
+
+def strategy_vs_trader(trades):
+    """Orders placed by strategies next to everyone's own: one row each for "Strategy" and "Trader"."""
+    columns = ["placed_by", "orders", "filled", "fill_rate", "traded_value"]
+    if trades.empty:
+        return pd.DataFrame(columns=columns)
+    done = trades["status"] == "FILLED"
+    flagged = trades.assign(placed_by=placed_by(trades), filled=done,
+                            finished=trades["status"].isin(FINAL_STATUSES),
+                            traded_value=trades["notional"].where(done, 0))
+    summary = flagged.groupby("placed_by", as_index=False).agg(
+        orders=("order_id", "count"), filled=("filled", "sum"), finished=("finished", "sum"),
+        traded_value=("traded_value", "sum"))
+    summary["fill_rate"] = (summary["filled"] / summary["finished"]).where(summary["finished"] > 0)
+    return summary.sort_values("placed_by").reset_index(drop=True)[columns]
+
+
+def strategy_trades(trades):
+    """What each strategy has traded, busiest first: one row per strategy and owner."""
+    columns = ["strategy_name", "email", "symbol", "orders", "filled", "buy_value", "sell_value", "last_order"]
+    if trades.empty or "strategy_name" not in trades or trades["strategy_name"].isna().all():
+        return pd.DataFrame(columns=columns)
+    theirs = trades[trades["strategy_name"].notna()]
+    done = theirs["status"] == "FILLED"
+    flagged = theirs.assign(
+        filled=done,
+        buy_value=theirs["notional"].where(done & (theirs["side"] == "BUY"), 0),
+        sell_value=theirs["notional"].where(done & (theirs["side"] == "SELL"), 0))
+    summary = flagged.groupby(["strategy_name", "email", "symbol"], as_index=False).agg(
+        orders=("order_id", "count"), filled=("filled", "sum"), buy_value=("buy_value", "sum"),
+        sell_value=("sell_value", "sum"), last_order=("created_on", "max"))
+    return summary.sort_values(["orders", "strategy_name"], ascending=[False, True]).reset_index(drop=True)[columns]
 
 
 # Rejection reasons are free text with symbols, accounts and amounts in them
@@ -211,3 +279,11 @@ def dlq_summary(dlq):
     summary = flagged.groupby("failure_type", as_index=False).agg(
         messages=("id", "count"), pending=("pending", "sum"), retryable=("retryable", "sum"))
     return summary.sort_values(["messages", "failure_type"], ascending=[False, True]).reset_index(drop=True)
+
+
+def etl_reject_reasons(rejects):
+    """Orders the latest ETL run refused (analytics.etl_rejected_orders), per rule broken, biggest first."""
+    if rejects.empty:
+        return pd.DataFrame(columns=["reject_reason", "orders"])
+    reasons = rejects["reject_reason"].value_counts().rename_axis("reject_reason").reset_index(name="orders")
+    return reasons.sort_values(["orders", "reject_reason"], ascending=[False, True]).reset_index(drop=True)

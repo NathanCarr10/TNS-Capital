@@ -1,8 +1,11 @@
 <div class="shell">
   <aside class="sidebar">
     <a class="brand" routerLink="/portfolio" aria-label="TNS Capital home">
-      <span class="brand-mark" aria-hidden="true">T</span>
-      <span class="brand-name">TNS <span>Capital</span></span>
+      <picture>
+        <!-- Just the mark when the sidebar collapses into a top bar on narrow screens -->
+        <source media="(max-width: 820px)" srcset="brand/TNS_Capital_icon_transparent.png" />
+        <img class="brand-logo" src="brand/TNS_Capital_horizontal_dark_transparent.png" alt="TNS Capital" />
+      </picture>
     </a>
 
     <nav aria-label="Main">
@@ -10,6 +13,12 @@
         <a [routerLink]="item.link" routerLinkActive="active" ariaCurrentWhenActive="page">
           <app-icon [name]="item.icon" />
           <span>{{ item.label }}</span>
+          @if (item.link === '/dead-letters' && pendingDeadLetters()) {
+            <span class="nav-notification" [attr.aria-label]="pendingDeadLetters() + ' pending dead letters'">{{ pendingDeadLetters() }}</span>
+          }
+          @if (item.label === 'Support Inbox' && supportUnreadCount()) {
+            <span class="nav-notification" [attr.aria-label]="supportUnreadCount() + ' unread support notifications'">{{ supportUnreadCount() }}</span>
+          }
         </a>
       }
     </nav>
@@ -17,7 +26,9 @@
 
   <div class="main">
     <header class="topbar">
-      <app-symbol-search />
+      @if (!isSupport) {
+        <app-symbol-search />
+      }
 
       <div class="topbar-actions">
         <span
@@ -49,7 +60,7 @@
             <span class="user-name">{{ displayName() }}</span>
             <span class="user-sub">{{ subtitle() }}</span>
           </span>
-          <span class="badge">{{ isAdmin ? 'Admin' : 'Trader' }}</span>
+          <span class="badge">{{ isSupport ? 'Support' : 'Trader' }}</span>
         </div>
 
         <span class="divider" aria-hidden="true"></span>
@@ -61,8 +72,11 @@
       </div>
     </header>
 
+    <app-ticker-tape />
+
     <main class="content">
       <router-outlet />
     </main>
   </div>
+  @if (showSupportWidget()) { <app-support-widget /> }
 </div>

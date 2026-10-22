@@ -2,11 +2,16 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { PG_POOL } from '../database/database.module';
 
-export type Role = 'USER' | 'ADMIN';
+/**
+ * USER trades on their own account. The two staff roles have no account and are kept apart:
+ * SUPPORT works in the trading app, ADMIN runs the analytics dashboard and operations.
+ */
+export type Role = 'USER' | 'SUPPORT' | 'ADMIN';
+export type StaffRole = Exclude<Role, 'USER'>;
 
 export interface RegisteredUser {
   id: number;
-  username: string;
+  email: string;
   createdAt: Date;
   accountId: number;
   accountNumber: string;
@@ -14,9 +19,9 @@ export interface RegisteredUser {
 
 export interface AuthenticatedUser {
   id: number;
-  username: string;
+  email: string;
   roles: Role[];
-  /** The user's trading account; null for admins, who have none */
+  /** The user's trading account; null for support and admin users, who have none */
   accountId: number | null;
 }
 
@@ -25,23 +30,29 @@ export interface UserRecord extends AuthenticatedUser {
   passwordHash: string;
 }
 
-export class UsernameTakenError extends Error {
+export class EmailTakenError extends Error {
   constructor() {
-    super('Username already exists');
+    super('Email already exists');
   }
 }
 
-/** The admin username belongs to a trader, so it cannot be made the admin. */
-export class AdminNameTakenError extends Error {
-  constructor(username: string) {
-    super(`"${username}" is a trader's username, so it cannot be the admin account`);
+/** A staff email already belongs to a user with another role, which is never changed. */
+export class StaffEmailTakenError extends Error {
+  constructor(email: string, role: StaffRole, existingRoles: Role[]) {
+    const owner = existingRoles.includes('USER') ? "a trader's email" : `already the ${existingRoles.join(', ')} account`;
+    super(`"${email}" is ${owner}, so it cannot be the ${role} account`);
   }
 }
 
 // Postgres error code for a unique constraint violation
 const UNIQUE_VIOLATION = '23505';
 
-const USER_COLUMNS = 'id, username, password_hash, role, account_id';
+const USER_COLUMNS = 'id, email, password_hash, role, account_id';
+
+/** Emails are stored trimmed and in lower case, so Ada@Example.com and ada@example.com are one user */
+export function normaliseEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 /**
  * Account numbers for self-registered users: "ACC-U" plus the zero-padded
@@ -66,27 +77,28 @@ export class UsersService {
    * The user row, the account row and the link between them are written in
    * one transaction, so a user never exists without an account.
    *
+   * @param email already normalised (trimmed, lower case) by AuthService
    * @param passwordHash Argon2id hash; the plaintext never reaches this layer
-   * @param holderName account holder name; defaults to the username
-   * @throws UsernameTakenError if the username is already registered
+   * @param holderName account holder name; defaults to the part of the email before the "@"
+   * @throws EmailTakenError if the email is already registered
    *
-   * Satisfies AC#4: Duplicate username throws, doesn't overwrite
+   * Satisfies AC#4: Duplicate email throws, doesn't overwrite
    */
-  async create(username: string, passwordHash: string, holderName?: string): Promise<RegisteredUser> {
+  async create(email: string, passwordHash: string, holderName?: string): Promise<RegisteredUser> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
 
       const userResult = await client.query(
-        'INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id, username, created_at',
-        [username, passwordHash],
+        'INSERT INTO users (email, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id, email, created_at',
+        [email, passwordHash],
       );
       const user = userResult.rows[0];
       const userId = Number(user.id);
 
       const accountResult = await client.query(
-        'INSERT INTO accounts (account_number, holder_name, cash_balance) VALUES ($1, $2, 0) RETURNING id, account_number',
-        [accountNumberFor(userId), holderName?.trim() || username],
+        'INSERT INTO accounts (account_number, holder_name, email, cash_balance) VALUES ($1, $2, $3, 0) RETURNING id, account_number',
+        [accountNumberFor(userId), holderName?.trim() || defaultHolderName(email), email],
       );
       const account = accountResult.rows[0];
 
@@ -95,17 +107,17 @@ export class UsersService {
 
       return {
         id: userId,
-        username: user.username,
+        email: user.email,
         createdAt: user.created_at,
         accountId: Number(account.id),
         accountNumber: account.account_number,
       };
     } catch (error) {
       await client.query('ROLLBACK');
-      // Two registrations for the same username can both pass AuthService's check
+      // Two registrations for the same email can both pass AuthService's check
       const pgError = error as { code?: string; constraint?: string };
-      if (pgError.code === UNIQUE_VIOLATION && pgError.constraint === 'users_username_key') {
-        throw new UsernameTakenError();
+      if (pgError.code === UNIQUE_VIOLATION && pgError.constraint === 'users_email_key') {
+        throw new EmailTakenError();
       }
       throw error;
     } finally {
@@ -114,30 +126,52 @@ export class UsersService {
   }
 
   /**
-   * Creates the ADMIN user, or sets a new password on it. Admins have no trading account.
+   * Creates a staff user (SUPPORT or ADMIN), or sets a new password on it. Staff have no
+   * trading account.
    *
-   * @throws AdminNameTakenError if a trader (USER) already has this username
+   * @throws StaffEmailTakenError if a user with another role (a trader, or the other staff
+   *   role) already has this email
    */
-  async saveAdmin(username: string, passwordHash: string): Promise<void> {
-    const existing = await this.findByUsername(username);
-    if (existing && !existing.roles.includes('ADMIN')) {
-      throw new AdminNameTakenError(username);
+  async saveStaff(email: string, passwordHash: string, role: StaffRole): Promise<void> {
+    const existing = await this.findByEmail(email);
+    if (existing && !existing.roles.includes(role)) {
+      throw new StaffEmailTakenError(email, role, existing.roles);
     }
     if (existing) {
-      await this.pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [
-        passwordHash,
-        existing.id,
-      ]);
+      await this.pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, existing.id]);
       return;
     }
+    await this.pool.query('INSERT INTO users (email, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())', [
+      email,
+      passwordHash,
+      role,
+    ]);
+  }
+
+  /** Creates or updates the local demo trader without opening a second account. */
+  async saveDemoUser(email: string, passwordHash: string, accountNumber: string): Promise<void> {
+    const account = await this.pool.query('SELECT id FROM accounts WHERE account_number = $1', [accountNumber]);
+    if (account.rows.length === 0) {
+      throw new Error(`Demo account ${accountNumber} does not exist`);
+    }
+
+    const existing = await this.findByEmail(email);
+    if (existing && (existing.roles.length !== 1 || existing.roles[0] !== 'USER' || existing.accountId !== Number(account.rows[0].id))) {
+      throw new Error(`Demo email "${email}" is already linked to another user`);
+    }
+    if (existing) {
+      await this.pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, existing.id]);
+      return;
+    }
+
     await this.pool.query(
-      "INSERT INTO users (username, password_hash, role, created_at, updated_at) VALUES ($1, $2, 'ADMIN', NOW(), NOW())",
-      [username, passwordHash],
+      'INSERT INTO users (email, password_hash, role, account_id, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())',
+      [email, passwordHash, 'USER', account.rows[0].id],
     );
   }
 
-  async findByUsername(username: string): Promise<UserRecord | null> {
-    const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE username = $1`, [username]);
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    const result = await this.pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE email = $1`, [email]);
     return result.rows.length === 0 ? null : toUserRecord(result.rows[0]);
   }
 
@@ -147,16 +181,21 @@ export class UsersService {
   }
 }
 
+/** The part of the email before the "@", e.g. "ada" for ada@example.com */
+function defaultHolderName(email: string): string {
+  return email.slice(0, email.lastIndexOf('@')) || email;
+}
+
 function toUserRecord(row: {
   id: string | number;
-  username: string;
+  email: string;
   password_hash: string;
   role: Role;
   account_id: string | number | null;
 }): UserRecord {
   return {
     id: Number(row.id),
-    username: row.username,
+    email: row.email,
     passwordHash: row.password_hash,
     roles: [row.role],
     accountId: row.account_id === null ? null : Number(row.account_id),

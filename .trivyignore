@@ -9,6 +9,8 @@
 CVE-2026-47884
 
 # Same spring-webmvc 6.2.19 and the same Spring 7.0.9-only fix as above. The flaw is in
-# Server-Sent Events rendered through views; the app has no SSE endpoints (no SseEmitter,
-# ResponseBodyEmitter or text/event-stream). (owner: NathanCarr10, review: 2026-10-20)
+# Server-Sent Events rendered through views. The only SSE endpoint, the support chat's
+# /api/v1/support/conversations/{id}/events (SupportService.subscribe), sends a plain
+# string and JSON message objects, never a view or ModelAndView. (owner: NathanCarr10,
+# review: 2026-10-21)
 CVE-2026-47890

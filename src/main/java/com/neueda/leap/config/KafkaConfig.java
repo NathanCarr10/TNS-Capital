@@ -4,12 +4,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.OrderStatus;
+import com.neueda.leap.model.Order;
 import com.neueda.leap.exceptions.NonRetryableOrderException;
 import com.neueda.leap.kafka.TradeEventPublisher;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.OrderEvent;
 import com.neueda.leap.repositories.OrderRepository;
 import com.neueda.leap.services.DeadLetterService;
+import com.neueda.leap.services.ReservationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -47,6 +49,7 @@ public class KafkaConfig {
     private final TradeEventPublisher tradeEventPublisher;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ReservationService reservations;
 
     @Value("${trading.kafka.topics.orders:orders}")
     private String ordersTopic;
@@ -78,6 +81,12 @@ public class KafkaConfig {
      * Trade events that fail publishing are routed here.
      */
     public static final String TRADE_EVENTS_DLQ_TOPIC = "trade-events.dlq";
+
+    /**
+     * Price updates from the pricing feed (spec §10.3), keyed by symbol.
+     * Consumed by the strategy service.
+     */
+    public static final String MARKET_DATA_TOPIC = "market-data";
 
     /**
      * Creates the main orders topic.
@@ -136,6 +145,22 @@ public class KafkaConfig {
         return TopicBuilder.name(TRADE_EVENTS_DLQ_TOPIC)
                 .partitions(1)
                 .replicas(1)
+                .build();
+    }
+
+    /**
+     * Creates the market-data topic: live prices and replayed bars, keyed by
+     * symbol so each symbol's prices stay in order. Prices are only useful
+     * while fresh, so they are kept for a day.
+     *
+     * @return NewTopic bean for the market-data topic
+     */
+    @Bean
+    public NewTopic marketDataTopic() {
+        return TopicBuilder.name(MARKET_DATA_TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .config("retention.ms", String.valueOf(24L * 60 * 60 * 1000))
                 .build();
     }
 
@@ -232,15 +257,21 @@ public class KafkaConfig {
      * Also publishes a trade lifecycle event to notify downstream systems
      * (Settlement, Risk Dashboard) that the order was rejected.
      * 
-     * DEFENSIVE GUARANTEE: This method ensures that every order reaching the DLQ
-     * has status=REJECTED and an associated lifecycle event, even if
-     * saveRejectedOrder()
-     * failed in the async consumer.
+     * DEFENSIVE GUARANTEE: This method ensures that every NEW order reaching the
+     * DLQ ends REJECTED with an associated lifecycle event, even if
+     * saveRejectedOrder() failed in the async consumer. An order that already
+     * has a final status (FILLED, CANCELLED) keeps it: it was settled or
+     * cancelled while this message failed, e.g. a cancellation that won the
+     * race against a broker error.
+     * 
+     * A message that cannot be read is forwarded unchanged to orders.dlq, so a
+     * copy is kept for investigation instead of being lost when its offset is
+     * committed.
      * 
      * @param consumerRecord the Kafka consumer record that failed
      * @param exception      the exception that caused the failure
      */
-    private void handleRecovery(ConsumerRecord<?, ?> consumerRecord, Exception exception) {
+    void handleRecovery(ConsumerRecord<?, ?> consumerRecord, Exception exception) {
         try {
             // Determine if this is a non-retryable error
             boolean isNonRetryable = isNonRetryableException(exception);
@@ -258,38 +289,11 @@ public class KafkaConfig {
 
             OrderEvent event = envelope.getPayload();
 
-            // DEFENSIVE GUARANTEE: Explicitly update order status to REJECTED
-            // This ensures status is REJECTED even if saveRejectedOrder() failed earlier
-            // and records the same failure reason that is stored in dlq_messages
+            // DEFENSIVE GUARANTEE: a NEW order ends REJECTED even if saveRejectedOrder()
+            // failed earlier, with the same failure reason that is stored in dlq_messages
             String failureReason = DeadLetterService.buildFailureReason(exception);
             orderRepository.findById(event.orderId())
-                    .ifPresent(order -> {
-                        // Only update status and publish event if order is not already REJECTED
-                        // This prevents duplicate trade events when processOrderEvent() already
-                        // published the REJECTED event
-                        if (order.getStatus() != OrderStatus.REJECTED) {
-                            OrderStatus previousStatus = order.getStatus();
-                            order.setStatus(OrderStatus.REJECTED);
-                            order.setStatusReason(failureReason);
-                            orderRepository.save(order);
-                            log.info(
-                                    "Updated order status to REJECTED in recovery handler (was not REJECTED): orderId={}, previousStatus={}",
-                                    event.orderId(), previousStatus);
-
-                            // Publish trade event only if status changed to REJECTED here
-                            tradeEventPublisher.publish(order, previousStatus, "EXHAUSTED_RETRIES");
-                            log.info("Published REJECTED trade event in recovery handler: orderId={}, previousStatus={}",
-                                    event.orderId(), previousStatus);
-                        } else {
-                            if (order.getStatusReason() == null) {
-                                order.setStatusReason(failureReason);
-                                orderRepository.save(order);
-                            }
-                            log.debug(
-                                    "Order already REJECTED (trade event was published during processing): orderId={}",
-                                    event.orderId());
-                        }
-                    });
+                    .ifPresent(order -> rejectIfStillNew(order, failureReason));
 
             // Capture the failed message to DLQ database table
             // Pass the retryability flag so admin UI knows which messages can be safely replayed
@@ -304,11 +308,14 @@ public class KafkaConfig {
                     event.orderId());
 
         } catch (JsonProcessingException jsonException) {
-            // Message deserialization failed - log the raw message for manual investigation
+            // The message cannot be read, so it has no order to reject or capture in the
+            // DLQ table. Its offset is committed after this returns, so keep the raw
+            // message on orders.dlq for manual investigation
             log.error(
-                    "Failed to deserialize order message for DLQ capture (message will remain in orders topic): topic={}, partition={}, offset={}, deserializationError={}",
-                    consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
+                    "Unreadable order message, forwarding it to {}: topic={}, partition={}, offset={}, deserializationError={}",
+                    ORDERS_DLQ_TOPIC, consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
                     jsonException.getMessage(), jsonException);
+            kafkaTemplate.send(ORDERS_DLQ_TOPIC, String.valueOf(consumerRecord.value()));
         } catch (Exception recoveryException) {
             // Unexpected error during recovery - log but don't throw to prevent cascading
             // failures
@@ -316,6 +323,32 @@ public class KafkaConfig {
                     "Unexpected error while capturing message to DLQ: topic={}, partition={}, offset={}, error={}",
                     consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset(),
                     recoveryException.getMessage(), recoveryException);
+        }
+    }
+
+    /**
+     * Stores a NEW order as REJECTED, releasing the cash or shares it reserved,
+     * and publishes its REJECTED event. An order
+     * already REJECTED (its event was published during processing) only gets
+     * the failure reason if it has none; FILLED and CANCELLED orders keep
+     * their status.
+     */
+    private void rejectIfStillNew(Order order, String failureReason) {
+        OrderStatus status = order.getStatus();
+        switch (status) {
+            case NEW -> reservations.rejectIfNew(order.getId(), failureReason).ifPresent(rejected -> {
+                log.info("Updated order status to REJECTED in recovery handler (was NEW): orderId={}", order.getId());
+                tradeEventPublisher.publish(rejected, status, "EXHAUSTED_RETRIES");
+            });
+            case REJECTED -> {
+                if (order.getStatusReason() == null) {
+                    order.setStatusReason(failureReason);
+                    orderRepository.save(order);
+                }
+                log.debug("Order already REJECTED (trade event was published during processing): orderId={}",
+                        order.getId());
+            }
+            default -> log.info("Order already {}, keeping its status: orderId={}", status, order.getId());
         }
     }
 

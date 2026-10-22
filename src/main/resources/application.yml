@@ -75,10 +75,21 @@ market-data:
     # A pooled price not updated for this long is refreshed over REST before use
     max-price-age: 60s
 
+newsletter:
+  # Fridays at 17:00 New York time, after the US market closes. NEWSLETTER_CRON=- switches it off
+  cron: ${NEWSLETTER_CRON:0 0 17 * * FRI}
+  zone: America/New_York
+  movers-per-side: 5
+  # Lets support staff publish the week's issue before Friday, e.g. for a demo. The Friday run then skips
+  # that week, so keep it off in production. NEWSLETTER_EARLY_PUBLISH=true switches it on
+  early-publish: ${NEWSLETTER_EARLY_PUBLISH:false}
+
 dlq:
   auto-resolve:
-    # PENDING DLQ messages are marked RESOLVED once older than after-ms
-    enabled: true
+    # PENDING DLQ messages are marked RESOLVED once older than after-ms. Off: a failed order
+    # stays PENDING until an admin reviews or replays it (OWASP A09-4). DLQ_AUTO_RESOLVE=true
+    # turns it back on, e.g. for a demo.
+    enabled: ${DLQ_AUTO_RESOLVE:false}
     after-ms: 10000
     interval-ms: 1000
 
@@ -104,10 +115,19 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      # /actuator/health is public (SecurityConfig): anyone gets UP or DOWN,
+      # only admins get the database and disk details
+      show-details: when-authorized
+      roles: ADMIN
   health:
     db:
       enabled: true
+
+# The metrics in Prometheus format, served at /metrics on their own port for the monitoring
+# stack (MetricsServer). 0 turns it off; Docker Compose sets 9464, which only the Compose
+# network can reach. The actuator on the API port stays admin-only.
+metrics:
+  port: ${METRICS_PORT:0}
 
 springdoc:
   swagger-ui:

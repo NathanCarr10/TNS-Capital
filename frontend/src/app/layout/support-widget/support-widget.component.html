@@ -1,0 +1,88 @@
+@if (!embedded()) {
+<button type="button" class="support-launcher" [class.active]="open()" (click)="toggle()" aria-haspopup="dialog" [attr.aria-expanded]="open()">
+  <app-icon name="help" />
+  <span>Need Help?</span>
+  @if (unreadCount()) { <b class="notification-count">{{ unreadCount() }}</b> }
+</button>
+}
+
+@if (embedded() || open()) {
+  <dialog open class="support-panel" [class.embedded-panel]="embedded()" aria-labelledby="support-title">
+    <header class="support-header">
+      <div>
+        <p class="eyebrow">TNS Capital support</p>
+        <h2 id="support-title">How can we help?</h2>
+      </div>
+      <button type="button" class="icon-btn" aria-label="Close support" (click)="close()"><app-icon name="close" /></button>
+    </header>
+
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    @if (loading()) { <p class="empty">Loading your conversations...</p> }
+    @else {
+      <div class="support-body">
+        <aside class="conversation-list" aria-label="Support conversations">
+          @if (!conversations().length) { <p class="empty">No conversations yet.</p> }
+          @for (conversation of conversations(); track conversation.id) {
+            <div class="conversation" [class.selected]="selectedId() === conversation.id">
+              <button type="button" class="conversation-select" (click)="select(conversation.id)">
+                <strong>{{ conversation.subject }}</strong>
+                <time>{{ conversation.updatedAt | date:'MMM d, h:mm a' }}</time>
+              </button>
+              @if (isSupport && conversation.accountId != null) {
+                <a class="customer-link" href="/portfolio" (click)="viewCustomerAccount(conversation, $event)">{{ conversation.customerEmail }}</a>
+              } @else {
+                <span>{{ conversation.customerEmail }}</span>
+              }
+            </div>
+          }
+        </aside>
+
+        <div class="conversation-view">
+          @if (selected(); as conversation) {
+            <div class="conversation-title">
+              <strong>{{ conversation.subject }}</strong>
+              <span>{{ conversation.status }}</span>
+              @if (isSupport && conversation.status === 'OPEN') {
+                <button type="button" class="close-conversation" [disabled]="sending()" (click)="closeConversation()">Close conversation</button>
+              }
+            </div>
+            <div class="messages" aria-live="polite">
+              @for (message of conversation.messages; track message.id) {
+                <article class="message" [class.from-agent]="message.senderRole === 'SUPPORT'">
+                  <span class="message-author">{{ message.senderRole === 'SUPPORT' ? 'Support team' : message.senderEmail }}</span>
+                  <p>{{ message.body }}</p>
+                  <time>{{ message.createdAt | date:'MMM d, h:mm a' }}</time>
+                </article>
+              }
+            </div>
+            @if (conversation.status === 'OPEN') {
+            <form class="composer" (ngSubmit)="sendReply()">
+              <label class="sr-only" for="support-reply">Reply</label>
+              <textarea id="support-reply" name="reply" [(ngModel)]="reply" rows="2" placeholder="Write a reply..."></textarea>
+              <button type="submit" class="send" [disabled]="sending() || !reply.trim()"><app-icon name="send" /><span>Send reply</span></button>
+            </form>
+            } @else {
+              <div class="closed-note">
+                <p>This conversation is closed. The message history is still available.</p>
+                @if (!isSupport) {
+                  <button type="button" class="send" (click)="startNewConversation()"><app-icon name="send" /><span>Start a new conversation</span></button>
+                }
+              </div>
+            }
+          } @else if (!isSupport) {
+            <form class="new-request" (ngSubmit)="submitRequest()">
+              <h3>Start a conversation</h3>
+              <label for="support-subject">What do you need help with?</label>
+              <input id="support-subject" name="subject" [(ngModel)]="subject" maxlength="120" placeholder="e.g. Question about an order" />
+              <label for="support-message">Message</label>
+              <textarea id="support-message" name="body" [(ngModel)]="body" rows="5" maxlength="4000" placeholder="Tell us what happened..."></textarea>
+              <button type="submit" class="send" [disabled]="sending() || !subject.trim() || !body.trim()"><app-icon name="send" /><span>Send request</span></button>
+            </form>
+          } @else {
+            <p class="empty">Select a customer conversation.</p>
+          }
+        </div>
+      </div>
+    }
+  </dialog>
+}

@@ -19,6 +19,8 @@ export class HoldingsComponent {
   readonly positions = input<PositionResponse[] | null>(null);
   /** Why the positions could not be loaded. */
   readonly error = input<string | null>(null);
+  /** Link each symbol to its trade page; support has no trade page. */
+  readonly linkSymbols = input(true);
 
   readonly skeletonRows = [1, 2, 3];
 

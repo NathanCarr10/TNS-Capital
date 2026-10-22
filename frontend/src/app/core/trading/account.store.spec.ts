@@ -10,14 +10,14 @@ import { TradingService } from './trading.service';
 
 describe('AccountStore', () => {
   let tradingService: jasmine.SpyObj<TradingService>;
-  let isAdmin: boolean;
+  let isSupport: boolean;
 
   const createStore = (): AccountStore => {
     TestBed.configureTestingModule({
       providers: [
         AccountStore,
         { provide: TradingService, useValue: tradingService },
-        { provide: AuthService, useValue: { isAdmin: () => isAdmin } },
+        { provide: AuthService, useValue: { isSupport: () => isSupport } },
       ],
     });
     return TestBed.inject(AccountStore);
@@ -25,14 +25,14 @@ describe('AccountStore', () => {
 
   beforeEach(() => {
     tradingService = tradingServiceStub();
-    isAdmin = false;
+    isSupport = false;
   });
 
   it("loads the trader's account, open positions and instruments", () => {
     tradingService.getAccountPositions.and.returnValue(
       of([
-        { accountId: 11, symbol: 'AAPL', quantity: 3, averageCost: 100, marketValue: null },
-        { accountId: 11, symbol: 'MSFT', quantity: 0, averageCost: 200, marketValue: null },
+        { accountId: 11, symbol: 'AAPL', quantity: 3, reservedQuantity: 0, availableQuantity: 3, averageCost: 100, marketValue: null },
+        { accountId: 11, symbol: 'MSFT', quantity: 0, reservedQuantity: 0, availableQuantity: 0, averageCost: 200, marketValue: null },
       ])
     );
 
@@ -48,7 +48,7 @@ describe('AccountStore', () => {
   });
 
   it('says so when no account is linked to the user', () => {
-    tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'nobody', roles: ['USER'], accountId: null }));
+    tradingService.getCurrentUserProfile.and.returnValue(of({ email: 'nobody@example.com', roles: ['USER'], accountId: null }));
 
     const store = createStore();
 
@@ -78,12 +78,12 @@ describe('AccountStore', () => {
     expect(tradingService.getAccountPositions).toHaveBeenCalledTimes(2);
   });
 
-  describe('for an admin', () => {
+  describe('for support', () => {
     const other = { ...ACCOUNT, id: 12, accountNumber: 'ACC-U000012', holderName: 'Trader Two' };
 
     beforeEach(() => {
-      isAdmin = true;
-      tradingService.getCurrentUserProfile.and.returnValue(of({ username: 'admin', roles: ['ADMIN'], accountId: null }));
+      isSupport = true;
+      tradingService.getCurrentUserProfile.and.returnValue(of({ email: 'support@tns-capital.local', roles: ['SUPPORT'], accountId: null }));
     });
 
     it('lists every account by number and shows the first one', () => {
@@ -91,7 +91,7 @@ describe('AccountStore', () => {
 
       const store = createStore();
 
-      expect(store.adminAccounts().map((account) => account.id)).toEqual([11, 12]);
+      expect(store.supportAccounts().map((account) => account.id)).toEqual([11, 12]);
       expect(store.account()?.id).toBe(ACCOUNT.id);
       expect(tradingService.getAccountPositions).toHaveBeenCalledWith(ACCOUNT.id);
     });

@@ -12,7 +12,8 @@ import { TradingService } from './trading.service';
  * The signed-in user's account, its open positions and the instrument list,
  * loaded once and shared by every page of the signed-in area.
  *
- * Admins have no account of their own: they pick any account and view it read-only.
+ * Support staff have no account of their own: they pick any trader's account, view it
+ * read-only and can suspend or reactivate it. Admins never get here (notAdminGuard).
  * Provided by the app shell, so it is rebuilt for each sign-in.
  */
 @Injectable()
@@ -20,10 +21,10 @@ export class AccountStore {
   private readonly tradingService = inject(TradingService);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly isAdmin = inject(AuthService).isAdmin();
+  readonly isSupport = inject(AuthService).isSupport();
 
   readonly profile = signal<CurrentUser | null>(null);
-  readonly adminAccounts = signal<AccountResponse[]>([]);
+  readonly supportAccounts = signal<AccountResponse[]>([]);
   readonly account = signal<AccountResponse | null>(null);
   readonly accountLoading = signal(true);
   readonly accountError = signal<string | null>(null);
@@ -50,7 +51,7 @@ export class AccountStore {
     this.loadInstruments();
   }
 
-  /** Admin view: switch to another account. */
+  /** Support view: switch to another account. */
   viewAccount(accountId: number): void {
     this.accountLoading.set(true);
     this.accountError.set(null);
@@ -77,7 +78,7 @@ export class AccountStore {
     return this.tradingService.updateAccount(account.id, { holderName }).pipe(tap((updated) => this.account.set(updated)));
   }
 
-  /** Admin view: suspend the shown account or reactivate it. */
+  /** Support view: suspend the shown account or reactivate it. */
   setStatus(status: AccountResponse.StatusEnum): Observable<AccountResponse> {
     const account = this.account();
     if (!account) {
@@ -86,7 +87,7 @@ export class AccountStore {
     return this.tradingService.updateAccountStatus(account.id, { status }).pipe(
       tap((updated) => {
         this.account.set(updated);
-        this.adminAccounts.update((accounts) => accounts.map((item) => (item.id === updated.id ? updated : item)));
+        this.supportAccounts.update((accounts) => accounts.map((item) => (item.id === updated.id ? updated : item)));
       })
     );
   }
@@ -108,10 +109,10 @@ export class AccountStore {
     this.subscribe(this.tradingService.getCurrentUserProfile(), {
       next: (profile) => {
         this.profile.set(profile);
-        if (this.isAdmin) {
-          this.loadAdminAccounts();
+        if (this.isSupport) {
+          this.loadSupportAccounts();
         } else if (profile.accountId == null) {
-          this.failAccount(new Error(), 'No trading account is linked to this user. Please contact support.');
+          this.failAccount(new Error('No trading account linked'), 'No trading account is linked to this user. Please contact support.');
         } else {
           this.viewAccount(profile.accountId);
         }
@@ -120,13 +121,13 @@ export class AccountStore {
     });
   }
 
-  private loadAdminAccounts(): void {
+  private loadSupportAccounts(): void {
     this.subscribe(this.tradingService.getAccounts(), {
       next: (accounts) => {
         const sorted = [...accounts].sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
-        this.adminAccounts.set(sorted);
+        this.supportAccounts.set(sorted);
         if (sorted.length === 0) {
-          this.failAccount(new Error(), 'There are no trading accounts yet.');
+          this.failAccount(new Error('No trading accounts'), 'There are no trading accounts yet.');
           this.positions.set([]);
           return;
         }

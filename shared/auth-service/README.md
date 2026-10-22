@@ -11,22 +11,24 @@ To run it on its own (Node 22+):
 
 ```bash
 cd shared/auth-service
-npm install
+npm ci
 npm run build
-JWT_SECRET=<same value as in the project .env> DB_HOST=localhost DB_PASSWORD=... 
-npm start
+set -a; source ../../.env; set +a   # JWT_SECRET, the staff passwords, DB_USER and DB_PASSWORD
+DB_HOST=localhost npm start
 ```
 
-Listens on `http://localhost:4000`. It refuses to start without a `JWT_SECRET` of at least 32 bytes.
+Listens on `http://localhost:4000`. It refuses to start without a `JWT_SECRET` of at least 32
+bytes, or with an `ADMIN_PASSWORD` or `SUPPORT_PASSWORD` that is too short or shared by both.
 
-Refresh tokens live in their own table, `refresh_tokens` (`db/tables/09_refresh_tokens.sql`).
-The schema scripts only run on an empty database, so after pulling this change recreate
-yours with `db/recreate_db.sh`.
+The service owns the `users` and `refresh_tokens` tables (`db/tables/08_users.sql`,
+`db/tables/09_refresh_tokens.sql`). The schema scripts only run on an empty database, so after
+pulling a schema change recreate yours with `docker compose down -v` (or `db/recreate_db.sh`).
 
 | Endpoint | Needs an access token | Purpose |
 |---|---|---|
 | `POST /auth/register` | no | create a user and their trading account |
 | `POST /auth/login` | no | get an access token and a refresh token |
+| `POST /auth/token` | no (takes a client id and secret) | a backend service's access token (client credentials); only the strategy service has one |
 | `POST /auth/refresh` | no (takes the refresh token) | spend the refresh token for a new access token and refresh token |
 | `POST /auth/logout` | no (takes the refresh token) | end the session the refresh token belongs to |
 | `GET /auth/me` | **yes** | the user the access token belongs to |
@@ -38,30 +40,31 @@ yours with `db/recreate_db.sh`.
 ```bash
 curl -X POST http://localhost:4000/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123","holderName":"Ada Lovelace"}'
+  -d '{"email":"trader1@example.com","password":"password123","holderName":"Ada Lovelace"}'
 ```
 
 ```json
-{"id":4,"username":"trader1","createdAt":"...","accountId":11,"accountNumber":"ACC-U000004"}
+{"id":4,"email":"trader1@example.com","createdAt":"...","accountId":11,"accountNumber":"ACC-U000004"}
 ```
 
 Registration creates the user **and** their trading account in one transaction: status
-`ACTIVE`, cash balance `0`, holder name `holderName` (defaults to the username). The user is
-linked to it through `users.account_id`. Usernames are 3-100 characters, passwords 8-256.
+`ACTIVE`, cash balance `0`, holder name `holderName` (defaults to the part of the email before
+the `@`). The user is linked to it through `users.account_id`. The email is the user's only
+identity: it is stored trimmed and in lower case, at most 320 characters. Passwords are 8-256.
 
 ## Log in
 
 ```bash
 curl -X POST http://localhost:4000/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"trader1","password":"password123"}'
+  -d '{"email":"trader1@example.com","password":"password123"}'
 ```
 
 ```json
 {"accessToken":"eyJhbGc...","refreshToken":"Xq3v...43 characters"}
 ```
 
-- **`accessToken`**: a JWT valid for 15 minutes, with the claims `sub` (username), `roles`,
+- **`accessToken`**: a JWT valid for 15 minutes, with the claims `sub` (the user's email), `roles`,
   `typ` (`"access"`), `jti` (a random UUID), `iss` (`urn:tns-capital:auth-service`), `iat`
   and `exp`. Send it as `Authorization: Bearer <accessToken>` to the trading API and to
   `GET /auth/me`.
@@ -72,13 +75,21 @@ curl -X POST http://localhost:4000/auth/login \
 | User | Password | roles | Can access |
 |---|---|---|---|
 | any registered user | their own | `["USER"]` | only their own account |
-| `admin` | `ADMIN_PASSWORD` | `["ADMIN"]` | every account, the DLQ, opening accounts |
+| `support@tns-capital.local` | `SUPPORT_PASSWORD` | `["SUPPORT"]` | every account in the trading app, suspending and reactivating them, opening accounts, instruments |
+| `admin@tns-capital.local` | `ADMIN_PASSWORD` | `["ADMIN"]` | the analytics dashboard, the DLQ, the actuator; no traders' accounts |
+| `jane.doe@example.com` (optional) | `DEMO_PASSWORD` | `["USER"]` | the seeded demo account `ACC-DEMO-JANE` |
 
 Roles come from `users.role`. Nothing is seeded with a known password: when the service
-starts, `src/users/admin-bootstrap.ts` creates the `admin` user (`ADMIN_USERNAME` to rename it)
-from `ADMIN_PASSWORD`, or sets that password on it if it differs, so changing the variable and
-restarting rotates it. It never promotes a trader who registered the same username. The trading API resolves which account a USER owns from the
-token's `sub`.
+starts, `src/users/staff-bootstrap.ts` creates the `admin@tns-capital.local` user (`ADMIN_EMAIL` to change it)
+from `ADMIN_PASSWORD` and the `support@tns-capital.local` user (`SUPPORT_EMAIL`) from `SUPPORT_PASSWORD`, or sets
+the password on one if it differs, so changing the variable and restarting rotates it. It never
+changes a role: a trader who registered one of those emails is never promoted, and the
+support user never becomes the admin. The two passwords must differ. The trading API resolves
+which account a USER owns from the token's `sub`.
+
+When `DEMO_PASSWORD` is set, `src/users/demo-bootstrap.ts` does the same for the demo trader
+`jane.doe@example.com`, linking it to the seeded `ACC-DEMO-JANE` account. Without it, the demo
+login is disabled and a warning is logged.
 
 ## Refresh and log out
 
@@ -113,11 +124,34 @@ expired refresh token". Revoking a session stops only new access tokens: ones al
 keep working until they expire, at most 15 minutes later, because the trading API verifies
 them without calling this service.
 
+## Service tokens (client credentials)
+
+Backend services log in with a client id and secret instead of an email and password. The
+only client is the strategy service (Strategy Lab), which places orders for traders who have
+switched a strategy on while they are not logged in (docs/DECISIONS.md 16).
+
+```bash
+curl -X POST http://localhost:4000/auth/token \
+  -H "Content-Type: application/json" \
+  -d "{\"clientId\":\"strategy-service\",\"clientSecret\":\"$STRATEGY_CLIENT_SECRET\"}"
+# -> {"accessToken":"eyJhbGc...","tokenType":"Bearer","expiresIn":900}
+```
+
+- The secret is `STRATEGY_CLIENT_SECRET` from the project's `.env`: at least 32 characters, and
+  the `change-me` placeholder is refused. Without it the client does not exist and every request
+  gets `401 AUTH-401` "invalid client credentials", the same answer as a wrong secret.
+- The access token has the usual claims, with `sub` `service:strategy-service` (not an email
+  address, so it never names a user) and `roles` `["STRATEGY"]`. It lasts 15 minutes and comes
+  with no refresh token: the service asks for a new one before it expires.
+- The trading API accepts `STRATEGY` only for placing and reading orders, and only on an account
+  whose owner has an ACTIVE strategy.
+- The secret is compared in constant time, and every attempt is logged like a login.
+
 ## Protected routes
 
 ```bash
 curl http://localhost:4000/auth/me -H "Authorization: Bearer <accessToken>"
-# -> {"username":"trader1","roles":["USER"],"accountId":11}
+# -> {"email":"trader1@example.com","roles":["USER"],"accountId":11}
 ```
 
 Every route needs an access token unless it is marked `@Public()`. Two global guards
@@ -146,24 +180,44 @@ the next refresh.
 |---|---|---|
 | HTTP | `auth/auth.controller.ts` | routes and DTO validation only |
 | Service | `auth/auth.service.ts` | `register`, `login`, `refresh` (rotation, reuse detection), `logout`, `validate` (credential check), `me` |
+| Service | `auth/service-clients.service.ts` | `issueToken`: client credentials of backend services (the strategy service) |
 | Service | `auth/token.service.ts` | `issue`, `verify`, `decode`; generating and hashing refresh tokens |
 | Data | `users/users.service.ts` | SQL on the `users` and `accounts` tables; never sees a plaintext password |
 | Data | `users/refresh-tokens.service.ts` | SQL on the `refresh_tokens` table; rotation runs in one transaction |
 | Access control | `auth/guards/`, `auth/decorators/` | `JwtAuthGuard`, `RolesGuard`, `@Public()`, `@Roles()`, `@CurrentUser()` |
 | Logging | `common/request-logging.interceptor.ts` | one line per request (method, path, status, time, user); never bodies, so no passwords or tokens |
+| Metrics | `common/metrics.ts` | login, refresh token reuse and response status counters for the monitoring stack |
 
 ## Errors
 
 Every error is `{ "errorCode", "message", "timestamp" }`: `VAL-422` (400, invalid body or
 unknown property), `AUTH-401` (wrong credentials, with no hint which part was wrong),
-`AUTH-403` (missing role), `AUTH-429` (rate limit), `USR-409` (username taken), `NOT-404`,
+`AUTH-403` (missing role), `AUTH-429` (rate limit), `USR-409` (email already registered), `NOT-404`,
 `REQ-405` and `SYS-500`.
 
 ## Rate limiting
 
-`POST /auth/register`, `/auth/login` and `/auth/refresh` allow `AUTH_RATE_LIMIT` requests
+`POST /auth/register`, `/auth/login`, `/auth/refresh` and `/auth/token` allow `AUTH_RATE_LIMIT` requests
 (default 10) per client IP per minute, to slow down password guessing. Above that the
 service answers `429 AUTH-429` with a `Retry-After` header. The other routes are not limited.
+
+Browsers reach the service through the frontend's nginx, so the client IP comes from the
+`X-Forwarded-For` header nginx adds. Only proxies listed in `AUTH_TRUST_PROXY` are believed
+(default `loopback, uniquelocal`: nginx on the Docker network); a request from anywhere else is
+limited by its own address, so the header cannot be forged to dodge the limit. Behind other
+proxies, set `AUTH_TRUST_PROXY` to their addresses or subnets, a number of hops, or `false`.
+
+## Logs and metrics
+
+With `LOG_FORMAT=json` (as in Docker Compose) every log line is one JSON object (`level`,
+`message`, `context`, `timestamp`), so the monitoring stack can filter it by level. Without
+it the usual coloured text lines are kept.
+
+With `METRICS_PORT` set (9464 in Compose) the service serves Prometheus counters at
+`GET /metrics` on that port, for the monitoring stack's alerts (OWASP A09-1, A09-2):
+`auth_logins_total{outcome}`, `auth_refresh_token_reuse_total` and
+`auth_http_responses_total{status}`. The port is not published and nginx does not proxy it.
+See [observability/README.md](../../observability/README.md).
 
 ## Tests
 
@@ -175,8 +229,12 @@ npm test
   database replaced by a fake
 - `tests/request-logging.interceptor.spec.ts`: the request log line and its level
 - `tests/rate-limit.spec.ts`: the 429 on the credential endpoints, with a limit of 3
+- `tests/metrics.spec.ts`: the counters and the `/metrics` server
 - `tests/auth.service.spec.ts`, `tests/token.service.spec.ts`, `tests/guards.spec.ts`: unit tests
 - `tests/password-hasher.spec.ts`: Argon2id hashing
+- `tests/env.validation.spec.ts`: the startup checks on `JWT_SECRET`, the staff passwords and
+  `STRATEGY_CLIENT_SECRET`
+- `tests/staff-bootstrap.spec.ts`: creating and rotating the admin and support users at startup
 - `tests/users.service.spec.ts`: the SQL of `UsersService` and `RefreshTokensService` against a real Postgres with the `db/` schema. Skipped
   unless `DB_HOST` is set (also set `DB_PORT`, `DB_USER`, `DB_PASSWORD`)
 

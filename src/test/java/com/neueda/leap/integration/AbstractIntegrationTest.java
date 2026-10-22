@@ -33,7 +33,7 @@ import org.testcontainers.utility.MountableFile;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@WithMockUser(username = "testuser", roles = "ADMIN")
+@WithMockUser(username = "testuser", roles = "SUPPORT")
 public abstract class AbstractIntegrationTest {
 
     @SuppressWarnings("resource")
@@ -43,19 +43,22 @@ public abstract class AbstractIntegrationTest {
             .withUsername("test_user")
             .withPassword("test_password")
             .withEnv("DB_USER", "test_user")
-            // Same layout as db/Dockerfile: the init script runs tables, then views, then data
+            // Same layout as db/Dockerfile: the init script runs tables, views, the services' roles, then data
             .withCopyFileToContainer(MountableFile.forHostPath("db/docker-entrypoint-initdb.sh", 0755),
                     "/docker-entrypoint-initdb.d/00-run-sql.sh")
             .withCopyFileToContainer(MountableFile.forHostPath("db/tables"),
                     "/docker-entrypoint-initdb.d/tables")
             .withCopyFileToContainer(MountableFile.forHostPath("db/views"),
                     "/docker-entrypoint-initdb.d/views")
+            .withCopyFileToContainer(MountableFile.forHostPath("db/roles"),
+                    "/docker-entrypoint-initdb.d/roles")
             .withCopyFileToContainer(MountableFile.forHostPath("db/data"),
                     "/docker-entrypoint-initdb.d/data");
 
     @SuppressWarnings("resource")
     static final KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:7.5.0"));
+            DockerImageName.parse("confluentinc/cp-kafka:7.5.0"))
+            .withKraft();
 
     // Stand-in for the Broker Simulator: fills every order at once (see TestBroker)
     protected static final TestBroker broker;
@@ -113,6 +116,6 @@ public abstract class AbstractIntegrationTest {
     }
 
     private void truncate() {
-        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log RESTART IDENTITY CASCADE");
+        jdbcTemplate.execute("TRUNCATE accounts, instruments, dlq_messages, trade_event_log, newsletter_issues RESTART IDENTITY CASCADE");
     }
 }

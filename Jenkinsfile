@@ -10,6 +10,8 @@ pipeline {
         IMAGE_NAME = "tns-capital-skeleton"
         // The auth service image, built only so Trivy can scan its OS packages and Node runtime
         AUTH_IMAGE_NAME = "tns-capital-auth"
+        // The strategy service image, built only so Trivy can scan its jar and OS packages
+        STRATEGY_IMAGE_NAME = "tns-capital-strategy"
 
         // Security scanners run as pinned Docker images so the Jenkins agent only
         // needs the Docker CLI — nothing to install, and every build uses the same
@@ -122,6 +124,22 @@ pipeline {
             }
         }
 
+        stage('Strategy Service Tests') {
+            steps {
+                // The Strategy Lab service is its own Maven project. verify runs its unit tests and
+                // StrategyServiceIT (Postgres built from db/ and Kafka, with Testcontainers), and
+                // writes the JaCoCo report SonarQube reads
+                dir('strategy-service') {
+                    sh 'mvn -B verify'
+                }
+            }
+            post {
+                always {
+                    junit 'strategy-service/target/surefire-reports/*.xml, strategy-service/target/failsafe-reports/*.xml'
+                }
+            }
+        }
+
         stage('ETL Tests') {
             steps {
                 // The ETL pytest suite, including its Postgres integration tests against a
@@ -150,14 +168,10 @@ pipeline {
 
         stage('Auth Service Tests') {
             steps {
-                // The NestJS auth service's Jest suite, in the same Node image its
-                // container uses (Node 22 LTS). The Postgres tests in users.service.spec.ts skip
-                // here (they need DB_HOST and a database).
-                sh '''
-                    docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-                        -v "$WORKSPACE":/repo -w /repo/shared/auth-service node:22-alpine \
-                        sh -c "npm ci --no-audit --no-fund && npm test"
-                '''
+                // The NestJS auth service's Jest suite in node:22-alpine (the image its
+                // container uses), including its Postgres tests against a throwaway database
+                // built from db/, with coverage for SonarQube (see ci/auth-tests.sh)
+                sh 'ci/auth-tests.sh'
             }
         }
 
@@ -167,6 +181,7 @@ pipeline {
                 // compile error fails here. npm's pretest/prebuild hooks first generate the API
                 // clients in src/app/api from contracts/, which needs Java: the JDK21 tool is
                 // mounted read-only, since the Playwright image ships Chromium but no JDK.
+                // --code-coverage writes frontend/coverage/frontend/lcov.info for SonarQube.
                 sh '''
                     docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
                         -v "$JAVA_HOME":/opt/jdk:ro -e JAVA_HOME=/opt/jdk \
@@ -174,7 +189,7 @@ pipeline {
                         bash -c 'export PATH="$JAVA_HOME/bin:$PATH" \
                             CHROME_BIN="$(ls -d /ms-playwright/chromium-*/chrome-linux64/chrome | head -n 1)" \
                             && npm ci --no-audit --no-fund \
-                            && npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox \
+                            && npm test -- --watch=false --browsers=ChromeHeadlessNoSandbox --code-coverage \
                             && npm run build'
                 '''
             }
@@ -183,8 +198,8 @@ pipeline {
         stage('E2E Tests') {
             steps {
                 // The Playwright journeys (frontend/e2e) in a real browser against the whole
-                // stack: register, log in, place a BUY that fills, the route guard, and an admin
-                // reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
+                // stack: register, log in, place a BUY that fills, the route guard, support
+                // suspending an account, and an admin reaching the analytics dashboard. ci/e2e-tests.sh starts a throwaway Compose
                 // project with no host ports, runs the suite in PLAYWRIGHT_IMAGE on its network,
                 // then removes it, so it can't clash with a stack already running on this host.
                 sh 'ci/e2e-tests.sh'
@@ -207,9 +222,12 @@ pipeline {
                     // sonar.qualitygate.wait=true blocks until SonarQube has evaluated the
                     // Quality Gate and fails the stage if it does not pass — without it the
                     // stage would succeed as soon as the report was uploaded.
+                    // The heap caps keep the scanner JVM and the Node.js process of the
+                    // TypeScript analysis (which sizes itself to 1.4 GB by default) small
+                    // enough that systemd-oomd does not kill Jenkins on this host.
                     withSonarQubeEnv('sonarserver') {
                         withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                            sh 'mvn -B sonar:sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true'
+                            sh 'MAVEN_OPTS="-Xmx768m" mvn -B sonar:sonar -Dsonar.token=$SONAR_TOKEN -Dsonar.qualitygate.wait=true -Dsonar.javascript.node.maxspace=768'
                         }
                     }
                 }
@@ -232,6 +250,7 @@ pipeline {
                     // (mirror.gcr.io) served a broken copy, failing the stage on every branch.
                     sh '''
                         docker build -q -t "$AUTH_IMAGE_NAME:$BUILD_NUMBER" shared/auth-service > /dev/null
+                        docker build -q -t "$STRATEGY_IMAGE_NAME:$BUILD_NUMBER" strategy-service > /dev/null
                         TRIVY="docker run --rm -v trivy-cache:/root/.cache/ \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             -v $WORKSPACE:/src:ro -w /src $TRIVY_IMAGE"
@@ -245,6 +264,8 @@ pipeline {
                             --format sarif "$IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-image.sarif"
                         $TRIVY image $COMMON --severity HIGH,CRITICAL \
                             --format sarif "$AUTH_IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-auth-image.sarif"
+                        $TRIVY image $COMMON --severity HIGH,CRITICAL \
+                            --format sarif "$STRATEGY_IMAGE_NAME:$BUILD_NUMBER" > "$REPORTS_DIR/trivy-strategy-image.sarif"
 
                         GATE_FAILED=0
                         $TRIVY fs $COMMON --severity CRITICAL --ignore-unfixed \
@@ -253,6 +274,8 @@ pipeline {
                             --exit-code 1 "$IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
                         $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
                             --exit-code 1 "$AUTH_IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
+                        $TRIVY image $COMMON --severity CRITICAL --ignore-unfixed \
+                            --exit-code 1 "$STRATEGY_IMAGE_NAME:$BUILD_NUMBER" || GATE_FAILED=1
                         exit $GATE_FAILED
                     '''
                 }
@@ -268,7 +291,14 @@ pipeline {
 
             // Each build tags a ~300MB image that nothing uses afterwards; remove it so
             // the agent's disk doesn't fill up.
-            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} || true"
+            sh "docker rmi ${IMAGE_NAME}:${BUILD_NUMBER} ${AUTH_IMAGE_NAME}:${BUILD_NUMBER} ${STRATEGY_IMAGE_NAME}:${BUILD_NUMBER} || true"
+
+            // Every image build adds to Docker's build cache (about 3 GB a build), which filled
+            // the disk until SonarQube's index went read-only and failed the analysis. Keep only
+            // the newest 3 GB, so later builds still reuse the dependency layers, and drop the
+            // untagged images the builds leave behind.
+            sh 'docker builder prune -f --keep-storage 3GB > /dev/null || true'
+            sh 'docker image prune -f > /dev/null || true'
         }
         failure {
             // Notifies the team on build failure. Replace with your notification
@@ -277,6 +307,13 @@ pipeline {
         }
         success {
             echo "Build ${BUILD_NUMBER} passed."
+        }
+        cleanup {
+            // Runs last, after the reports are archived. Each workspace holds node_modules and
+            // build output (~1 GB); without this, every branch ever built keeps one, which
+            // filled the disk and took the agent offline. Nothing is lost: every stage
+            // reinstalls its dependencies (npm ci) on the next build anyway.
+            deleteDir()
         }
     }
 }

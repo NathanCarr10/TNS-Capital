@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { ApiException } from '../common/api.exception';
 import type { Role } from '../users/users.service';
 
@@ -20,10 +20,13 @@ export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export const INVALID_ACCESS_TOKEN = 'Unauthorised or invalid token';
 
+/** Role of a backend service's token (client credentials); never a user's role */
+export type ServiceRole = 'STRATEGY';
+
 /** Claims of an access token: exactly sub, roles, typ, jti, iss, iat, exp */
 export interface AccessTokenPayload {
   sub: string;
-  roles: Role[];
+  roles: (Role | ServiceRole)[];
   typ: 'access';
   jti: string;
   iss: string;
@@ -47,8 +50,9 @@ export interface RefreshToken {
 export class TokenService {
   constructor(private readonly jwt: JwtService) {}
 
-  issue(user: { username: string; roles: Role[] }): Promise<string> {
-    return this.jwt.signAsync({ sub: user.username, roles: user.roles, typ: 'access' }, { jwtid: randomUUID() });
+  /** @param subject the user's email, or "service:<clientId>" for a backend service */
+  issue(subject: string, roles: (Role | ServiceRole)[]): Promise<string> {
+    return this.jwt.signAsync({ sub: subject, roles, typ: 'access' }, { jwtid: randomUUID() });
   }
 
   /**

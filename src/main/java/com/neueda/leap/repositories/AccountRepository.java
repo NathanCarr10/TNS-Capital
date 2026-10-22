@@ -1,7 +1,9 @@
 package com.neueda.leap.repositories;
 
 import com.neueda.leap.model.Account;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.Optional;
@@ -25,10 +27,29 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
      * Finds the account owned by a user. The users table belongs to the auth
      * service, which links each registered user to the account it opens for them.
      *
-     * @param username the user's username (the JWT "sub" claim)
+     * @param email the user's email (the JWT "sub" claim)
      * @return the owned account's ID, empty if the user has none (e.g. admins)
      */
-    @Query(value = "SELECT account_id FROM users WHERE username = :username AND account_id IS NOT NULL",
+    @Query(value = "SELECT account_id FROM users WHERE email = :email AND account_id IS NOT NULL",
             nativeQuery = true)
-    Optional<Long> findAccountIdByUsername(@Param("username") String username);
+    Optional<Long> findAccountIdByEmail(@Param("email") String email);
+
+    /**
+     * Whether the account's owner has switched a strategy on. The strategy
+     * service may only place orders on such an account (AccountAccessGuard).
+     */
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM strategies WHERE account_id = :accountId AND status = 'ACTIVE')",
+            nativeQuery = true)
+    boolean hasActiveStrategy(@Param("accountId") Long accountId);
+
+    /**
+     * Finds an account and locks its row until the transaction ends. Orders
+     * reserve, release and settle cash and shares under this lock, so two
+     * orders for one account take turns instead of both passing the check.
+     *
+     * @param id the account ID
+     * @return Optional containing the locked account if found, empty otherwise
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Account> findWithLockById(Long id);
 }

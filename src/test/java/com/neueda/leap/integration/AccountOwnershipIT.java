@@ -53,17 +53,17 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
     void setUp() {
         ownAccount = accountRepository.save(new Account("ACC-U000001", "Trader", new BigDecimal("1000.00"), clock));
         otherAccount = accountRepository.save(new Account("ACC-U000002", "Someone Else", new BigDecimal("500.00"), clock));
-        linkUser("trader", ownAccount);
-        linkUser("someone", otherAccount);
+        linkUser("trader@example.com", ownAccount);
+        linkUser("someone@example.com", otherAccount);
 
         instrumentRepository.save(new Instrument("AAPL", "Apple Inc.", "EQUITY", "USD", true));
         otherOrder = orderRepository.save(new Order(otherAccount.getId(), "AAPL", OrderSide.BUY, 1,
                 new BigDecimal("100.00"), UUID.randomUUID().toString(), clock));
     }
 
-    private void linkUser(String username, Account account) {
-        jdbcTemplate.update("INSERT INTO users (username, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
-                username, account.getId());
+    private void linkUser(String email, Account account) {
+        jdbcTemplate.update("INSERT INTO users (email, password_hash, role, account_id) VALUES (?, 'x', 'USER', ?)",
+                email, account.getId());
     }
 
     private static String cash(String amount) {
@@ -78,7 +78,7 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
 
     @Nested
     @DisplayName("as a user")
-    @WithMockUser(username = "trader", roles = "USER")
+    @WithMockUser(username = "trader@example.com", roles = "USER")
     class AsUser {
 
         @Test
@@ -207,12 +207,25 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
             mockMvc.perform(delete("/api/v1/orders/{id}", otherOrder.getId()))
                     .andExpect(status().isForbidden());
         }
+
+        @Test
+        @DisplayName("cannot suspend or reactivate any account, not even their own; that is a support task")
+        void cannotChangeAccountStatus() throws Exception {
+            for (Account account : new Account[] {ownAccount, otherAccount}) {
+                mockMvc.perform(put("/api/v1/accounts/{id}/status", account.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"SUSPENDED\"}"))
+                        .andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.errorCode").value("AUTH-403"));
+            }
+            mockMvc.perform(get("/api/v1/accounts/{id}", ownAccount.getId()))
+                    .andExpect(jsonPath("$.status").value("ACTIVE"));
+        }
     }
 
     @Nested
-    @DisplayName("as an admin")
-    @WithMockUser(username = "admin", roles = "ADMIN")
-    class AsAdmin {
+    @DisplayName("as support")
+    @WithMockUser(username = "support", roles = "SUPPORT")
+    class AsSupport {
 
         @Test
         @DisplayName("lists every account and order")
@@ -236,6 +249,66 @@ class AccountOwnershipIT extends AbstractIntegrationTest {
                     .andExpect(jsonPath("$.cashBalance").value(600.0));
             mockMvc.perform(get("/api/v1/orders/{id}", otherOrder.getId()))
                     .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("can stop trading an instrument")
+        void changesInstruments() throws Exception {
+            mockMvc.perform(put("/api/v1/instruments/AAPL").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"symbol\":\"AAPL\",\"name\":\"Apple\",\"assetClass\":\"EQUITY\","
+                            + "\"currency\":\"USD\",\"tradable\":false}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.tradable").value(false));
+        }
+
+        @Test
+        @DisplayName("can suspend and reactivate an account")
+        void changesAccountStatus() throws Exception {
+            mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"SUSPENDED\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("SUSPENDED"));
+            mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"ACTIVE\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("ACTIVE"));
+        }
+    }
+
+    @Nested
+    @DisplayName("as an admin")
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    class AsAdmin {
+
+        @Test
+        @DisplayName("sees no trader's account or order: those are support's, admins run operations")
+        void seesNoTraderData() throws Exception {
+            mockMvc.perform(get("/api/v1/accounts"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", empty()));
+            mockMvc.perform(get("/api/v1/orders"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", empty()));
+            mockMvc.perform(get("/api/v1/accounts/{id}", otherAccount.getId()))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/v1/orders/{id}", otherOrder.getId()))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        @DisplayName("cannot suspend accounts, open them or change instruments")
+        void cannotDoSupportTasks() throws Exception {
+            mockMvc.perform(put("/api/v1/accounts/{id}/status", otherAccount.getId())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"SUSPENDED\"}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("AUTH-403"));
+            mockMvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"accountNumber\": \"ACC-X\", \"holderName\": \"X\", \"cashBalance\": 0}"))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(put("/api/v1/instruments/AAPL").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"symbol\":\"AAPL\",\"name\":\"Apple\",\"assetClass\":\"EQUITY\","
+                            + "\"currency\":\"USD\",\"tradable\":false}"))
+                    .andExpect(status().isForbidden());
         }
     }
 }

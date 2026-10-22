@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.neueda.leap.enums.OrderStatus;
 import com.neueda.leap.kafka.events.MessageEnvelope;
 import com.neueda.leap.kafka.events.TradeEvent;
+import com.neueda.leap.metrics.TradingMetrics;
 import com.neueda.leap.model.Order;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +33,9 @@ import java.util.UUID;
  * 
  * Consumers can subscribe independently using different consumer group IDs
  * without impacting the producer or other consumers.
+ *
+ * Every final status passes through here, so this is also where the order
+ * outcome and fill time metrics are recorded (TradingMetrics).
  */
 @Component
 @Slf4j
@@ -40,14 +44,17 @@ public class TradeEventPublisher {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final String tradeEventsTopic;
+    private final TradingMetrics metrics;
 
     public TradeEventPublisher(
             KafkaTemplate<String, String> kafkaTemplate,
             ObjectMapper objectMapper,
-            @Value("${trading.kafka.topics.trade-events:trade-events}") String tradeEventsTopic) {
+            @Value("${trading.kafka.topics.trade-events:trade-events}") String tradeEventsTopic,
+            TradingMetrics metrics) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.tradeEventsTopic = tradeEventsTopic;
+        this.metrics = metrics;
     }
 
     /**
@@ -61,6 +68,7 @@ public class TradeEventPublisher {
      * @param reason optional reason for status change (e.g., rejection reason, cancellation reason)
      */
     public void publish(Order order, OrderStatus previousStatus, String reason) {
+        metrics.orderFinished(order);
         try {
             TradeEvent tradeEvent = buildTradeEvent(order, previousStatus, reason);
             MessageEnvelope<TradeEvent> envelope = buildEnvelope(tradeEvent);

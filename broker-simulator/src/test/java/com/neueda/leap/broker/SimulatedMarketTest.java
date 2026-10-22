@@ -44,6 +44,48 @@ class SimulatedMarketTest {
     }
 
     @Test
+    @DisplayName("fills at the market price when the limit allows it")
+    void fillsAtMarketPrice() {
+        SimulatedMarket market = new SimulatedMarket(properties(0, 0, 50), new Random(7));
+
+        // A BUY limit above the market and a SELL limit below it get the market price
+        assertEquals(new BigDecimal("227.47"),
+                market.fillPrice(Side.BUY, new BigDecimal("230.00"), new BigDecimal("227.47")));
+        assertEquals(new BigDecimal("227.47"),
+                market.fillPrice(Side.SELL, new BigDecimal("225.00"), new BigDecimal("227.47")));
+    }
+
+    @Test
+    @DisplayName("never fills worse than the limit when the market has moved past it")
+    void marketPriceCappedByLimit() {
+        SimulatedMarket market = new SimulatedMarket(properties(0, 0, 50), new Random(7));
+
+        assertEquals(new BigDecimal("1.00"),
+                market.fillPrice(Side.BUY, new BigDecimal("1.00"), new BigDecimal("227.47")));
+        assertEquals(new BigDecimal("10000.00"),
+                market.fillPrice(Side.SELL, new BigDecimal("10000.00"), new BigDecimal("227.47")));
+    }
+
+    @Test
+    @DisplayName("rounds a market price to cents in the trader's favour, never past the limit")
+    void marketPriceRounding() {
+        SimulatedMarket market = new SimulatedMarket(properties(0, 0, 0), new Random(7));
+
+        assertEquals(new BigDecimal("227.46"),
+                market.fillPrice(Side.BUY, new BigDecimal("230.00"), new BigDecimal("227.4651")));
+        assertEquals(new BigDecimal("227.47"),
+                market.fillPrice(Side.SELL, new BigDecimal("225.00"), new BigDecimal("227.4651")));
+    }
+
+    @Test
+    @DisplayName("without a market price, fills relative to the limit as before")
+    void noMarketPrice() {
+        SimulatedMarket market = new SimulatedMarket(properties(0, 0, 0), new Random(7));
+
+        assertEquals(new BigDecimal("25.50"), market.fillPrice(Side.BUY, new BigDecimal("25.50"), null));
+    }
+
+    @Test
     @DisplayName("picks a delay inside the configured range")
     void delayInRange() {
         SimulatedMarket market = new SimulatedMarket(properties(500, 2000, 0), new Random(7));

@@ -38,13 +38,12 @@ export class OrderTicketComponent {
   /** The latest price, or null when there is none. */
   readonly livePrice = input<number | null>(null);
 
-  readonly isAdmin = this.store.isAdmin;
+  readonly isSupport = this.store.isSupport;
   readonly account = this.store.account;
   readonly accountLoading = this.store.accountLoading;
 
   readonly isSubmitting = signal(false);
   readonly isTracking = signal(false);
-  readonly successMessage = signal<string | null>(null);
   readonly errorMessage = signal<string | null>(null);
 
   readonly orderForm = this.formBuilder.group({
@@ -66,10 +65,38 @@ export class OrderTicketComponent {
   readonly side = computed(() => this.formValue().side);
   readonly isLimit = computed(() => this.formValue().orderType === 'LIMIT');
 
-  /** Shares of this symbol held, which caps a sell. */
-  readonly heldQuantity = computed(
-    () => this.store.positions()?.find((position) => position.symbol === this.symbol())?.quantity ?? 0
+  /**
+   * Limit orders are immediate-or-cancel: the server refuses a BUY limit below the
+   * market price or a SELL limit above it (ORD-422), as it would not fill.
+   */
+  private readonly limitNotMarketable = computed(() => {
+    const price = this.formValue().price;
+    const live = this.livePrice();
+    if (!this.isLimit() || price == null || live == null) {
+      return null;
+    }
+    // Like the server, round the live price to the cent in the trader's favour
+    if (this.side() === 'BUY') {
+      const market = Math.floor(live * 100) / 100;
+      return price < market ? `A buy limit below the market price (${market.toFixed(2)}) will not fill.` : null;
+    }
+    const market = Math.ceil(live * 100) / 100;
+    return price > market ? `A sell limit above the market price (${market.toFixed(2)}) will not fill.` : null;
+  });
+
+  /** The trader's position in this symbol, if any. */
+  private readonly position = computed(
+    () => this.store.positions()?.find((position) => position.symbol === this.symbol()) ?? null
   );
+
+  /** Shares of this symbol held, including those open sell orders reserved. */
+  readonly heldQuantity = computed(() => this.position()?.quantity ?? 0);
+
+  /** Shares not reserved by open sell orders, which caps a sell. */
+  readonly availableQuantity = computed(() => this.position()?.availableQuantity ?? 0);
+
+  /** Shares held for open sell orders. */
+  readonly reservedQuantity = computed(() => this.position()?.reservedQuantity ?? 0);
 
   /** Quantity at the limit price, or at the latest price for a market order. */
   readonly estimatedTotal = computed(() => {
@@ -80,12 +107,22 @@ export class OrderTicketComponent {
 
   /** A warning when the order looks like it will be rejected; the server still decides. */
   readonly shortfall = computed(() => {
+    const notMarketable = this.limitNotMarketable();
+    if (notMarketable) {
+      return notMarketable;
+    }
     const quantity = this.formValue().quantity;
     if (this.side() === 'SELL') {
-      return quantity > this.heldQuantity() ? `You hold ${this.heldQuantity()} ${this.symbol()}.` : null;
+      if (quantity <= this.availableQuantity()) {
+        return null;
+      }
+      return this.reservedQuantity() > 0
+        ? `You can sell ${this.availableQuantity()} ${this.symbol()}; ${this.reservedQuantity()} are in open orders.`
+        : `You hold ${this.heldQuantity()} ${this.symbol()}.`;
     }
     const total = this.estimatedTotal();
-    const cash = this.account()?.cashBalance;
+    // Cash reserved by open buy orders is not available
+    const cash = this.account()?.availableCash;
     return total != null && cash != null && total > cash ? 'The estimated cost is more than your available cash.' : null;
   });
 
@@ -95,7 +132,6 @@ export class OrderTicketComponent {
       this.symbol();
       untracked(() => {
         this.orderForm.controls.price.setValue(null);
-        this.successMessage.set(null);
         this.errorMessage.set(null);
       });
     });
@@ -106,7 +142,8 @@ export class OrderTicketComponent {
       const price = this.orderForm.controls.price;
       untracked(() => {
         if (livePrice != null && price.value == null) {
-          price.setValue(livePrice);
+          // Prices are in cents
+          price.setValue(Math.round(livePrice * 100) / 100);
         }
       });
     });
@@ -123,7 +160,7 @@ export class OrderTicketComponent {
 
   isSubmitDisabled(): boolean {
     return (
-      this.isAdmin ||
+      this.isSupport ||
       !this.tradable() ||
       this.orderForm.invalid ||
       this.isSubmitting() ||
@@ -134,8 +171,8 @@ export class OrderTicketComponent {
   }
 
   onSubmit(): void {
-    if (this.isAdmin) {
-      return; // the admin view is read-only
+    if (this.isSupport) {
+      return; // the support view is read-only
     }
     const account = this.account();
     if (!account) {
@@ -147,7 +184,6 @@ export class OrderTicketComponent {
       return;
     }
 
-    this.successMessage.set(null);
     this.errorMessage.set(null);
     this.isSubmitting.set(true);
 
@@ -155,7 +191,6 @@ export class OrderTicketComponent {
       next: (accepted: PlaceOrderResponse) => {
         this.isSubmitting.set(false);
         this.isTracking.set(true);
-        this.successMessage.set(`Order ${accepted.status || 'ACCEPTED'}. Tracking order ${accepted.orderId}.`);
         this.follow(accepted.orderId);
       },
       error: (error: unknown) => {
@@ -186,7 +221,6 @@ export class OrderTicketComponent {
     // The tracker announces the result with a toast; the ticket only unlocks for the next order
     this.trackingSubscription = this.orderTracker.track(orderId).subscribe(() => {
       this.isTracking.set(false);
-      this.successMessage.set(null);
     });
   }
 
@@ -194,7 +228,7 @@ export class OrderTicketComponent {
     const messages: Record<string, string> = {
       'ACC-404': 'Account not found (ACC-404).',
       'ACC-403': 'Account inactive (ACC-403).',
-      'INS-404': 'Instrument not found (INS-404).',
+      'INS-404': 'Instrument not found or not tradable (INS-404).',
       'VAL-422': 'Invalid input (VAL-422). Check quantity and price.',
     };
     const code = readApiError(error)?.errorCode;
@@ -206,5 +240,8 @@ function generateIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  // randomUUID is missing outside secure contexts (http to a non-localhost address);
+  // getRandomValues is not, and is a cryptographically strong source too
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }

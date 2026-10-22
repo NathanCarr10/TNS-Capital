@@ -1,8 +1,8 @@
 package com.neueda.leap.exceptions;
 
-public class InstrumentNotFoundException extends RuntimeException {
+public class InstrumentNotFoundException extends TradingException {
 
     public InstrumentNotFoundException(String message) {
-        super(message);
+        super("INS-404", message);
     }
 }

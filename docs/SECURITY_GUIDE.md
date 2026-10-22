@@ -1,4 +1,4 @@
-# 🔒 API Security Best Practices Documentation
+# Security Guide
 
 ## Overview
 
@@ -8,50 +8,68 @@ For the platform's OWASP Top 10 review, with a finding and disposition for every
 
 ---
 
-## 1. 🔐 Authentication & Authorization
+## 1. Authentication & Authorization
 
 ### JWT (JSON Web Tokens)
 
 **Implementation:**
 - JWT tokens are signed using HMAC-SHA256 with a shared secret
-- Configured in [SecurityConfig.java](../../security/SecurityConfig.java)
+- Configured in [SecurityConfig.java](../src/main/java/com/neueda/leap/security/SecurityConfig.java)
 - Tokens are issued by the NestJS authentication service (`shared/auth-service/`)
 
 **Best Practices:**
-- ✅ **Shared Secret Management**: The JWT secret is externalized via environment variable `jwt.shared-secret`
-- ✅ **Token Validation**: All tokens are validated on every API request
-- ✅ **Stateless Authentication**: No session state stored on server
+- **Shared secret management**: the secret comes from the `JWT_SECRET` environment variable, with
+  no default. The API refuses to start if it is missing, shorter than 32 bytes or the
+  `change-me` placeholder from `.env.example`
+- **Token validation**: every request's token is checked for its signature, expiry, issuer
+  (`urn:tns-capital:auth-service`) and type (`typ` = `access`)
+- **Stateless authentication**: no session state is stored on the server
 
-**Configuration:**
+**Configuration** (`src/main/resources/application.yml`):
 ```yaml
 jwt:
-  shared-secret: "mission-control-shared-secret-key-32-bytes-minimum"
+  # Must match the auth service. Set JWT_SECRET in the environment; there is no default.
+  shared-secret: ${JWT_SECRET}
+  issuer: urn:tns-capital:auth-service
 ```
 
-**Sample Token Flow:**
+**Token flow:**
 ```
-1. Client requests token from auth-service with credentials
-2. Auth-service issues JWT signed with shared secret
-3. Client includes token in Authorization header: "Bearer <token>"
-4. API validates token using shared secret
-5. Request proceeds if token is valid and not expired
+1. Client signs in to the auth service (POST /auth/login) with an email and password
+2. The auth service issues a 15-minute access token signed with the shared secret,
+   and a 7-day single-use refresh token
+3. Client includes the access token in the Authorization header: "Bearer <token>"
+4. The API validates the token locally, using the shared secret
+5. The request proceeds if the token is valid; the caller's roles and account decide what it may do
 ```
 
 ### Roles and Account Ownership
 
 - `POST /register` on the auth service creates the user **and** opens their trading account
   (ACTIVE, cash balance 0), linked by `users.account_id`. The token's `roles` claim comes from
-  `users.role`: `["USER"]` for registered users, `["ADMIN"]` for the seeded `admin` user.
-- **USER**: may only use the account linked to their username (the token's `sub`) — read it,
+  `users.role`: `["USER"]` for registered users, `["SUPPORT"]` for `support@tns-capital.local` and
+  `["ADMIN"]` for `admin@tns-capital.local`, both created by the auth service at startup.
+- **USER**: may only use the account linked to their email (the token's `sub`) — read it,
   move cash, place/cancel orders on it, see its positions and orders. Anything else is
   `403 AUTH-403`, including account IDs that do not exist (no probing for valid IDs).
   `GET /api/v1/accounts` and `GET /api/v1/orders` return only the user's own rows.
-- **ADMIN**: may use every account, open accounts (`POST /api/v1/accounts`) and use the DLQ.
+- **SUPPORT**: may use every account (the trading app shows it read-only), suspend or reactivate
+  accounts (`PUT /api/v1/accounts/{id}/status`), open accounts (`POST /api/v1/accounts`), add
+  or change instruments, read and answer every support conversation, and review, replay and
+  dismiss dead letters.
+- **ADMIN**: the DLQ and the actuator's metrics, info and health details, plus the analytics
+  dashboard. No access to traders' accounts: an admin is not support
+  ([decision 10](DECISIONS.md#10-roles)).
+- **STRATEGY**: a service role, never a user's. Only the strategy service's token has it, issued by
+  `POST /auth/token` from `STRATEGY_CLIENT_SECRET`. It may place an order, read an order and read
+  prices, and only for an account whose owner has an ACTIVE strategy; every other endpoint answers
+  `403 AUTH-403` (`SecurityConfig`, `AccountAccessGuard.checkTradingAccess`;
+  [decision 16](DECISIONS.md#16-sprint-10-extension-strategy-lab-automated-strategy-execution)).
 - Enforced by [AccountAccessGuard.java](../src/main/java/com/neueda/leap/security/AccountAccessGuard.java).
 
 ---
 
-## 2. ✅ Input Validation
+## 2. Input Validation
 
 ### Validation Strategy
 
@@ -59,7 +77,7 @@ Input validation occurs at the **API boundary** using Jakarta Validation annotat
 
 ### Request DTOs with Validation
 
-#### **PlaceOrderRequest.java**
+#### PlaceOrderRequest.java
 ```java
 public record PlaceOrderRequest(
     @NotNull(message = "Account ID is required")
@@ -76,7 +94,8 @@ public record PlaceOrderRequest(
     @Max(value = 1000000, message = "Quantity max: 1,000,000")
     Integer quantity,
     
-    @NotNull @Positive
+    // Optional: when omitted the order is priced at the live market price
+    @Positive
     @DecimalMax(value = "999999.99", message = "Price max: 999,999.99")
     BigDecimal price,
     
@@ -86,7 +105,7 @@ public record PlaceOrderRequest(
 )
 ```
 
-#### **CreateInstrumentRequest.java**
+#### CreateInstrumentRequest.java
 ```java
 public record CreateInstrumentRequest(
     @NotNull @NotBlank
@@ -145,7 +164,7 @@ public record CreateInstrumentRequest(
 
 ---
 
-## 3. � Password Hashing (Auth Service)
+## 3. Password Hashing (Auth Service)
 
 ### Algorithm: Argon2id
 
@@ -198,33 +217,34 @@ password_hash VARCHAR(255) NOT NULL  -- e.g., $argon2id$v=19$m=65540,t=3,p=4$abc
 
 ### Plaintext Prevention
 
-✅ Passwords hashed immediately upon registration using `passwordHasher.hashPassword()`  
-✅ Hashes verified during login (plaintext input compared to stored hash via `verifyPassword()`)  
-✅ Error responses never include password or hash  
-✅ Response DTOs exclude passwordHash field  
-✅ Request/response logs redact password fields automatically  
+- Passwords hashed immediately upon registration using `hashPassword()` (`password-hasher.ts`)
+- Hashes verified during login (plaintext input compared to stored hash via `verifyPassword()`)
+- Error responses never include password or hash
+- Response DTOs exclude passwordHash field
+- Request logs record the method, path, status, time and user, never bodies, so no passwords or tokens
 
 ### Implementation Details
 
 **Registration Flow** (`POST /auth/register`):
 ```
-1. Client sends {username, password} in request body
-2. Server validates username (3-100 chars) and password (8-256 chars)
-3. Server checks for duplicate username → 409 USR-409 if exists
+1. Client sends {email, password} in request body
+2. Server validates email (a valid address, at most 320 chars) and password (8-256 chars),
+   then trims and lower-cases the email
+3. Server checks for a duplicate email → 409 USR-409 if exists
 4. Server hashes password with Argon2id → passwordHash
-5. Server inserts (username, passwordHash) into database
-6. Server returns {id, username, createdAt} (NO password or hash)
+5. Server inserts (email, passwordHash) into database and opens the trading account
+6. Server returns {id, email, createdAt, accountId, accountNumber} (NO password or hash)
 ```
 
 **Login Flow** (`POST /auth/login`):
 ```
-1. Client sends {username, password} in request body
-2. Server retrieves user record from database by username
+1. Client sends {email, password} in request body
+2. Server retrieves user record from database by email (trimmed, lower case)
 3. Server verifies plaintext password against stored hash
 4. If password matches: issue a 15-minute access token (JWT) and a 7-day refresh token,
    store the refresh token's SHA-256 hash in refresh_tokens under a new session family,
    return {accessToken, refreshToken}
-5. If password doesn't match: Return 401 AUTH-401 (no hint about username validity)
+5. If password doesn't match: Return 401 AUTH-401 (no hint about whether the email is registered)
 ```
 
 **Refresh and Logout** (`POST /auth/refresh`, `POST /auth/logout`):
@@ -246,33 +266,33 @@ usable tokens. Logout revokes the refresh token's session only; an access token 
 it expires (at most 15 minutes), because the trading API checks signatures without calling
 this service.
 
-**Why No Username Hint?**: Returning different errors for "user not found" vs "password wrong" reveals whether a username exists, enabling account enumeration attacks. Always return "invalid username or password" for both cases.
+**Why No Email Hint?**: Returning different errors for "user not found" vs "password wrong" reveals whether an email is registered, enabling account enumeration attacks. Always return "invalid email or password" for both cases.
 
 ### Verification & Testing
 
 All password handling is tested in `shared/auth-service/tests/`:
 
 **password-hasher.spec.ts** — Unit tests for hashing:
-- ✅ Hash always differs from input (random salt)
-- ✅ Same password produces different hashes (salt randomization)
-- ✅ Correct password verifies against stored hash
-- ✅ Incorrect password verification fails
-- ✅ Hash string includes algorithm, parameters, and salt
-- ✅ Invalid hash format returns false, not error
+- Hash always differs from input (random salt)
+- Same password produces different hashes (salt randomization)
+- Correct password verifies against stored hash
+- Incorrect password verification fails
+- Hash string includes algorithm, parameters, and salt
+- Invalid hash format returns false, not error
 
 **users.service.spec.ts** — Integration tests for the SQL (needs Postgres; skipped unless `DB_HOST` is set):
-- ✅ Registration opens an ACTIVE account with a 0 cash balance, linked via `users.account_id`
-- ✅ Duplicate username is rejected without opening a second account
-- ✅ A failed account insert rolls back the user
-- ✅ Refresh tokens rotate, a reused token revokes its family, concurrent refreshes cannot both win, tokens expire, and logout revokes the family
+- Registration opens an ACTIVE account with a 0 cash balance, linked via `users.account_id`
+- Duplicate email is rejected without opening a second account
+- A failed account insert rolls back the user
+- Refresh tokens rotate, a reused token revokes its family, concurrent refreshes cannot both win, tokens expire, and logout revokes the family
 
 **auth.service.spec.ts** — Unit tests for the auth logic:
-- ✅ Password is Argon2id-hashed before it reaches the database layer
-- ✅ Login succeeds with valid credentials and fails identically for a wrong password or unknown user
+- Password is Argon2id-hashed before it reaches the database layer
+- Login succeeds with valid credentials and fails identically for a wrong password or unknown user
 
 **guards.spec.ts**, **token.service.spec.ts** — Unit tests for `JwtAuthGuard`, `RolesGuard` and token handling:
-- ✅ `JwtAuthGuard` verifies locally (no database lookup or network call) and gives the handler the verified claims
-- ✅ Expired, wrong-signature, tampered, wrong-issuer, wrong-type and `alg: none` tokens, a missing header and a non-Bearer scheme all get the same 401 AUTH-401
+- `JwtAuthGuard` verifies locally (no database lookup or network call) and gives the handler the verified claims
+- Expired, wrong-signature, tampered, wrong-issuer, wrong-type and `alg: none` tokens, a missing header and a non-Bearer scheme all get the same 401 AUTH-401
 
 **auth-api.spec.ts** — HTTP tests (no database): claims, roles, refresh, logout, guards, error envelope, validation.
 
@@ -292,17 +312,17 @@ npm test
 
 ---
 
-## 4. 🛡️ Error Handling
+## 4. Error Handling
 
 ### GlobalExceptionHandler
 
-Located in [GlobalExceptionHandler.java](../../controllers/GlobalExceptionHandler.java)
+Located in [GlobalExceptionHandler.java](../src/main/java/com/neueda/leap/controllers/GlobalExceptionHandler.java)
 
 **Key Principles:**
-- ✅ **No Stack Traces**: Never expose Java stack traces to clients
-- ✅ **Sanitized Messages**: Remove sensitive information from error messages
-- ✅ **Machine-Readable Codes**: Error codes for client-side handling
-- ✅ **Server-Side Logging**: Full details logged for debugging
+- **No Stack Traces**: Never expose Java stack traces to clients
+- **Sanitized Messages**: Remove sensitive information from error messages
+- **Machine-Readable Codes**: Error codes for client-side handling
+- **Server-Side Logging**: Full details logged for debugging
 
 ### Exception Handling Map
 
@@ -314,13 +334,25 @@ Codes follow section 21 of the specification; the codes marked * extend it for c
 | `AccountNotActiveException` | 403 | `ACC-403` | "The account is not in an active state for this operation" |
 | `AccountAlreadyExistsException`, `AccountDeletionConflictException` | 409 | `ACC-409`* | Duplicate account number / account has working orders |
 | `InstrumentNotFoundException` (unknown or not tradable) | 404 | `INS-404` | "The requested instrument could not be found or is not tradable" |
+| `DuplicateInstrumentException` | 409 | `INS-409`* | "An instrument with this symbol already exists" |
 | `InsufficientFundsException` | 400 | `ORD-400` | "The account does not have sufficient funds for this operation" |
 | `InsufficientHoldingsException`, `DuplicateOrderException`, `OrderCancellationConflictException` | 409 | `ORD-409` | Insufficient holdings / duplicate idempotency key / order cannot be cancelled |
+| `LimitNotMarketableException` | 422 | `ORD-422`* | A BUY limit below the live price, or a SELL limit above it |
 | `OrderNotFoundException` | 404 | `ORD-404`* | "The requested order could not be found" |
+| `PositionNotFoundException` | 404 | `POS-404`* | "The requested position could not be found" |
+| `PriceUnavailableException` | 503 | `PRC-503`* | No live price for an order sent without one |
+| `MarketDataUnavailableException` | 503 | `MKT-503`* | Price bars could not be loaded |
+| `ReplayInProgressException`, `ReplayNotFoundException` | 409 / 404 | `MKT-409`* / `MKT-404`* | A market replay is already running / no bars for that day, or no replay running |
+| `OrderPublishException` | 503 | `SYS-503`* | Kafka did not acknowledge the order; it is stored as `REJECTED` |
+| `OptimisticLockingFailureException` | 409 | `SYS-409`* | Two requests changed the same account at once; retry |
+| `SupportConversationClosedException` | 409 | `SUP-409`* | "This support conversation is closed" |
+| `NewsletterNotFoundException` | 404 | `NWS-404`* | "The requested newsletter issue could not be found" |
+| `NewsletterPublishingDisabledException` | 403 | `NWS-403`* | "Publishing the newsletter before the weekly run is switched off" |
 | `MethodArgumentNotValidException`, malformed JSON, bad path variable | 422 | `VAL-422` | Field-specific validation messages |
 | Missing or invalid JWT | 401 | `AUTH-401` | "Unauthorised or invalid token" |
 | `AccessDeniedException` | 403 | `AUTH-403`* | "You do not have permission to access this resource" |
 | Unsupported method / media type | 405 / 415 | `REQ-405`* / `REQ-415`* | |
+| Unknown path | 404 | `NOT-404`* | "Resource not found: ..." |
 | Generic Exception | 500 | `SYS-500`* | "An unexpected error occurred" |
 
 Insufficient funds and holdings are only known once an order executes, which
@@ -356,11 +388,11 @@ public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundExcept
 
 ---
 
-## 5. 🔒 Security Headers
+## 5. Security Headers
 
 ### Implemented Headers
 
-Configured in [SecurityConfig.java](../../security/SecurityConfig.java)
+Configured in [SecurityConfig.java](../src/main/java/com/neueda/leap/security/SecurityConfig.java)
 
 ```java
 .headers(headers -> headers
@@ -415,15 +447,15 @@ Rules for keeping the frontend XSS-safe:
 
 ---
 
-## 6. 🚫 CSRF Protection
+## 6. CSRF Protection
 
 ### Why CSRF is Disabled
 
-**Correct Decision**: CSRF protection is disabled for this API because:
+CSRF protection is disabled for this API because:
 
-✅ **Stateless Authentication**: Uses JWT tokens, not session cookies  
-✅ **REST API**: No traditional forms that are vulnerable to CSRF  
-✅ **Token-Based**: CSRF tokens would be redundant with JWT  
+- **Stateless Authentication**: Uses JWT tokens, not session cookies
+- **REST API**: No traditional forms that are vulnerable to CSRF
+- **Token-Based**: CSRF tokens would be redundant with JWT
 
 **Configuration:**
 ```java
@@ -432,7 +464,7 @@ Rules for keeping the frontend XSS-safe:
 
 ---
 
-## 7. 🔑 Idempotency
+## 7. Idempotency
 
 ### Purpose
 
@@ -448,9 +480,9 @@ String idempotencyKey
 ```
 
 **Validation Rules:**
-- ✅ Required on every order request
-- ✅ Must be 1-100 alphanumeric characters, hyphens, underscores
-- ✅ Checked for duplicates before processing
+- Required on every order request
+- Must be 1-100 alphanumeric characters, hyphens, underscores
+- Checked for duplicates before processing
 
 **Example Flow:**
 ```
@@ -460,7 +492,7 @@ Request 2: POST /orders with idempotencyKey="ORDER-001" (retry) → Returns 409 
 
 ---
 
-## 8. 🔐 Sensitive Data Protection
+## 8. Sensitive Data Protection
 
 ### What's Protected
 
@@ -505,21 +537,37 @@ JWT_SECRET=<output of: openssl rand -hex 32>
 
 ---
 
-## 9. 📋 API Endpoint Security
+## 9. API Endpoint Security
 
 ### Protected Endpoints (Require JWT)
 
+"Owner" means a `USER` whose token's `sub` owns the account. `ADMIN` has no access to traders'
+accounts or orders.
+
 ```
-POST   /api/v1/orders          - Place order (owner of the order's account, or ADMIN)
-GET    /api/v1/orders          - List orders (own orders; ADMIN sees all)
-GET    /api/v1/orders/{id}     - Get order (owner or ADMIN)
-DELETE /api/v1/orders/{id}     - Cancel order (owner or ADMIN)
-GET    /api/v1/accounts        - List accounts (own account; ADMIN sees all)
-POST   /api/v1/accounts        - Open account (ADMIN)
-*      /api/v1/accounts/{id}/** - Account, balance, deposit, withdraw, positions, orders (owner or ADMIN)
-GET    /api/v1/positions/{id}  - List positions (owner or ADMIN)
-*      /api/v1/dlq/**          - Dead-letter queue admin (ADMIN role in the token's "roles" claim)
+POST   /api/v1/orders              - Place order (owner; STRATEGY for an account with an ACTIVE strategy)
+GET    /api/v1/orders              - List orders (own orders; SUPPORT sees all)
+GET    /api/v1/orders/{id}         - Get order (owner, SUPPORT; STRATEGY as above)
+DELETE /api/v1/orders/{id}         - Cancel order (owner)
+GET    /api/v1/accounts            - List accounts (own account; SUPPORT sees all)
+POST   /api/v1/accounts            - Open account (SUPPORT)
+PUT    /api/v1/accounts/{id}/status - Suspend or reactivate (SUPPORT)
+*      /api/v1/accounts/{id}/**    - Account, balance, deposit, withdraw, positions, orders (owner; SUPPORT reads)
+GET    /api/v1/positions/{id}      - List positions (owner, SUPPORT)
+POST   /api/v1/instruments, PUT /api/v1/instruments/{symbol} - Add or change instruments (SUPPORT)
+GET    /api/v1/prices/**           - Prices, bars and news (any signed-in user; STRATEGY)
+*      /api/v1/market-data/replays/** - Start, read and stop a market replay (any signed-in user)
+*      /api/v1/support/conversations/** - Support chat (own conversations; SUPPORT sees all and
+                                     alone closes them and reads notifications)
+*      /api/v1/dlq/**              - Dead-letter queue (ADMIN, SUPPORT)
+GET    /api/v1/newsletters, /api/v1/newsletters/{id} - Newsletter issues (any signed-in user)
+GET    /api/v1/newsletters/preview - Preview this week's issue, not saved (SUPPORT)
+POST   /api/v1/newsletters/publish - Publish this week's issue early, if NEWSLETTER_EARLY_PUBLISH is on (SUPPORT)
+*      /actuator/**                - Metrics, info and health details (ADMIN)
 ```
+
+The strategy service's endpoints (`/api/v1/strategies`, port 8087) use the same tokens:
+traders manage their own strategies, support staff read every strategy, and admins see none.
 
 ### Public Endpoints (No Auth Required)
 
@@ -528,8 +576,7 @@ GET  /swagger-ui.html          - Swagger UI documentation
 GET  /swagger-ui/**            - Swagger resources
 GET  /v3/api-docs              - OpenAPI spec
 GET  /v3/api-docs/**           - OpenAPI resources
-GET  /health                   - Health check
-GET  /info                     - App info
+GET  /actuator/health          - Health check: UP or DOWN; details for ADMIN only
 ```
 
 ### Authorization Check
@@ -537,52 +584,53 @@ GET  /info                     - App info
 ```java
 .authorizeHttpRequests(auth -> auth
     .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**")
-    .permitAll()  // Public
-    .anyRequest().authenticated()  // Everything else requires auth
-)
+    .permitAll()
+    .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+    .requestMatchers("/actuator/**").hasRole("ADMIN")
+    // The only endpoints the strategy service's STRATEGY token may call
+    .requestMatchers(HttpMethod.POST, "/api/v1/orders").authenticated()
+    .requestMatchers(HttpMethod.GET, "/api/v1/orders/*", "/api/v1/prices", "/api/v1/prices/**")
+    .authenticated()
+    // Everything else needs a user's token (USER, SUPPORT or ADMIN)
+    .anyRequest().access(userOnly))
 ```
+
+Role checks on staff operations use `@PreAuthorize`, and account ownership is enforced by
+[AccountAccessGuard.java](../src/main/java/com/neueda/leap/security/AccountAccessGuard.java).
 
 ---
 
-## 10. 🧪 Security Testing
+## 10. Security Testing
 
 ### Test Suites
 
-**SecurityTests.java** - Comprehensive API security validation
-- Input Validation Tests
-- Sensitive Data Protection Tests
-- Exception Handling Security Tests
-- Security Best Practices Tests
-- Rate Limiting Tests
-- Acceptance Criteria Verification
-
-**GlobalExceptionHandlerTests.java** - Exception handler validation
-- Business Exception Handling
-- Security Exception Handling
-- Validation Error Handling
-- Generic Exception Handling
-- Error Response Structure
-- Security Validation
+| Test | Covers |
+|---|---|
+| `security/JwtSecurityTest.java` | Valid, expired, tampered, wrong-issuer, wrong-type and missing tokens; the security headers |
+| `security/SecurityConfigSecretTest.java` | The API refuses a missing, short or placeholder `JWT_SECRET` |
+| `security/AccountAccessGuardTest.java` | Ownership rules for USER, SUPPORT, ADMIN and STRATEGY |
+| `integration/AccountOwnershipIT.java` | A trader cannot read or change another trader's account, orders or positions |
+| `integration/StrategyServiceAccessIT.java` | What the STRATEGY token may and may not call |
+| `integration/DatabaseRolesIT.java` | Each service's database role can only reach its own tables |
+| `controllers/GlobalExceptionHandlerTest.java`, `GlobalExceptionHandlerTests.java` | Every exception maps to its code and a safe message, with no stack trace |
+| `shared/auth-service/tests/` | Password hashing, tokens, guards, rate limiting and refresh token reuse (see section 3) |
 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Unit tests
 mvn test
 
-# Run only security tests
-mvn test -Dtest=SecurityTests
+# Unit and integration tests (Docker must be running), with a JaCoCo report
+mvn verify
 
-# Run exception handler tests
-mvn test -Dtest=GlobalExceptionHandlerTests
-
-# With coverage
-mvn clean test jacoco:report
+# One class
+mvn test -Dtest=JwtSecurityTest
 ```
 
 ---
 
-## 10. 📊 Monitoring & Logging
+## 11. Monitoring & Logging
 
 ### Logging Strategy
 
@@ -593,10 +641,10 @@ logger.error("Unexpected exception occurred: ", e);  // Full stack trace
 ```
 
 **What NOT to Log:**
-- ❌ Passwords or credentials
-- ❌ Card numbers or sensitive financial data
-- ❌ Full response bodies containing sensitive info
-- ❌ Personal identifiable information (PII)
+- Passwords or credentials
+- Card numbers or sensitive financial data
+- Full response bodies containing sensitive info
+- Personal identifiable information (PII)
 
 ### Health Checks
 
@@ -608,14 +656,18 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      # /actuator/health is public: anyone gets UP or DOWN, only admins get the details
+      show-details: when-authorized
+      roles: ADMIN
 ```
 
-**Health Endpoint:** `/health` (public access)
+**Health endpoint:** `/actuator/health` (public; details for `ADMIN` only). Metrics for the
+monitoring stack are served on a separate, unpublished port (`METRICS_PORT`, 9464); see
+[observability/README.md](../observability/README.md).
 
 ---
 
-## 11. 🚀 Deployment Security Checklist
+## 12. Deployment Security Checklist
 
 Before deploying to production:
 
@@ -627,14 +679,14 @@ Before deploying to production:
 - [ ] Logging doesn't expose credentials or PII
 - [ ] Database is accessible only from application server
 - [ ] API is behind a web application firewall (WAF)
-- [ ] Rate limiting is configured (optional but recommended)
+- [ ] Rate limiting is configured (the auth service limits credential endpoints per client IP; `AUTH_RATE_LIMIT`, `AUTH_TRUST_PROXY`)
 - [ ] Security headers are verified in responses
 - [ ] All tests pass including security tests
 - [ ] Dependencies are up-to-date (no known vulnerabilities)
 
 ---
 
-## 12. 🔄 Incident Response
+## 13. Incident Response
 
 ### If Security Issue is Discovered
 
@@ -660,7 +712,7 @@ Before deploying to production:
 
 ---
 
-## 13. 📚 Reference Implementation
+## 14. Reference Implementation
 
 ### Example: Secure Order Placement
 
@@ -684,13 +736,14 @@ curl -X POST http://localhost:3000/api/v1/orders \
 {
     "orderId": "550e8400-e29b-41d4-a716-446655440000",
     "status": "ACCEPTED",
+    "price": 150.00,
     "message": "Order accepted for processing. Poll GET /api/v1/orders/{orderId} to track status."
 }
 ```
 
 The order executes asynchronously; `GET /api/v1/orders/{orderId}` then returns it
 with status `FILLED` or `REJECTED`. Rejected orders are also captured in the
-dead-letter queue (`/api/v1/dlq/messages`, ADMIN only) with the failure reason.
+dead-letter queue (`/api/v1/dlq/messages`, ADMIN and SUPPORT) with the failure reason.
 
 **Validation Error (422):**
 ```json
@@ -712,7 +765,7 @@ dead-letter queue (`/api/v1/dlq/messages`, ADMIN only) with the failure reason.
 
 ---
 
-## 14. 📖 Additional Resources
+## 15. Additional Resources
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [Spring Security Documentation](https://spring.io/projects/spring-security)
@@ -722,7 +775,7 @@ dead-letter queue (`/api/v1/dlq/messages`, ADMIN only) with the failure reason.
 
 ---
 
-## 15. 🔍 CI Security Scanning (DevSecOps)
+## 16. CI Security Scanning (DevSecOps)
 
 Every Jenkins build (all branches and pull requests) runs automated security scans defined in the [Jenkinsfile](../Jenkinsfile). The scanners run as pinned Docker images, so the Jenkins agent only needs Docker.
 
@@ -730,7 +783,7 @@ Every Jenkins build (all branches and pull requests) runs automated security sca
 |---|---|---|---|
 | Secret Scan | Gitleaks | Full git history for committed credentials (keys, tokens, passwords) | Any secret is found |
 | SAST | Semgrep (`p/java`, `p/owasp-top-ten`) | Source code and Dockerfiles for insecure patterns | An `ERROR`-severity rule matches |
-| Dependency Scan | Trivy (`fs` + `image`) | `pom.xml`, `package-lock.json`, and every library and OS package in the built image, for known CVEs | A `CRITICAL` CVE with an available fix is found |
+| Dependency Scan | Trivy (`fs` + `image`) | The repo's manifests (`pom.xml` files, `package-lock.json` files, Python `requirements.txt` files), and every library and OS package in the built API, auth service and strategy service images, for known CVEs | A `CRITICAL` CVE with an available fix is found |
 
 Each security stage uses `catchError`, so a failed gate marks the build **FAILED** but the remaining stages still run. That way one build reports every finding.
 
@@ -738,7 +791,7 @@ Each security stage uses `catchError`, so a failed gate marks the build **FAILED
 
 - **Console output:** each stage prints its findings in the Jenkins console log.
 - **Reports:** SARIF files are archived on every build under **Build Artifacts → `security-reports/`**:
-  - `gitleaks.sarif`, `semgrep.sarif`, `trivy-fs.sarif`, `trivy-image.sarif`
+  - `gitleaks.sarif`, `semgrep.sarif`, `trivy-fs.sarif`, `trivy-image.sarif`, `trivy-auth-image.sarif`, `trivy-strategy-image.sarif`
   - Trivy reports include `HIGH` findings as well as `CRITICAL` ones. `HIGH` findings do not fail the build but should be triaged.
   - SARIF opens in VS Code with the *SARIF Viewer* extension.
 
@@ -750,7 +803,7 @@ Always prefer fixing the finding. Only suppress it after confirming it is a fals
 |---|---|---|
 | Gitleaks | **Rotate the credential first**, since it is exposed in git history. Then move it to an env var or secret store. | Add the finding's fingerprint (`<commit>:<file>:<rule>:<line>`, printed in the log) to `.gitleaksignore` |
 | Semgrep | Change the code as the rule message suggests | Add `// nosemgrep: <rule-id>` on the flagged line |
-| Trivy | Upgrade the library. For Spring-managed libraries, bump the Spring Boot parent or override the version property in `pom.xml` (e.g. `<tomcat.version>`). | Add the CVE ID with a reason and owner to `.trivyignore` |
+| Trivy | Upgrade the library. For Spring-managed libraries, bump the Spring Boot parent or override the version property in `pom.xml` (e.g. `<tomcat.version>`). | Add the CVE ID with a reason, owner and review date to `.trivyignore`, and record it in [DECISIONS.md](DECISIONS.md#11-accepted-vulnerabilities) |
 
 ### Running the scans locally
 
@@ -773,5 +826,4 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.
 
 ---
 
-**Last Updated:** 2026-10-05  
-**Status:** ✅ Complete - All Acceptance Criteria Met
+**Last updated:** 2026-10-21

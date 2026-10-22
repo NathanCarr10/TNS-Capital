@@ -78,16 +78,16 @@ describe('MarketWatchComponent', () => {
 
     const aapl = rowFor('AAPL');
     expect(aapl.textContent).toContain('$190.00');
-    expect(aapl.querySelectorAll('td.change-up').length).toBe(2);
+    expect(aapl.querySelectorAll('td.change-up')).toHaveSize(2);
     expect(aapl.textContent).toContain('+10.00');
     expect(aapl.textContent).toContain('+5.56%');
 
     const msft = rowFor('MSFT');
-    expect(msft.querySelectorAll('td.change-down').length).toBe(2);
+    expect(msft.querySelectorAll('td.change-down')).toHaveSize(2);
     expect(msft.textContent).toContain('-10.00');
     expect(msft.textContent).toContain('-2.44%');
 
-    expect(rowFor('TSLA').querySelectorAll('td.change-flat').length).toBe(2);
+    expect(rowFor('TSLA').querySelectorAll('td.change-flat')).toHaveSize(2);
 
     discardPeriodicTasks();
   }));
@@ -101,7 +101,7 @@ describe('MarketWatchComponent', () => {
 
     expect(rowFor('MSFT').querySelector('.price-unavailable')?.textContent).toContain('Price unavailable');
     expect(rowFor('AAPL').querySelector('.price-unavailable')).toBeNull();
-    expect(rowFor('TSLA').querySelectorAll('td.change-unknown').length).toBe(2);
+    expect(rowFor('TSLA').querySelectorAll('td.change-unknown')).toHaveSize(2);
 
     discardPeriodicTasks();
   }));
@@ -120,7 +120,7 @@ describe('MarketWatchComponent', () => {
 
     expect(marketDataServiceSpy.getQuotes).toHaveBeenCalledTimes(2);
     expect(rowFor('AAPL').textContent).toContain('$170.00');
-    expect(rowFor('AAPL').querySelectorAll('td.change-down').length).toBe(2);
+    expect(rowFor('AAPL').querySelectorAll('td.change-down')).toHaveSize(2);
 
     discardPeriodicTasks();
   }));

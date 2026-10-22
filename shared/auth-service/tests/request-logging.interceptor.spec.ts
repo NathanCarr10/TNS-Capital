@@ -30,16 +30,16 @@ describe('RequestLoggingInterceptor', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('logs method, path, status, time and the user of a successful request', async () => {
-    const request = { method: 'GET', path: '/auth/me', user: { sub: 'trader' } };
+    const request = { method: 'GET', path: '/auth/me', user: { sub: 'trader@example.com' } };
 
     await lastValueFrom(interceptor.intercept(context(request), handler(() => of({ ok: true }))));
 
-    expect(log).toHaveBeenCalledWith(expect.stringMatching(/^GET \/auth\/me 200 \d+ms user=trader$/));
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/^GET \/auth\/me 200 \d+ms user=trader@example.com$/));
   });
 
   it('logs a rejected login as a warning, without the password', async () => {
-    const request = { method: 'POST', path: '/auth/login', body: { username: 'x', password: 'secret123' } };
-    const failure = new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', 'invalid username or password');
+    const request = { method: 'POST', path: '/auth/login', body: { email: 'x@example.com', password: 'secret123' } };
+    const failure = new ApiException(HttpStatus.UNAUTHORIZED, 'AUTH-401', 'invalid email or password');
 
     await expect(
       lastValueFrom(interceptor.intercept(context(request), handler(() => throwError(() => failure)))),

@@ -21,7 +21,8 @@ public class SellOrderStrategy implements OrderExecutionStrategy {
         var currentPosition = positionRepository.findByAccountIdAndSymbol(request.accountId(), symbol)
                 .orElseThrow(() -> new InsufficientHoldingsException("No position for symbol: " + symbol));
 
-        if (currentPosition.getQuantity() < request.quantity()) {
+        // Shares reserved for other orders are not available
+        if (currentPosition.getAvailableQuantity() < request.quantity()) {
             throw new InsufficientHoldingsException("Insufficient holdings for symbol: " + symbol);
         }
 

@@ -6,12 +6,14 @@
       <p class="muted">{{ current.accountNumber }} &middot; {{ current.holderName }}</p>
     }
   </div>
-  <a class="btn btn-primary" routerLink="/trade">Place order</a>
+  @if (!isSupport) {
+    <a class="btn btn-primary" routerLink="/trade">Place order</a>
+  }
 </header>
 
 <section class="card">
   <div class="card-header">
-    <div class="segmented" role="group" aria-label="Filter by status">
+    <fieldset class="segmented" aria-label="Filter by status">
       @for (option of filters; track option.value) {
         <button
           type="button"
@@ -22,7 +24,7 @@
           {{ option.label }}
         </button>
       }
-    </div>
+    </fieldset>
     @if (!orderHistoryLoading() && !orderHistoryError()) {
       <span class="muted count">{{ visibleRows().length }} of {{ orderHistory().length }} orders</span>
     }
@@ -54,7 +56,7 @@
             <th class="numeric">Price</th>
             <th class="numeric">Total</th>
             <th>Status</th>
-            @if (!isAdmin) {
+            @if (!isSupport) {
               <th><span class="visually-hidden">Actions</span></th>
             }
           </tr>
@@ -63,7 +65,13 @@
           @for (row of visibleRows(); track row.id) {
             <tr>
               <td class="num">{{ row.dateTime | date:'MMM d, y, HH:mm:ss' }}</td>
-              <td><a class="symbol-link symbol" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a></td>
+              <td>
+                @if (isSupport) {
+                  <span class="symbol">{{ row.symbol }}</span>
+                } @else {
+                  <a class="symbol-link symbol" [routerLink]="['/trade', row.symbol]">{{ row.symbol }}</a>
+                }
+              </td>
               <td>
                 <span [class]="row.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ row.side }}</span>
               </td>
@@ -80,7 +88,7 @@
                   {{ row.status === 'NEW' ? 'Open' : row.status }}
                 </span>
               </td>
-              @if (!isAdmin) {
+              @if (!isSupport) {
                 <td>
                   @if (row.status === 'NEW') {
                     <button

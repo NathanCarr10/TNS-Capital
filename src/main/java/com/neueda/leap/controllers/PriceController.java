@@ -1,5 +1,8 @@
 package com.neueda.leap.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import com.neueda.leap.dtos.NewsHeadlineResponse;
 import com.neueda.leap.exceptions.InstrumentNotFoundException;
 import com.neueda.leap.exceptions.MarketDataUnavailableException;
 import com.neueda.leap.exceptions.PriceUnavailableException;
@@ -36,6 +39,9 @@ public class PriceController {
      * Quotes with daily change for a watchlist, e.g. ?symbols=AAPL,MSFT.
      * A symbol with no live price is still returned, with null price fields.
      */
+    @Operation(summary = "Quotes for several instruments", description = "Latest price and daily change, e.g. ?symbols=AAPL,MSFT (1 to 50). A symbol with no live price is returned with null price fields.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "404", description = "INS-404 One of the symbols is not an instrument")
     @GetMapping
     public ResponseEntity<List<MarketQuote>> getQuotes(@RequestParam List<String> symbols) {
         List<String> normalizedSymbols = symbols.stream()
@@ -50,6 +56,10 @@ public class PriceController {
         return ResponseEntity.ok(marketDataService.quotes(normalizedSymbols));
     }
 
+    @Operation(summary = "Latest price of an instrument")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "404", description = "INS-404 Instrument not found")
+    @ApiResponse(responseCode = "503", description = "PRC-503 No live price for this instrument")
     @GetMapping("/{symbol}")
     public ResponseEntity<PriceQuote> getPrice(@PathVariable String symbol) {
         String normalizedSymbol = requireInstrument(InputNormalizer.normalize(symbol));
@@ -64,6 +74,10 @@ public class PriceController {
      * @param timeframe 15Min, 1Hour or 1Day
      * @param limit     how many bars, 1 to MAX_BARS
      */
+    @Operation(summary = "Price bars of an instrument", description = "The most recent OHLC bars, oldest first. timeframe is 15Min, 1Hour or 1Day; limit is 1 to 1000.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "404", description = "INS-404 Instrument not found")
+    @ApiResponse(responseCode = "503", description = "MKT-503 Market data is unavailable")
     @GetMapping("/{symbol}/bars")
     public ResponseEntity<List<PriceBar>> getBars(@PathVariable String symbol,
             @RequestParam(defaultValue = "1Day") String timeframe,
@@ -78,6 +92,21 @@ public class PriceController {
             throw new MarketDataUnavailableException("No " + timeframe + " bars for " + normalizedSymbol);
         }
         return ResponseEntity.ok(bars);
+    }
+
+    /** The latest headlines about an instrument, for the Trade page's news ticker. */
+    @Operation(summary = "News about an instrument",
+            description = "Up to 10 headlines from the last 7 days, newest first. Empty when there is no news or "
+                    + "market data is unavailable. Cached for 5 minutes per symbol.")
+    @ApiResponse(responseCode = "200", description = "OK")
+    @ApiResponse(responseCode = "404", description = "INS-404 Instrument not found")
+    @GetMapping("/{symbol}/news")
+    public ResponseEntity<List<NewsHeadlineResponse>> getNews(@PathVariable String symbol) {
+        String normalizedSymbol = requireInstrument(InputNormalizer.normalize(symbol));
+        return ResponseEntity.ok(marketDataService.news(normalizedSymbol).stream()
+                .map(article -> new NewsHeadlineResponse(article.headline(), article.source(), article.url(),
+                        article.publishedAt()))
+                .toList());
     }
 
     // Only known instruments, so arbitrary symbols are never sent to the market data API

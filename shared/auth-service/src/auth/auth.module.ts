@@ -8,6 +8,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { ServiceClientsService } from './service-clients.service';
 import { DEFAULT_AUTH_RATE_LIMIT } from './rate-limit';
 import { ACCESS_TOKEN_TTL_SECONDS, JWT_ISSUER, TokenService } from './token.service';
 
@@ -35,6 +36,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, JWT_ISSUER, TokenService } from './token.serv
   providers: [
     AuthService,
     TokenService,
+    ServiceClientsService,
     // Global guards run in this order: authenticate, then check roles.
     // Every route needs an access token unless marked @Public().
     { provide: APP_GUARD, useClass: JwtAuthGuard },

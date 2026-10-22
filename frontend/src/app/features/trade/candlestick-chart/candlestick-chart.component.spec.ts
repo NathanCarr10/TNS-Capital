@@ -40,7 +40,7 @@ describe('CandlestickChartComponent', () => {
   it('draws one candle per bar, coloured by direction', () => {
     const candles = Array.from(fixture.nativeElement.querySelectorAll('g.candle')) as SVGGElement[];
 
-    expect(candles.length).toBe(3);
+    expect(candles).toHaveSize(3);
     expect(candles.map((candle) => candle.classList.contains('candle-up'))).toEqual([true, false, true]);
   });
 
@@ -74,7 +74,7 @@ describe('CandlestickChartComponent', () => {
     component.width.set(264);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelectorAll('g.candle').length).toBe(50);
+    expect(fixture.nativeElement.querySelectorAll('g.candle')).toHaveSize(50);
     expect(component.visibleBars()[49]).toBe(many[119]);
   });
 
@@ -85,7 +85,7 @@ describe('CandlestickChartComponent', () => {
     component.width.set(2000);
     fixture.detectChanges();
 
-    expect(component.visibleBars().length).toBe(CandlestickChartComponent.MAX_VISIBLE);
+    expect(component.visibleBars()).toHaveSize(CandlestickChartComponent.MAX_VISIBLE);
     // With 60 earlier bars to average over, the line starts at the first visible candle
     expect(component.overlays()[0].values.every((value) => value !== null)).toBeTrue();
   });
@@ -99,7 +99,7 @@ describe('CandlestickChartComponent', () => {
     fixture.detectChanges();
 
     expect(component.activeIndex()).toBe(1);
-    expect(fixture.nativeElement.querySelectorAll('g.candle.dimmed').length).toBe(2);
+    expect(fixture.nativeElement.querySelectorAll('g.candle.dimmed')).toHaveSize(2);
     expect(fixture.nativeElement.querySelector('line.crosshair')).not.toBeNull();
 
     svg.dispatchEvent(new PointerEvent('pointerleave'));

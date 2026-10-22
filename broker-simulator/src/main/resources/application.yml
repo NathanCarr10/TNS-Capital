@@ -18,8 +18,10 @@ broker:
   executions-topic: executions
   venue: SIM
 
+# /actuator/prometheus is scraped by the monitoring stack (profile "observability"). The broker
+# has no host port, so only containers on the Compose network can reach it.
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus

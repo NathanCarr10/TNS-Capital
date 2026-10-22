@@ -11,7 +11,10 @@ export const ACCOUNT: AccountResponse = {
   id: 11,
   accountNumber: 'ACC-U000011',
   holderName: 'Trader One',
+  email: 'ada@example.com',
   cashBalance: 5000,
+  reservedCash: 0,
+  availableCash: 5000,
   status: 'ACTIVE',
   openedOn: '2026-09-01T09:30:00Z',
   lastUpdated: '2026-10-13T10:00:00Z',
@@ -40,7 +43,7 @@ export function tradingServiceStub(): jasmine.SpyObj<TradingService> {
     'updateAccount',
     'updateAccountStatus',
   ]);
-  spy.getCurrentUserProfile.and.returnValue(of({ username: 'trader1', roles: ['USER'], accountId: ACCOUNT.id }));
+  spy.getCurrentUserProfile.and.returnValue(of({ email: ACCOUNT.email, roles: ['USER'], accountId: ACCOUNT.id }));
   spy.getAccount.and.returnValue(of(ACCOUNT));
   spy.getInstruments.and.returnValue(of(INSTRUMENTS));
   spy.getAccountPositions.and.returnValue(of([]));

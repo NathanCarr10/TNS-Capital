@@ -114,10 +114,19 @@ export class AuthService {
     return claims.exp > nowInSeconds;
   }
 
-  /** True when the stored access token carries the ADMIN role. */
+  /** True when the stored access token carries the ADMIN role: the analytics dashboard's users. */
   isAdmin(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  /** True when the stored access token carries the SUPPORT role: staff who look after traders' accounts here. */
+  isSupport(): boolean {
+    return this.hasRole('SUPPORT');
+  }
+
+  private hasRole(role: AccessTokenClaims.RolesEnum): boolean {
     const token = this.tokenStorage.accessToken;
-    return token ? (this.decodeClaims(token).roles ?? []).includes('ADMIN') : false;
+    return token ? (this.decodeClaims(token).roles ?? []).includes(role) : false;
   }
 
   private clearSession(): void {
@@ -133,8 +142,8 @@ export class AuthService {
 
     try {
       const payload = parts[1]
-        .replace(/-/g, '+')
-        .replace(/_/g, '/');
+        .replaceAll('-', '+')
+        .replaceAll('_', '/');
       const normalizedPayload = payload.padEnd(Math.ceil(payload.length / 4) * 4, '=');
       const claimsJson = atob(normalizedPayload);
       return JSON.parse(claimsJson) as JwtClaims;
@@ -143,7 +152,7 @@ export class AuthService {
     }
   }
 
-  static getErrorMessage(error: unknown, defaultMessage = 'Invalid username or password.'): string {
+  static getErrorMessage(error: unknown, defaultMessage = 'Invalid email or password.'): string {
 
     if (!error || typeof error !== 'object') {
       return defaultMessage;

@@ -19,6 +19,10 @@
 }
 
 .segment {
+  // A <button> (focusable, shows its tooltip), drawn as a plain bar segment
+  padding: 0;
+  border: 0;
+  font: inherit;
   flex-basis: 0;
   // Keeps a tiny holding visible and hoverable
   min-width: 4px;

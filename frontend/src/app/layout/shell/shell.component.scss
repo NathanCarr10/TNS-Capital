@@ -19,23 +19,17 @@
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0 0.4rem;
+  justify-content: center;
+  padding: 0.35rem;
   color: #ffffff;
   text-decoration: none;
 }
 
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 8px;
-  background: #f4f6f2;
-  color: #354f52;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 1.25rem;
-  font-weight: 700;
+.brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 12rem;
+  height: auto;
 }
 
 .brand-name {
@@ -68,7 +62,7 @@ nav {
     text-decoration: none;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--sidebar-hover);
       color: #ffffff;
     }
 
@@ -78,7 +72,23 @@ nav {
       color: #ffffff;
       font-weight: 600;
     }
+
+    .nav-notification {
+      display: inline-grid;
+      place-items: center;
+      min-width: 1.2rem;
+      height: 1.2rem;
+      margin-left: auto;
+      padding: 0 .25rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: .68rem;
+      font-weight: 800;
+      line-height: 1;
+    }
   }
+
 }
 
 .topbar {
@@ -99,6 +109,8 @@ nav {
   display: flex;
   align-items: center;
   gap: 0.9rem;
+  // Stay at the right end even when there is no symbol search (support view)
+  margin-left: auto;
 }
 
 .divider {
@@ -219,8 +231,10 @@ nav {
     overflow-x: auto;
   }
 
-  .brand-name {
-    display: none;
+  // The icon has no reversed variant, so lighten its charcoal swoosh for the dark bar
+  .brand-logo {
+    width: 2.5rem;
+    filter: invert(1) hue-rotate(180deg);
   }
 
   nav {

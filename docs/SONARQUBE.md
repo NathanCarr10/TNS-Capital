@@ -7,8 +7,20 @@ Each developer runs their own SonarQube and Jenkins. This is a one-time setup.
 
 ## How it works
 
-1. The `Test` stage runs the unit tests. JaCoCo writes a coverage report to
-   `target/site/jacoco/jacoco.xml`.
+1. The test stages write a coverage report for each component SonarQube analyses
+   (`sonar.sources` in `pom.xml`):
+
+   | Component | Stage | Report |
+   |---|---|---|
+   | Java API | `Test` | `target/site/jacoco/jacoco.xml` (JaCoCo) |
+   | Strategy service | `Strategy Service Tests` | `strategy-service/target/site/jacoco/jacoco.xml` (JaCoCo) |
+   | Python ETL, dashboard | `ETL Tests`, `Dashboard Tests` | `etl/coverage.xml`, `dashboard/coverage.xml` |
+   | Angular frontend | `Frontend Tests` | `frontend/coverage/frontend/lcov.info` (`karma.conf.js`) |
+   | NestJS auth service | `Auth Service Tests` | `shared/auth-service/coverage/lcov.info` (`jest.config.js`) |
+
+   The TypeScript reports use paths from the repo root, where SonarQube resolves them. The
+   generated API clients (`frontend/src/app/api`) and the Angular specs are not analysed as
+   source code. The broker simulator is tested in Jenkins but not analysed by SonarQube.
 2. The `SonarQube Analysis` stage runs `mvn sonar:sonar` against the server Jenkins
    knows as `sonarserver`, using the `sonar-token` credential.
 3. `-Dsonar.qualitygate.wait=true` makes Maven wait for the gate result and exit

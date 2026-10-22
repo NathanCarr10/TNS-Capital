@@ -3,7 +3,7 @@
     <p class="eyebrow">Overview</p>
     <h2 class="card-title">Order ticket</h2>
   </div>
-  <span class="badge">{{ isAdmin ? 'Read-only' : 'Live' }}</span>
+  <span class="badge">{{ isSupport ? 'Read-only' : 'Live' }}</span>
 </div>
 
 <form class="ticket-body" [formGroup]="orderForm" (ngSubmit)="onSubmit()" novalidate>
@@ -69,14 +69,19 @@
     <div>
       @if (side() === 'BUY') {
         <dt>Available cash</dt>
-        <dd class="num">{{ account() ? (account()!.cashBalance | currency:'USD':'symbol':'1.2-2') : '—' }}</dd>
+        <dd class="num">{{ account() ? (account()!.availableCash | currency:'USD':'symbol':'1.2-2') : '—' }}</dd>
       } @else {
-        <dt>Shares held</dt>
-        <dd class="num">{{ heldQuantity() | number }}</dd>
+        <dt>Shares available</dt>
+        <dd class="num">{{ availableQuantity() | number }}</dd>
       }
     </div>
   </dl>
-  @if (shortfall() && !isAdmin) {
+  @if (side() === 'BUY' && account() && account()!.reservedCash > 0) {
+    <p class="hint">{{ account()!.reservedCash | currency:'USD':'symbol':'1.2-2' }} is held for your open orders.</p>
+  } @else if (side() === 'SELL' && reservedQuantity() > 0) {
+    <p class="hint">{{ reservedQuantity() | number }} of your {{ heldQuantity() | number }} {{ symbol() }} are in open orders.</p>
+  }
+  @if (shortfall() && !isSupport) {
     <p class="hint warning">{{ shortfall() }}</p>
   }
 
@@ -95,13 +100,10 @@
     }
   </button>
 
-  @if (isAdmin) {
-    <p class="note">Admin view: read-only. Orders can only be placed by the account's owner.</p>
+  @if (isSupport) {
+    <p class="note">Support view: read-only. Orders can only be placed by the account's owner.</p>
   } @else if (instrument() && !tradable()) {
     <p class="note">{{ symbol() }} is not tradable.</p>
-  }
-  @if (successMessage()) {
-    <p class="note success" role="status">{{ successMessage() }}</p>
   }
   @if (errorMessage()) {
     <p class="note error" role="alert">{{ errorMessage() }}</p>

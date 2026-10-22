@@ -4,10 +4,10 @@
  * is set. Rows created here are removed afterwards.
  */
 import { Pool } from 'pg';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { hashPassword } from '../src/users/password-hasher';
 import { RefreshTokensService } from '../src/users/refresh-tokens.service';
-import { accountNumberFor, AdminNameTakenError, UsernameTakenError, UsersService } from '../src/users/users.service';
+import { accountNumberFor, EmailTakenError, StaffEmailTakenError, UsersService } from '../src/users/users.service';
 
 const describeWithDb = process.env.DB_HOST ? describe : describe.skip;
 
@@ -23,10 +23,10 @@ const refreshTokens = new RefreshTokensService(pool);
 
 const runId = Date.now();
 const created: string[] = [];
-const uniqueName = (prefix: string) => {
-  const name = `${prefix}_${runId}_${created.length}`;
-  created.push(name);
-  return name;
+const uniqueEmail = (prefix: string) => {
+  const email = `${prefix}_${runId}_${created.length}@example.com`;
+  created.push(email);
+  return email;
 };
 
 let passwordHash: string;
@@ -40,7 +40,7 @@ afterAll(async () => {
     await pool.end();
     return;
   }
-  const users = await pool.query('DELETE FROM users WHERE username = ANY($1) RETURNING account_id', [created]);
+  const users = await pool.query('DELETE FROM users WHERE email = ANY($1) RETURNING account_id', [created]);
   const accountIds = users.rows.map((row) => row.account_id).filter((id) => id !== null);
   await pool.query('DELETE FROM accounts WHERE id = ANY($1)', [accountIds]);
   await pool.end();
@@ -48,27 +48,28 @@ afterAll(async () => {
 
 describeWithDb('UsersService.create', () => {
   it('stores the hash it is given', async () => {
-    const username = uniqueName('hashtest');
-    await service.create(username, passwordHash);
+    const email = uniqueEmail('hashtest');
+    await service.create(email, passwordHash);
 
-    const row = (await pool.query('SELECT password_hash FROM users WHERE username = $1', [username])).rows[0];
+    const row = (await pool.query('SELECT password_hash FROM users WHERE email = $1', [email])).rows[0];
     expect(row.password_hash).toBe(passwordHash);
   });
 
   it('opens an ACTIVE account with a zero cash balance and links it to the user', async () => {
-    const username = uniqueName('newtrader');
-    const user = await service.create(username, passwordHash, 'Ada Lovelace');
+    const email = uniqueEmail('newtrader');
+    const user = await service.create(email, passwordHash, 'Ada Lovelace');
 
     expect(user.accountNumber).toBe(accountNumberFor(user.id));
 
     const account = (
-      await pool.query('SELECT account_number, holder_name, cash_balance, status FROM accounts WHERE id = $1', [
+      await pool.query('SELECT account_number, holder_name, email, cash_balance, status FROM accounts WHERE id = $1', [
         user.accountId,
       ])
     ).rows[0];
     expect(account).toEqual({
       account_number: user.accountNumber,
       holder_name: 'Ada Lovelace',
+      email,
       cash_balance: '0.00',
       status: 'ACTIVE',
     });
@@ -78,74 +79,88 @@ describeWithDb('UsersService.create', () => {
     expect(link.role).toBe('USER');
   });
 
-  it('uses the username as the holder name when none is given', async () => {
-    const username = uniqueName('noholder');
-    const user = await service.create(username, passwordHash);
+  it('uses the part of the email before the "@" as the holder name when none is given', async () => {
+    const email = uniqueEmail('noholder');
+    const user = await service.create(email, passwordHash);
 
     const account = (await pool.query('SELECT holder_name FROM accounts WHERE id = $1', [user.accountId])).rows[0];
-    expect(account.holder_name).toBe(username);
+    expect(account.holder_name).toBe(email.split('@')[0]);
   });
 
-  it('rejects a duplicate username without opening a second account (AC#4)', async () => {
-    const username = uniqueName('duplicate');
-    await service.create(username, passwordHash);
+  it('rejects a duplicate email without opening a second account (AC#4)', async () => {
+    const email = uniqueEmail('duplicate');
+    await service.create(email, passwordHash);
     const accountsBefore = Number((await pool.query('SELECT COUNT(*) FROM accounts')).rows[0].count);
 
-    await expect(service.create(username, passwordHash)).rejects.toBeInstanceOf(UsernameTakenError);
+    await expect(service.create(email, passwordHash)).rejects.toBeInstanceOf(EmailTakenError);
 
     const accountsAfter = Number((await pool.query('SELECT COUNT(*) FROM accounts')).rows[0].count);
     expect(accountsAfter).toBe(accountsBefore);
   });
 
   it('rolls back the user when the account cannot be opened', async () => {
-    const username = uniqueName('rollback');
+    const email = uniqueEmail('rollback');
     // A holder name longer than the column fails the account insert
-    await expect(service.create(username, passwordHash, 'x'.repeat(300))).rejects.toThrow();
+    await expect(service.create(email, passwordHash, 'x'.repeat(300))).rejects.toThrow();
 
-    const users = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+    const users = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     expect(users.rows).toHaveLength(0);
   });
 });
 
-describeWithDb('UsersService.findByUsername', () => {
+describeWithDb('UsersService.findByEmail', () => {
   it('returns the user with their hash, USER role and account', async () => {
-    const username = uniqueName('findtest');
-    const { id, accountId } = await service.create(username, passwordHash);
+    const email = uniqueEmail('findtest');
+    const { id, accountId } = await service.create(email, passwordHash);
 
-    expect(await service.findByUsername(username)).toEqual({ id, username, passwordHash, roles: ['USER'], accountId });
+    expect(await service.findByEmail(email)).toEqual({
+      id,
+      email,
+      passwordHash,
+      roles: ['USER'],
+      accountId,
+    });
   });
 
   it('returns null for an unknown user', async () => {
-    expect(await service.findByUsername('nonexistent_user')).toBeNull();
+    expect(await service.findByEmail('nonexistent_user@example.com')).toBeNull();
   });
 
   it('finds the same user by id', async () => {
-    const username = uniqueName('findbyid');
-    const { id } = await service.create(username, passwordHash);
+    const email = uniqueEmail('findbyid');
+    const { id } = await service.create(email, passwordHash);
 
-    expect(await service.findById(id)).toEqual(await service.findByUsername(username));
+    expect(await service.findById(id)).toEqual(await service.findByEmail(email));
     expect(await service.findById(-1)).toBeNull();
   });
 
 });
 
-describeWithDb('UsersService.saveAdmin', () => {
-  it('creates an ADMIN with no trading account, then sets a new password on it', async () => {
-    const username = uniqueName('admintest');
+describeWithDb('UsersService.saveStaff', () => {
+  it.each(['ADMIN', 'SUPPORT'] as const)('creates a %s with no trading account, then sets a new password on it', async (role) => {
+    const email = uniqueEmail(`${role.toLowerCase()}test`);
 
-    await service.saveAdmin(username, passwordHash);
-    expect(await service.findByUsername(username)).toMatchObject({ username, roles: ['ADMIN'], accountId: null, passwordHash });
+    await service.saveStaff(email, passwordHash, role);
+    expect(await service.findByEmail(email)).toMatchObject({ email, roles: [role], accountId: null, passwordHash });
 
-    await service.saveAdmin(username, 'new-hash');
-    expect((await service.findByUsername(username))?.passwordHash).toBe('new-hash');
+    await service.saveStaff(email, 'new-hash', role);
+    expect((await service.findByEmail(email))?.passwordHash).toBe('new-hash');
   });
 
-  it("never promotes a trader's username", async () => {
-    const username = uniqueName('notadmin');
-    await service.create(username, passwordHash);
+  it("never promotes a trader's email", async () => {
+    const email = uniqueEmail('notadmin');
+    await service.create(email, passwordHash);
 
-    await expect(service.saveAdmin(username, 'new-hash')).rejects.toThrow(AdminNameTakenError);
-    expect(await service.findByUsername(username)).toMatchObject({ roles: ['USER'], passwordHash });
+    await expect(service.saveStaff(email, 'new-hash', 'ADMIN')).rejects.toThrow(StaffEmailTakenError);
+    expect(await service.findByEmail(email)).toMatchObject({ roles: ['USER'], passwordHash });
+  });
+
+  it('never turns the support account into the admin one', async () => {
+    const email = uniqueEmail('supportonly');
+    await service.saveStaff(email, passwordHash, 'SUPPORT');
+
+    await expect(service.saveStaff(email, 'new-hash', 'ADMIN')).rejects.toThrow('already the SUPPORT account');
+    expect(await service.findByEmail(email)).toMatchObject({ roles: ['SUPPORT'], passwordHash });
   });
 });
 
@@ -159,7 +174,7 @@ describeWithDb('RefreshTokensService', () => {
       .rows[0];
 
   beforeAll(async () => {
-    userId = (await service.create(uniqueName('refreshtest'), passwordHash)).id;
+    userId = (await service.create(uniqueEmail('refreshtest'), passwordHash)).id;
   });
 
   it('rotates a token: spends it and stores its successor in the same family', async () => {
@@ -226,8 +241,7 @@ describeWithDb('RefreshTokensService', () => {
   });
 
   it("deletes the user's tokens along with the user", async () => {
-    const username = uniqueName('cascade');
-    const { id, accountId } = await service.create(username, passwordHash);
+    const { id, accountId } = await service.create(uniqueEmail('cascade'), passwordHash);
     const token = hash();
     await refreshTokens.create(id, token, randomUUID(), 3600);
 

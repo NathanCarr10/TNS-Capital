@@ -1,15 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { AnalyticsDashboardService } from '../../core/analytics/analytics-dashboard.service';
 import { AccountStore } from '../../core/trading/account.store';
 import { readErrorMessage } from '../../core/trading/api-error';
 import { MarketQuotesStore } from '../../core/trading/market-quotes.store';
 import { IconComponent } from '../../layout/icon/icon.component';
-import { AdminAccountBarComponent } from './admin-account-bar/admin-account-bar.component';
+import { SupportAccountBarComponent } from './support-account-bar/support-account-bar.component';
 import { HoldingsComponent } from './holdings/holdings.component';
 import { MarketWatchComponent } from './market-watch/market-watch.component';
 import { PerformanceSummaryComponent } from './performance-summary/performance-summary.component';
@@ -24,7 +23,7 @@ import { PortfolioValueChartComponent } from './portfolio-value/portfolio-value-
     ReactiveFormsModule,
     RouterLink,
     IconComponent,
-    AdminAccountBarComponent,
+    SupportAccountBarComponent,
     HoldingsComponent,
     MarketWatchComponent,
     PerformanceSummaryComponent,
@@ -37,12 +36,11 @@ import { PortfolioValueChartComponent } from './portfolio-value/portfolio-value-
 })
 export class PortfolioComponent {
   private readonly store = inject(AccountStore);
-  private readonly analyticsDashboard = inject(AnalyticsDashboardService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly today = new Date();
-  readonly isAdmin = this.store.isAdmin;
-  readonly adminAccounts = this.store.adminAccounts;
+  readonly isSupport = this.store.isSupport;
+  readonly supportAccounts = this.store.supportAccounts;
   readonly account = this.store.account;
   readonly accountLoading = this.store.accountLoading;
   readonly accountError = this.store.accountError;
@@ -65,12 +63,21 @@ export class PortfolioComponent {
   /** First name of the account holder, for the greeting. */
   readonly firstName = computed(() => this.account()?.holderName.split(/\s+/)[0] ?? '');
 
+  constructor() {
+    // The market watch picks the quoted symbols for traders; support has no market watch,
+    // so quote the shown account's holdings, or the holdings and KPIs would never get prices
+    if (this.isSupport) {
+      const quotes = inject(MarketQuotesStore);
+      effect(() => quotes.watch(this.heldSymbols().slice(0, MarketWatchComponent.MAX_SYMBOLS)));
+    }
+  }
+
   viewAccount(accountId: number): void {
     this.statusError.set(null);
     this.store.viewAccount(accountId);
   }
 
-  /** Admin view: suspend the account if it is active, otherwise reactivate it. */
+  /** Support view: suspend the account if it is active, otherwise reactivate it. */
   toggleStatus(): void {
     const account = this.account();
     if (!account || this.statusLoading()) {
@@ -90,10 +97,6 @@ export class PortfolioComponent {
           this.statusError.set(readErrorMessage(error, 'Could not change the account status. Please try again.'));
         },
       });
-  }
-
-  openAnalytics(): void {
-    this.analyticsDashboard.open();
   }
 
   toggleDeposit(): void {

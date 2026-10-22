@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -27,9 +28,11 @@ import java.time.ZoneOffset;
 
 /**
  * Global exception handler that provides secure, consistent error responses.
+ * - Each TradingException carries its error code (see the exceptions package);
+ *   this class picks the HTTP status and a fixed, safe message for it
  * - Uses the error codes and HTTP statuses from section 21 of the specification;
- *   ACC-409, INS-409, ORD-404, POS-404, AUTH-403, NOT-404, REQ-405,
- *   REQ-415, PRC-503, SYS-500 and SYS-503 extend the catalog for cases it does not list
+ *   ACC-409, INS-409, ORD-404, ORD-422, POS-404, AUTH-403, NOT-404, REQ-405,
+ *   REQ-415, PRC-503, MKT-503, SYS-409, SYS-500 and SYS-503 extend the catalog for cases it does not list
  * - Never exposes stack traces to clients
  * - Logs detailed information server-side for debugging
  * - Follows security best practices to prevent information leakage
@@ -45,54 +48,54 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccountNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundException e) {
         logger.warn("Account not found: {}", e.getMessage());
-        return error(HttpStatus.NOT_FOUND, "ACC-404", "The requested account could not be found");
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested account could not be found");
     }
 
     @ExceptionHandler(AccountNotActiveException.class)
     public ResponseEntity<ErrorResponse> handleAccountNotActive(AccountNotActiveException e) {
         logger.warn("Account not active: {}", e.getMessage());
-        return error(HttpStatus.FORBIDDEN, "ACC-403", "The account is not in an active state for this operation");
+        return error(HttpStatus.FORBIDDEN, e.getErrorCode(), "The account is not in an active state for this operation");
     }
 
     @ExceptionHandler(AccountAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleAccountAlreadyExists(AccountAlreadyExistsException e) {
         logger.warn("Duplicate account: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, ACCOUNT_CONFLICT, "An account with this account number already exists");
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "An account with this account number already exists");
     }
 
     @ExceptionHandler(AccountDeletionConflictException.class)
     public ResponseEntity<ErrorResponse> handleAccountDeletionConflict(AccountDeletionConflictException e) {
-        return error(HttpStatus.CONFLICT, ACCOUNT_CONFLICT, e.getMessage());
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), e.getMessage());
     }
 
     @ExceptionHandler(DuplicateInstrumentException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateInstrument(DuplicateInstrumentException e) {
         logger.warn("Duplicate instrument: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, "INS-409", "An instrument with this symbol already exists");
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "An instrument with this symbol already exists");
     }
 
     @ExceptionHandler(InstrumentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleInstrumentNotFound(InstrumentNotFoundException e) {
         logger.warn("Instrument not found: {}", e.getMessage());
-        return error(HttpStatus.NOT_FOUND, "INS-404", "The requested instrument could not be found or is not tradable");
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested instrument could not be found or is not tradable");
     }
 
     @ExceptionHandler(InsufficientFundsException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientFunds(InsufficientFundsException e) {
         logger.warn("Insufficient funds: {}", e.getMessage());
-        return error(HttpStatus.BAD_REQUEST, "ORD-400", "The account does not have sufficient funds for this operation");
+        return error(HttpStatus.BAD_REQUEST, e.getErrorCode(), "The account does not have sufficient funds for this operation");
     }
 
     @ExceptionHandler(InsufficientHoldingsException.class)
     public ResponseEntity<ErrorResponse> handleInsufficientHoldings(InsufficientHoldingsException e) {
         logger.warn("Insufficient holdings: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "The account does not have sufficient holdings for this operation");
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "The account does not have sufficient holdings for this operation");
     }
 
     @ExceptionHandler(DuplicateOrderException.class)
     public ResponseEntity<ErrorResponse> handleDuplicateOrder(DuplicateOrderException e) {
         logger.warn("Duplicate order detected: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "An order with this idempotency key has already been submitted");
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "An order with this idempotency key has already been submitted");
     }
 
     // Two requests with the same idempotency key can both pass the duplicate check;
@@ -112,44 +115,90 @@ public class GlobalExceptionHandler {
         return handleGenericException(e);
     }
 
+    // Two requests changed the same account at once (e.g. a deposit while a fill
+    // settles); the account's version column (NFR-02) rejected the later one, and
+    // nothing it did was saved
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(OptimisticLockingFailureException e) {
+        logger.warn("Concurrent update rejected: {}", e.getMessage());
+        return error(HttpStatus.CONFLICT, "SYS-409",
+                "The record was changed by another request at the same time; nothing was saved. Please try again");
+    }
+
+    // A limit order that would not fill at the live price; the message names both prices
+    @ExceptionHandler(LimitNotMarketableException.class)
+    public ResponseEntity<ErrorResponse> handleLimitNotMarketable(LimitNotMarketableException e) {
+        logger.warn("Limit not marketable: {}", e.getMessage());
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, e.getErrorCode(), e.getMessage());
+    }
+
     @ExceptionHandler(OrderCancellationConflictException.class)
     public ResponseEntity<ErrorResponse> handleOrderCancellationConflict(OrderCancellationConflictException e) {
         logger.warn("Order cancellation conflict: {}", e.getMessage());
-        return error(HttpStatus.CONFLICT, ORDER_CONFLICT, "Only NEW orders can be cancelled");
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "Only NEW orders can be cancelled");
     }
 
     // Kafka did not take the order; it is stored as REJECTED and will not execute
     @ExceptionHandler(OrderPublishException.class)
     public ResponseEntity<ErrorResponse> handleOrderPublish(OrderPublishException e) {
         logger.error("Order could not be queued: {}", e.getMessage());
-        return error(HttpStatus.SERVICE_UNAVAILABLE, "SYS-503",
+        return error(HttpStatus.SERVICE_UNAVAILABLE, e.getErrorCode(),
                 "The order could not be queued and was not executed. Try again later with a new idempotency key");
     }
 
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleOrderNotFound(OrderNotFoundException e) {
         logger.warn("Order not found: {}", e.getMessage());
-        return error(HttpStatus.NOT_FOUND, "ORD-404", "The requested order could not be found");
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested order could not be found");
+    }
+
+    @ExceptionHandler(NewsletterNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNewsletterNotFound(NewsletterNotFoundException e) {
+        logger.warn("Newsletter issue not found: {}", e.getMessage());
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested newsletter issue could not be found");
+    }
+
+    @ExceptionHandler(NewsletterPublishingDisabledException.class)
+    public ResponseEntity<ErrorResponse> handleNewsletterPublishingDisabled(NewsletterPublishingDisabledException e) {
+        logger.warn("Newsletter publishing refused: {}", e.getMessage());
+        return error(HttpStatus.FORBIDDEN, e.getErrorCode(),
+                "Publishing the newsletter before the weekly run is switched off");
+    }
+
+    @ExceptionHandler(SupportConversationClosedException.class)
+    public ResponseEntity<ErrorResponse> handleSupportConversationClosed(SupportConversationClosedException e) {
+        logger.warn("Support message refused: {}", e.getMessage());
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), "This support conversation is closed");
     }
 
     @ExceptionHandler(PositionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handlePositionNotFound(PositionNotFoundException e) {
         logger.warn("Position not found: {}", e.getMessage());
-        return error(HttpStatus.NOT_FOUND, "POS-404", "The requested position could not be found");
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), "The requested position could not be found");
     }
 
     @ExceptionHandler(PriceUnavailableException.class)
     public ResponseEntity<ErrorResponse> handlePriceUnavailable(PriceUnavailableException e) {
         logger.warn("Price unavailable: {}", e.getMessage());
-        return error(HttpStatus.SERVICE_UNAVAILABLE, "PRC-503",
+        return error(HttpStatus.SERVICE_UNAVAILABLE, e.getErrorCode(),
                 "No live price is available for this instrument; include a price in the order");
     }
 
     @ExceptionHandler(MarketDataUnavailableException.class)
     public ResponseEntity<ErrorResponse> handleMarketDataUnavailable(MarketDataUnavailableException e) {
         logger.warn("Market data unavailable: {}", e.getMessage());
-        return error(HttpStatus.SERVICE_UNAVAILABLE, "MKT-503",
+        return error(HttpStatus.SERVICE_UNAVAILABLE, e.getErrorCode(),
                 "Market data is unavailable right now; try again later");
+    }
+
+    @ExceptionHandler(ReplayInProgressException.class)
+    public ResponseEntity<ErrorResponse> handleReplayInProgress(ReplayInProgressException e) {
+        return error(HttpStatus.CONFLICT, e.getErrorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(ReplayNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleReplayNotFound(ReplayNotFoundException e) {
+        return error(HttpStatus.NOT_FOUND, e.getErrorCode(), e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -25,10 +25,12 @@ import com.neueda.leap.exceptions.SettlementException;
 import com.neueda.leap.execution.BrokerSimulatorClient;
 import com.neueda.leap.kafka.events.ExecutionEvent;
 import com.neueda.leap.model.Execution;
+import com.neueda.leap.model.Instrument;
 import com.neueda.leap.repositories.ExecutionRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import com.neueda.leap.exceptions.PriceUnavailableException;
+import com.neueda.leap.exceptions.LimitNotMarketableException;
 import com.neueda.leap.marketdata.PriceProvider;
 import com.neueda.leap.repositories.AccountRepository;
 import com.neueda.leap.repositories.InstrumentRepository;
@@ -74,6 +76,7 @@ public class OrderService {
     private final BrokerSimulatorClient brokerClient;
     private final ExecutionRepository executionRepository;
     private final PriceProvider priceProvider;
+    private final ReservationService reservations;
 
     public OrderService(
             AccountRepository accountRepository,
@@ -89,7 +92,8 @@ public class OrderService {
             PlatformTransactionManager transactionManager,
             BrokerSimulatorClient brokerClient,
             ExecutionRepository executionRepository,
-            PriceProvider priceProvider) {
+            PriceProvider priceProvider,
+            ReservationService reservations) {
         this.accountRepository = Objects.requireNonNull(accountRepository);
         this.instrumentRepository = Objects.requireNonNull(instrumentRepository);
         this.orderRepository = Objects.requireNonNull(orderRepository);
@@ -105,6 +109,7 @@ public class OrderService {
         this.brokerClient = Objects.requireNonNull(brokerClient);
         this.executionRepository = Objects.requireNonNull(executionRepository);
         this.priceProvider = Objects.requireNonNull(priceProvider);
+        this.reservations = Objects.requireNonNull(reservations);
     }
 
     /**
@@ -150,9 +155,12 @@ public class OrderService {
      * @param request the validated order request
      * @return the stored NEW order
      * @throws AccountNotFoundException    if the account does not exist
-     * @throws InstrumentNotFoundException if the instrument does not exist
+     * @throws AccountNotActiveException   if the account is SUSPENDED or CLOSED
+     * @throws InstrumentNotFoundException if the instrument does not exist or is not tradable
      * @throws DuplicateOrderException     if the idempotency key was already used
      * @throws PriceUnavailableException   if no price was given and no live price is available
+     * @throws LimitNotMarketableException if a live price is available and the limit would not
+     *                                     fill at it (a BUY below or a SELL above it)
      * @throws OrderPublishException       if Kafka could not take the order; it
      *                                     is then stored as REJECTED
      */
@@ -160,19 +168,33 @@ public class OrderService {
     public Order submitOrder(PlaceOrderRequest request) {
         Objects.requireNonNull(request);
 
-        // Fail fast: these cannot succeed later, so don't store or queue the order
-        accountRepository.findById(request.accountId())
+        // Fail fast: these cannot succeed later, so don't store or queue the order.
+        // The Trade Executor checks them again, in case they change while the order waits.
+        Account account = accountRepository.findById(request.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + request.accountId()));
+        if (!account.isActive()) {
+            throw new AccountNotActiveException("Account not active: " + request.accountId());
+        }
         String symbol = InputNormalizer.normalize(request.symbol());
-        instrumentRepository.findBySymbol(symbol)
+        Instrument instrument = instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
+        if (!instrument.isTradable()) {
+            throw new InstrumentNotFoundException("Instrument not tradable: " + symbol);
+        }
 
         // No price given: price the order now at the live market price, so it fills
-        // at the price at the time it was accepted. Only known instruments get here,
-        // so arbitrary symbols are never sent to the market data API.
-        PlaceOrderRequest priced = request.price() != null ? request
-                : new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
-                        livePrice(symbol), request.idempotencyKey());
+        // at the price at the time it was accepted. A limit order must be marketable
+        // at the live price, when there is one. Only known instruments get here, so
+        // arbitrary symbols are never sent to the market data API.
+        PlaceOrderRequest priced;
+        if (request.price() == null) {
+            priced = new PlaceOrderRequest(request.accountId(), request.symbol(), request.side(), request.quantity(),
+                    livePrice(symbol), request.idempotencyKey());
+        } else {
+            priceProvider.latestPrice(symbol)
+                    .ifPresent(quote -> requireMarketable(request.side(), request.price(), quote.price()));
+            priced = request;
+        }
 
         Order order = transactionTemplate.execute(status -> storeNewOrder(priced));
         try {
@@ -187,11 +209,34 @@ public class OrderService {
         return order;
     }
 
-    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
     private BigDecimal livePrice(String symbol) {
-        return priceProvider.latestPrice(symbol)
-                .map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP))
+        return marketPrice(symbol)
                 .orElseThrow(() -> new PriceUnavailableException("No live price for " + symbol));
+    }
+
+    // Orders are stored to the cent (NUMERIC(18,2)), so round the market price to match
+    private Optional<BigDecimal> marketPrice(String symbol) {
+        return priceProvider.latestPrice(symbol).map(quote -> quote.price().setScale(2, RoundingMode.HALF_UP));
+    }
+
+    /**
+     * Limit orders are immediate-or-cancel: one that would not fill at the
+     * market price now (a BUY limit below it, a SELL limit above it) is refused
+     * instead of being filled at a price the market would not give.
+     *
+     * Limits are in cents and market prices may have more decimals, so the
+     * market price is rounded to the cent in the trader's favour: down for a
+     * BUY, up for a SELL. A limit at the rounded market price is accepted.
+     */
+    private static void requireMarketable(OrderSide side, BigDecimal limit, BigDecimal market) {
+        boolean buy = side == OrderSide.BUY;
+        BigDecimal bound = market.setScale(2, buy ? RoundingMode.FLOOR : RoundingMode.CEILING);
+        boolean marketable = buy ? limit.compareTo(bound) >= 0 : limit.compareTo(bound) <= 0;
+        if (!marketable) {
+            throw new LimitNotMarketableException(String.format(
+                    "A %s limit must be %s the market price (%s) to fill; this order would not fill at %s",
+                    side, buy ? "at or above" : "at or below", bound.toPlainString(), limit.toPlainString()));
+        }
     }
 
     private void rejectUnqueuedOrder(Order order, OrderPublishException cause) {
@@ -201,6 +246,7 @@ public class OrderService {
                 if (stored.getStatus() != OrderStatus.NEW) {
                     return null;
                 }
+                reservations.release(stored);
                 stored.setStatus(OrderStatus.REJECTED);
                 stored.setStatusReason("Could not be queued for execution: " + cause.getMessage());
                 return orderRepository.save(stored);
@@ -253,11 +299,11 @@ public class OrderService {
     /**
      * The Trade Executor: works an order event from the orders topic.
      * 
-     * Called by OrderMessageListener. Validates the order, checks the account
-     * can afford it at its limit price (cash for a BUY, holdings for a SELL)
-     * and sends it to the Broker Simulator. Nothing moves yet: the order stays
-     * NEW until the broker's fill arrives on the executions topic and
-     * {@link #settleExecution} settles it.
+     * Called by OrderMessageListener. Validates the order, reserves what it
+     * needs at its limit price (cash for a BUY, shares for a SELL; see
+     * {@link ReservationService}) and sends it to the Broker Simulator. The
+     * order stays NEW, holding its reservation, until the broker's fill
+     * arrives on the executions topic and {@link #settleExecution} settles it.
      * 
      * TRANSACTION BOUNDARIES: The checks run in their own transaction, which is
      * committed before the order goes to the broker. If a check fails, or the
@@ -291,7 +337,8 @@ public class OrderService {
      * Re-processes an order event that was routed to the DLQ.
      * 
      * Unlike {@link #processOrderEvent(OrderEvent)}, an existing REJECTED order is
-     * not treated as already processed: it is checked and sent to the broker
+     * not treated as already processed: it is checked, reserves its cash or
+     * shares again (the rejection released them) and is sent to the broker
      * again, replacing the REJECTED record. If the replay fails again, the original REJECTED
      * order is kept and no further trade event is published.
      * 
@@ -330,8 +377,9 @@ public class OrderService {
                 return prepareOrderEvent(event);
             });
             if (order != null) {
-                // Committed as NEW above, so the fill can always find the order
-                brokerClient.submit(order);
+                // Committed as NEW above, so the fill can always find the order. The
+                // broker fills at the current market price, within the order's limit
+                brokerClient.submit(order, marketPrice(order.getSymbol()).orElse(null));
             }
         } catch (AccountNotFoundException | InstrumentNotFoundException ex) {
             log.warn("Order rejected due to missing resource (non-retryable): orderId={}, error={}, type={}",
@@ -366,11 +414,13 @@ public class OrderService {
     }
 
     /**
-     * Validates the order and checks the account can afford it; changes no
-     * cash or positions. Must run inside a transaction.
+     * Validates the order and reserves its cash or shares; moves no cash or
+     * positions yet. Must run inside a transaction, so a failed check
+     * reserves nothing.
      * 
      * Locks the stored NEW order first, so a cancellation cannot slip in
-     * between the status check and sending the order to the broker.
+     * between the status check and sending the order to the broker, then the
+     * account, so concurrent orders for it are checked one after the other.
      * 
      * @return the NEW order, saved, or null if the stored order is no longer
      *         NEW (cancelled while it waited)
@@ -397,48 +447,30 @@ public class OrderService {
 
         // DEFENSIVE VALIDATION: account or instrument may have been deleted between
         // REST validation and async processing
-        Account account = accountRepository.findById(event.accountId())
+        accountRepository.findWithLockById(event.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + event.accountId()));
         instrumentRepository.findBySymbol(symbol)
                 .orElseThrow(() -> new InstrumentNotFoundException("Instrument not found: " + symbol));
 
-        checkAffordable(account, request, symbol);
-
         // Messages published before orders were stored as NEW (and DLQ replays,
         // which removed the REJECTED record) have no stored order yet
-        return orderRepository.save(stored.orElseGet(() -> newOrderFromEvent(event)));
+        Order order = stored.orElseGet(() -> newOrderFromEvent(event));
+        reservations.reserve(order);
+        return orderRepository.save(order);
     }
 
     /**
-     * Rejects an order the account cannot afford at its limit price. Checked
-     * again at settlement, at the fill price, since other orders may have used
-     * the cash or holdings in the meantime.
-     */
-    private void checkAffordable(Account account, PlaceOrderRequest request, String symbol) {
-        if (request.side() == OrderSide.BUY) {
-            BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
-            if (account.getCashBalance().compareTo(cost) < 0) {
-                throw new InsufficientFundsException("Insufficient funds for buy order");
-            }
-        } else {
-            Position position = positionRepository.findByAccountIdAndSymbol(request.accountId(), symbol)
-                    .orElseThrow(() -> new InsufficientHoldingsException("No position for symbol: " + symbol));
-            if (position.getQuantity() < request.quantity()) {
-                throw new InsufficientHoldingsException("Insufficient holdings for symbol: " + symbol);
-            }
-        }
-    }
-
-    /**
-     * Settles a fill from the Broker Simulator (executions topic): moves the
-     * cash and position at the fill price, records the execution and marks the
-     * order FILLED, all in one transaction, then publishes the FILLED event.
+     * Settles a fill from the Broker Simulator (executions topic): releases
+     * the order's reservation, moves the cash and position at the fill price,
+     * records the execution and marks the order FILLED, all in one
+     * transaction, then publishes the FILLED event.
      * 
      * A fill for an order that is no longer NEW is ignored: it was cancelled
-     * while the broker worked it, or this fill is a redelivery. If the account
-     * can no longer afford the order (another order used the cash or holdings
-     * first) or is no longer active, nothing moves, the order is stored as
-     * REJECTED and a SettlementException is thrown for the DLQ.
+     * while the broker worked it, or this fill is a redelivery. The reservation
+     * covers the fill, so a reserved order is always affordable; if the
+     * account is no longer active (or an order from before reservations can no
+     * longer be afforded), nothing moves, the order is stored as REJECTED,
+     * releasing its reservation, and a SettlementException is thrown for the DLQ.
      *
      * @return the FILLED order, or null if the fill was ignored
      * @throws SettlementException if the order was rejected at settlement
@@ -475,7 +507,7 @@ public class OrderService {
             return null;
         }
 
-        Account account = accountRepository.findById(order.getAccountId())
+        Account account = accountRepository.findWithLockById(order.getAccountId())
                 .orElseThrow(() -> new AccountNotFoundException(ACCOUNT_NOT_FOUND + order.getAccountId()));
         if (!account.isActive()) {
             throw new AccountNotActiveException("Account not active: " + order.getAccountId());
@@ -485,7 +517,9 @@ public class OrderService {
             throw new IllegalStateException("No strategy registered for order side: " + order.getSide());
         }
 
-        // The strategies re-check funds or holdings, at the fill price this time
+        // The fill takes the place of the reservation: give it back, then the strategies
+        // move the cash and shares at the fill price (never worse than the reserved limit)
+        reservations.release(order);
         PlaceOrderRequest atFillPrice = new PlaceOrderRequest(order.getAccountId(), order.getSymbol(),
                 order.getSide(), fill.quantity(), fill.price(), order.getIdempotencyKey());
         strategy.execute(account, atFillPrice, order.getSymbol());
@@ -506,8 +540,8 @@ public class OrderService {
      * Persists the order as REJECTED in its own transaction and publishes the
      * REJECTED trade event once it is committed.
      * 
-     * Updates the stored NEW order. Does nothing if the order already has a
-     * final status (e.g. a failed DLQ replay of an order that was already
+     * Updates the stored NEW order and releases its reservation. Does nothing
+     * if the order already has a final status (e.g. a failed DLQ replay of an order that was already
      * rejected), so each order produces at most one REJECTED event. Failures here are logged and swallowed so the original
      * exception still reaches the Kafka error handler.
      */
@@ -520,6 +554,7 @@ public class OrderService {
                     return null;
                 }
                 Order order = stored.orElseGet(() -> newOrderFromEvent(event));
+                reservations.release(order);
                 order.setStatus(OrderStatus.REJECTED);
                 order.setStatusReason(DeadLetterService.buildFailureReason(cause));
                 orderRepository.save(order);
@@ -579,8 +614,9 @@ public class OrderService {
      * Cancellation is only allowed for orders in NEW state.
      * Attempting to cancel FILLED, REJECTED, or CANCELLED orders throws a conflict
      * exception.
-     * When an order is cancelled, it is archived to OrderHistory for audit trail
-     * and a lifecycle event is published to Kafka.
+     * When an order is cancelled, the cash or shares it reserved are released,
+     * it is archived to OrderHistory for audit trail and a lifecycle event is
+     * published to Kafka.
      *
      * @param orderId the order ID to cancel
      * @return the cancelled order
@@ -604,7 +640,8 @@ public class OrderService {
         // Track status transition for event
         OrderStatus previousStatus = order.getStatus();
 
-        // Update order status to CANCELLED
+        // Give back the cash or shares it held, then mark it CANCELLED
+        reservations.release(order);
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
 

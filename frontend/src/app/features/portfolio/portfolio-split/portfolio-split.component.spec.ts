@@ -12,8 +12,8 @@ describe('PortfolioSplitComponent', () => {
   let store: Pick<MarketQuotesStore, 'quotes' | 'lastUpdated' | 'errorMessage'>;
 
   const positions: PositionResponse[] = [
-    { accountId: 11, symbol: 'AAPL', quantity: 10, averageCost: 100, marketValue: null },
-    { accountId: 11, symbol: 'MSFT', quantity: 5, averageCost: 200, marketValue: null },
+    { accountId: 11, symbol: 'AAPL', quantity: 10, reservedQuantity: 0, availableQuantity: 10, averageCost: 100, marketValue: null },
+    { accountId: 11, symbol: 'MSFT', quantity: 5, reservedQuantity: 0, availableQuantity: 5, averageCost: 200, marketValue: null },
   ];
 
   const quote = (symbol: string, price: number | null): MarketQuote => ({
@@ -61,7 +61,7 @@ describe('PortfolioSplitComponent', () => {
 
     setQuotes(quote('AAPL', 120), quote('MSFT', 200));
     expect(fixture.nativeElement.querySelector('.skeleton')).toBeNull();
-    expect(segments().length).toBe(3);
+    expect(segments()).toHaveSize(3);
   });
 
   it('sizes each segment by value and lists every part in the legend', () => {
@@ -116,7 +116,7 @@ describe('PortfolioSplitComponent', () => {
     render({ positions, cashBalance: 800 });
     setQuotes(quote('AAPL', 120), quote('MSFT', null));
 
-    expect(segments().length).toBe(2);
+    expect(segments()).toHaveSize(2);
     expect(fixture.nativeElement.querySelector('.note')?.textContent).toContain('1 unpriced holding');
   });
 

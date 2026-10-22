@@ -1,9 +1,9 @@
 <header class="page-header">
   <div>
     <p class="eyebrow">{{ today | date:'EEEE, MMMM d' }}</p>
-    @if (isAdmin) {
+    @if (isSupport) {
       <h1>Account viewer</h1>
-      <p class="muted">Admin view: orders can only be placed by the account's owner.</p>
+      <p class="muted">Support view: orders can only be placed by the account's owner.</p>
     } @else {
       <h1>Welcome{{ firstName() ? ', ' + firstName() : '' }}</h1>
       <p class="muted">Here's how your portfolio is performing today.</p>
@@ -11,12 +11,11 @@
   </div>
 
   <div class="actions">
-    @if (isAdmin) {
-      <app-admin-account-bar
-        [accounts]="adminAccounts()"
+    @if (isSupport) {
+      <app-support-account-bar
+        [accounts]="supportAccounts()"
         [selectedId]="account()?.id ?? null"
         (accountChange)="viewAccount($event)"
-        (openAnalytics)="openAnalytics()"
       />
     } @else {
       <a class="btn" routerLink="/orders">View Order History</a>
@@ -32,7 +31,7 @@
   <p class="note error" role="alert">{{ accountError() }}</p>
 }
 
-<section class="card account-card" [class.admin]="isAdmin" aria-label="Account details">
+<section class="card account-card" [class.support]="isSupport" aria-label="Account details">
   @if (accountLoading()) {
     <p class="eyebrow">Account details</p>
     <span class="skeleton skeleton-title" aria-hidden="true"></span>
@@ -46,7 +45,7 @@
       </p>
       <p class="muted holder">{{ details.holderName }} &middot; Updated {{ details.lastUpdated | date:'MMM d, HH:mm' }}</p>
     </div>
-    @if (isAdmin) {
+    @if (isSupport) {
       <div class="status-control">
         <span class="muted">Account status</span>
         <button
@@ -69,14 +68,21 @@
     <div class="cash">
       <span class="muted">Cash balance</span>
       <strong class="num">{{ details.cashBalance | currency:'USD':'symbol':'1.2-2' }}</strong>
-      <span class="available">Available to trade</span>
-      @if (!isAdmin) {
+      @if (details.reservedCash > 0) {
+        <span class="available">{{ details.availableCash | currency:'USD':'symbol':'1.2-2' }} available to trade</span>
+        <span class="reserved" title="Held for open buy orders until they fill or are cancelled">
+          {{ details.reservedCash | currency:'USD':'symbol':'1.2-2' }} in open orders
+        </span>
+      } @else {
+        <span class="available">Available to trade</span>
+      }
+      @if (!isSupport) {
         <button class="btn btn-primary deposit-toggle" type="button" (click)="toggleDeposit()">
           {{ depositOpen() ? 'Cancel' : 'Deposit cash' }}
         </button>
       }
     </div>
-    @if (!isAdmin && depositOpen()) {
+    @if (!isSupport && depositOpen()) {
       <form class="deposit-form" [formGroup]="depositForm" (ngSubmit)="submitDeposit()" novalidate>
         <label for="deposit-amount">Amount</label>
         <div class="deposit-fields">
@@ -89,7 +95,7 @@
           <p class="form-error" role="alert">Enter an amount greater than $0.00.</p>
         }
         @if (depositMessage()) {
-          <p class="form-success" role="status">{{ depositMessage() }}</p>
+          <output class="form-success">{{ depositMessage() }}</output>
         }
         @if (depositError()) {
           <p class="form-error" role="alert">{{ depositError() }}</p>
@@ -110,15 +116,17 @@
       <app-portfolio-value-chart [positions]="positions()" [cashBalance]="cashBalance()" />
     </section>
     <section class="card">
-      <app-holdings [positions]="positions()" [error]="positionsError()" />
+      <app-holdings [positions]="positions()" [error]="positionsError()" [linkSymbols]="!isSupport" />
     </section>
   </div>
   <div class="column">
     <section class="card">
       <app-portfolio-split [positions]="positions()" [cashBalance]="cashBalance()" [error]="positionsError()" />
     </section>
-    <section class="card">
-      <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" [heldSymbols]="heldSymbols()" />
-    </section>
+    @if (!isSupport) {
+      <section class="card">
+        <app-market-watch [instruments]="instrumentsLoading() ? null : instruments()" [heldSymbols]="heldSymbols()" />
+      </section>
+    }
   </div>
 </div>

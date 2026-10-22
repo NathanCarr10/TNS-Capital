@@ -57,8 +57,8 @@ public class Broker {
     /** Queues the order; it is filled after the market's delay. */
     public void accept(BrokerOrder order) {
         long delay = market.fillDelay().toMillis();
-        log.info("Accepted order {} ({} {} {} @ {}), filling in {} ms", order.orderId(), order.side(),
-                order.quantity(), order.symbol(), order.limitPrice(), delay);
+        log.info("Accepted order {} ({} {} {} limit {}, market {}), filling in {} ms", order.orderId(), order.side(),
+                order.quantity(), order.symbol(), order.limitPrice(), order.marketPrice(), delay);
         scheduler.schedule(() -> fill(order), delay, TimeUnit.MILLISECONDS);
     }
 
@@ -70,7 +70,7 @@ public class Broker {
                 order.symbol(),
                 order.side(),
                 order.quantity(),
-                market.fillPrice(order.side(), order.limitPrice()),
+                market.fillPrice(order.side(), order.limitPrice(), order.marketPrice()),
                 properties.venue(),
                 clock.instant());
         try {

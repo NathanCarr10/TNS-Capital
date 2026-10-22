@@ -1,0 +1,35 @@
+meta {
+  name: Create Strategy
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{strategyUrl}}/api/v1/strategies
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Fast MA 5/20",
+    "symbol": "SPY",
+    "ruleType": "MA_CROSSOVER",
+    "params": { "shortWindow": 5, "longWindow": 20 },
+    "quantity": 1
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("strategyId", res.body.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Creates a PAUSED strategy on the caller's account. Switch it on with Switch On.
+}

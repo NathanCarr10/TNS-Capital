@@ -38,7 +38,7 @@
   border-left: 4px solid var(--primary);
 }
 
-.account-card.admin > div:first-child {
+.account-card.support > div:first-child {
   margin-right: auto;
 }
 
@@ -149,6 +149,11 @@
   .available {
     font-size: 0.72rem;
     color: var(--positive);
+  }
+
+  .reserved {
+    font-size: 0.72rem;
+    color: var(--text-muted);
   }
 }
 

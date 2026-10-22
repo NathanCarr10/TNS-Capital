@@ -15,6 +15,7 @@ PLAYWRIGHT_IMAGE=${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.64.0-noble}
 PROJECT="e2e-$(date +%s%N)"
 ENV_FILE=$(mktemp)
 ADMIN_PASSWORD=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+SUPPORT_PASSWORD=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 
 if docker compose version >/dev/null 2>&1; then COMPOSE="docker compose"; else COMPOSE="docker-compose"; fi
 COMPOSE="$COMPOSE --project-name $PROJECT --project-directory $ROOT --env-file $ENV_FILE \
@@ -26,8 +27,10 @@ COMPOSE="$COMPOSE --project-name $PROJECT --project-directory $ROOT --env-file $
 cat > "$ENV_FILE" <<VARS
 DB_USER=tns-capital-db-user
 ADMIN_PASSWORD=$ADMIN_PASSWORD
+SUPPORT_PASSWORD=$SUPPORT_PASSWORD
 DB_PASSWORD=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
 JWT_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+STRATEGY_CLIENT_SECRET=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
 AUTH_RATE_LIMIT=1000
 BROKER_MIN_DELAY=4s
 BROKER_MAX_DELAY=5s
@@ -48,12 +51,12 @@ rm -rf "$ROOT/frontend/playwright-report" "$ROOT/frontend/test-results" \
     "$ROOT/frontend/e2e-results.xml" "$ROOT/frontend/e2e-stack.log"
 
 # The frontend depends on the API, auth service and dashboard, and those on the rest.
-# --wait returns once the health checks pass; the suite's global setup then waits for
-# the API itself (it has no health check).
+# --wait returns once the health checks pass, the API's (/actuator/health) included; the
+# suite's global setup then checks each route through the frontend.
 $COMPOSE up --detach --build --wait --wait-timeout 300 frontend
 
 # --ipc=host: Chromium needs more shared memory than Docker's 64 MB default
 docker run --rm --network "${PROJECT}_default" --ipc=host \
-    --user "$(id -u):$(id -g)" -e HOME=/tmp -e CI=1 -e E2E_BASE_URL=http://frontend:8080 -e E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    --user "$(id -u):$(id -g)" -e HOME=/tmp -e CI=1 -e E2E_BASE_URL=http://frontend:8080 -e E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" -e E2E_SUPPORT_PASSWORD="$SUPPORT_PASSWORD" \
     -v "$ROOT":/repo -w /repo/frontend "$PLAYWRIGHT_IMAGE" \
     bash -c '[ -d node_modules/@playwright/test ] || npm ci --no-audit --no-fund; npx playwright test'
