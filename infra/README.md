@@ -119,15 +119,29 @@ gate has passed. It needs three things on the Jenkins side, set up once:
    `alpaca-api-secret-key`.
 3. **`tofu`, `aws`, `jq` and Docker** on the agent (all already on the class EC2 hosts).
 
-## Teardown
+## Pausing overnight (keeps the data)
+
+```bash
+# Stop the tasks and pause the database
+tofu apply -var-file=training.tfvars -var image_tag=<live tag> -var desired_count=0
+aws rds stop-db-instance --db-instance-identifier nathan-tns-db
+# Start again (RDS takes about 5 minutes)
+aws rds start-db-instance --db-instance-identifier nathan-tns-db
+aws rds wait db-instance-available --db-instance-identifier nathan-tns-db
+tofu apply -var-file=training.tfvars -var image_tag=<live tag>
+```
+
+About $0.05 an hour while paused (the ALB, plus storage), against $0.25 running. AWS
+starts a stopped database again by itself after 7 days.
+
+## Teardown (deletes the database)
 
 ```bash
 tofu destroy -var-file=training.tfvars -var image_tag=unused
 ```
 
-This removes everything billed (about $0.25 an hour while up: 7 Fargate tasks, the ALB,
-RDS, public IPs). The state bucket in `bootstrap/` stays. Secrets are deleted without a
-recovery window, so the next `apply` can reuse their names.
+Removes everything, **including the RDS database and all its data** (there are no
+backups). Only for the end of the project. The state bucket in `bootstrap/` stays.
 
 ## Troubleshooting
 
