@@ -294,7 +294,7 @@ resource "aws_ecs_service" "this" {
   name            = each.key
   cluster         = aws_ecs_cluster.this.id
   task_definition = aws_ecs_task_definition.service[each.key].arn
-  desired_count   = 1
+  desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
   # Kafka and the ETL scheduler stop the old task before starting the new one
@@ -304,10 +304,9 @@ resource "aws_ecs_service" "this" {
   # Spring Boot takes a minute or so on half a vCPU; don't let the ALB judge it sooner
   health_check_grace_period_seconds = contains(keys(local.web_services), each.key) ? 180 : null
 
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
+  # No circuit breaker: like Compose without depends_on, a service whose dependencies
+  # (Kafka, the database roles) aren't ready yet restarts until they are, and the
+  # breaker would count that as a failed deployment and stop launching tasks.
 
   network_configuration {
     subnets          = each.value.public ? var.public_subnet_ids : var.private_subnet_ids

@@ -39,6 +39,12 @@ variable "image_tag" {
   type        = string
 }
 
+variable "desired_count" {
+  description = "Tasks per service. 0 on the first apply, until scripts/init-db.sh has created the database roles"
+  type        = number
+  default     = 1
+}
+
 variable "cpu_architecture" {
   description = "X86_64 or ARM64: must match the machine the images were built on"
   type        = string

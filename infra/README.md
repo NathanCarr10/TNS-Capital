@@ -64,20 +64,23 @@ TAG=$(git rev-parse --short HEAD)
 tofu apply -var-file=training.tfvars -var image_tag=$TAG -target=aws_ecr_repository.this
 scripts/push-images.sh $TAG
 
-# 2. Everything else (RDS takes 5-10 minutes)
-tofu apply -var-file=training.tfvars -var image_tag=$TAG
+# 2. Everything else, with no tasks running yet (RDS takes 5-10 minutes)
+tofu apply -var-file=training.tfvars -var image_tag=$TAG -var desired_count=0
 
 # 3. Schema, roles and seed data into RDS (once per new database)
 scripts/init-db.sh
 
-# 4. The Angular app
+# 4. Start the services
+tofu apply -var-file=training.tfvars -var image_tag=$TAG
+
+# 5. The Angular app
 scripts/publish-frontend.sh
 
 tofu output url
 ```
 
-The services start before the database is initialised and restart until it is; give
-them a few minutes after step 3. Logins are in `tofu output logins`, and the passwords
+Services that start before Kafka is up restart until it is; give them a few minutes
+after step 4. Logins are in `tofu output logins`, and the passwords
 in the secret (`tofu output secret_arn`).
 
 ## Deploying a new version
@@ -89,8 +92,9 @@ tofu apply -var-file=training.tfvars -var image_tag=$TAG
 scripts/publish-frontend.sh       # if the frontend changed
 ```
 
-ECS rolls each service with no downtime and rolls back if the new tasks fail to start
-(deployment circuit breaker). Kafka and the ETL scheduler stop the old task first, since
+ECS rolls each service with no downtime: the old task keeps serving until the new one
+passes the ALB health check. If a new version never gets healthy, the old one stays up;
+fix it and apply again, or apply the previous tag. Kafka and the ETL scheduler stop the old task first, since
 two of either must not run at once.
 
 ## Teardown
