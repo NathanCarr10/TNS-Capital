@@ -357,6 +357,10 @@ resource "aws_ecs_task_definition" "db_init" {
       { name = "PGHOST", value = local.db_host },
       { name = "PGPORT", value = "5432" },
       { name = "PGSSLMODE", value = "require" },
+      # The RDS master user is not a superuser. This lets it act as the roles it creates
+      # (CREATE SCHEMA analytics AUTHORIZATION tns_etl, ALTER DEFAULT PRIVILEGES FOR ROLE
+      # tns_etl), which on a local superuser needs nothing extra
+      { name = "PGOPTIONS", value = "-c createrole_self_grant=set,inherit" },
       { name = "DB_USER", value = aws_db_instance.this.username },
     ]
     secrets = [

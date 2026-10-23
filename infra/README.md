@@ -68,7 +68,7 @@ scripts/push-images.sh $TAG
 tofu apply -var-file=training.tfvars -var image_tag=$TAG -var desired_count=0
 
 # 3. Schema, roles and seed data into RDS (once per new database)
-scripts/init-db.sh
+scripts/init-db.sh            # --reset drops and recreates a half-initialised database
 
 # 4. Start the services
 tofu apply -var-file=training.tfvars -var image_tag=$TAG
