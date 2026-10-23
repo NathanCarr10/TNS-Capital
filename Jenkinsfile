@@ -281,6 +281,35 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to AWS') {
+            // Only main is deployed, and only if every gate above passed: the gates use
+            // catchError, so a failed one leaves the build running but marked FAILURE.
+            when {
+                allOf {
+                    branch 'main'
+                    expression { currentBuild.currentResult == 'SUCCESS' }
+                }
+            }
+            environment {
+                AWS_REGION = 'eu-west-1'
+                AWS_DEFAULT_REGION = 'eu-west-1'
+            }
+            steps {
+                // Builds and pushes the images tagged with the commit, rolls the ECS services
+                // onto them through OpenTofu, publishes the frontend and checks the site
+                // (infra/scripts/deploy.sh). AWS access comes from the Jenkins host's instance
+                // profile (infra/ci.tf), so no AWS keys are stored in Jenkins. The script stops
+                // if the plan would change anything but the release itself.
+                withCredentials([
+                    string(credentialsId: 'tns-tofu-passphrase', variable: 'TF_VAR_state_passphrase'),
+                    string(credentialsId: 'alpaca-api-key-id', variable: 'TF_VAR_alpaca_api_key_id'),
+                    string(credentialsId: 'alpaca-api-secret-key', variable: 'TF_VAR_alpaca_api_secret_key')
+                ]) {
+                    sh 'infra/scripts/deploy.sh "$(git rev-parse --short HEAD)"'
+                }
+            }
+        }
     }
 
     post {
