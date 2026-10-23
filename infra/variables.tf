@@ -34,6 +34,12 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "alb_name" {
+  description = "The ALB's name, which starts its DNS name (<name>-<number>.<region>.elb.amazonaws.com). Defaults to <prefix>-alb; at most 32 characters, unique in the account and region"
+  type        = string
+  default     = ""
+}
+
 variable "image_tag" {
   description = "Tag of the service images in ECR, normally the git commit SHA"
   type        = string

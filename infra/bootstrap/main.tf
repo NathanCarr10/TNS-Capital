@@ -13,7 +13,7 @@ terraform {
 }
 
 variable "prefix" {
-  description = "Your personal prefix (the training account's naming rule), e.g. nathan-tns"
+  description = "Starts every resource name, e.g. tns-capital"
   type        = string
 }
 

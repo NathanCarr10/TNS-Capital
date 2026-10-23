@@ -14,7 +14,7 @@ locals {
 }
 
 resource "aws_lb" "this" {
-  name               = "${var.prefix}-alb"
+  name               = coalesce(var.alb_name, "${var.prefix}-alb")
   load_balancer_type = "application"
   internal           = false
   subnets            = var.public_subnet_ids
@@ -41,6 +41,10 @@ resource "aws_lb_target_group" "web" {
     interval            = 15
     healthy_threshold   = 2
     unhealthy_threshold = 3
+  }
+  # Still attached while its replacement is created, e.g. when the prefix changes
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

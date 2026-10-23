@@ -43,7 +43,7 @@ NAT gateway; without keys they stay private.
 
 - The default VPC, its subnets and the VPC endpoints belong to the instructor. This stack
   only reads them (`training.tfvars`); `tofu destroy` never touches them.
-- Every name starts with `prefix` (`nathan-tns`). Teammates use their own tfvars file.
+- Every name starts with `prefix` (`tns-capital`), the team's shared stack. A teammate wanting a separate copy uses their own tfvars file and prefix.
 - Everyone in the account is an administrator, so the state file is encrypted with
   OpenTofu's state encryption (`versions.tf`). This makes the code OpenTofu-only.
 
@@ -55,7 +55,7 @@ source ~/.tns-tofu.env     # TF_VAR_state_passphrase (+ TF_VAR_alpaca_*); never 
 cd infra
 
 # Once per account: the state bucket (local state, holds no secrets)
-tofu -chdir=bootstrap init && tofu -chdir=bootstrap apply -var prefix=nathan-tns
+tofu -chdir=bootstrap init && tofu -chdir=bootstrap apply -var prefix=tns-capital
 cp backend.hcl.example backend.hcl    # put in the bucket name it printed
 tofu init -backend-config=backend.hcl
 
@@ -124,10 +124,10 @@ gate has passed. It needs three things on the Jenkins side, set up once:
 ```bash
 # Stop the tasks and pause the database
 tofu apply -var-file=training.tfvars -var image_tag=<live tag> -var desired_count=0
-aws rds stop-db-instance --db-instance-identifier nathan-tns-db
+aws rds stop-db-instance --db-instance-identifier tns-capital-db
 # Start again (RDS takes about 5 minutes)
-aws rds start-db-instance --db-instance-identifier nathan-tns-db
-aws rds wait db-instance-available --db-instance-identifier nathan-tns-db
+aws rds start-db-instance --db-instance-identifier tns-capital-db
+aws rds wait db-instance-available --db-instance-identifier tns-capital-db
 tofu apply -var-file=training.tfvars -var image_tag=<live tag>
 ```
 
@@ -147,7 +147,7 @@ backups). Only for the end of the project. The state bucket in `bootstrap/` stay
 
 | Symptom | Look at |
 |---|---|
-| A service keeps restarting | `aws logs tail /ecs/nathan-tns/<service> --since 15m` |
+| A service keeps restarting | `aws logs tail /ecs/tns-capital/<service> --since 15m` |
 | `CannotPullContainerError` | The image tag was not pushed: `scripts/push-images.sh <tag>` |
 | `ResourceInitializationError ... secrets` | The execution role's `read-secrets` policy, or the shared Secrets Manager endpoint |
 | Auth service: `no pg_hba.conf entry ... no encryption` | `PGSSLMODE` missing from its task definition |

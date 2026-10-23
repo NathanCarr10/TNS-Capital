@@ -15,6 +15,10 @@ resource "aws_security_group" "alb" {
   name        = "${var.prefix}-alb-sg"
   description = "${var.prefix} ALB, HTTP from CloudFront only"
   vpc_id      = data.aws_vpc.shared.id
+  # Still attached while its replacement is created, e.g. when the prefix changes
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_from_cloudfront" {
@@ -41,6 +45,10 @@ resource "aws_security_group" "app" {
   name        = "${var.prefix}-app-sg"
   description = "${var.prefix} ECS tasks"
   vpc_id      = data.aws_vpc.shared.id
+  # Still attached while its replacement is created, e.g. when the prefix changes
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
@@ -75,6 +83,10 @@ resource "aws_security_group" "rds" {
   name        = "${var.prefix}-rds-sg"
   description = "${var.prefix} RDS, 5432 from the ECS tasks only"
   vpc_id      = data.aws_vpc.shared.id
+  # Still attached while its replacement is created, e.g. when the prefix changes
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_vpc_security_group_ingress_rule" "rds_from_app" {

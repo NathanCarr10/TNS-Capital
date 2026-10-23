@@ -1,5 +1,7 @@
 resource "aws_db_subnet_group" "this" {
-  name        = "${var.prefix}-db-subnets"
+  # Fixed name: the database can't be moved to another subnet group in the same VPC, so
+  # renaming the prefix (nathan-tns -> tns-capital) must not replace it
+  name        = "nathan-tns-db-subnets"
   description = "${var.prefix} private subnets for the database"
   subnet_ids  = var.private_subnet_ids
 }
@@ -30,4 +32,10 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot     = true
   deletion_protection     = false
   apply_immediately       = true
+
+  # The data is kept for the whole project: no plan may delete this instance (a rename or
+  # tofu destroy fails here instead). Remove this only to tear down at the very end.
+  lifecycle {
+    prevent_destroy = true
+  }
 }

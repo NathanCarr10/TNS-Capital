@@ -56,6 +56,10 @@ resource "aws_cloudfront_function" "spa_routes" {
       return request;
     }
   EOT
+  # Still attached while its replacement is created, e.g. when the prefix changes
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # frontend/security-headers.conf, plus HSTS now that the site is served over HTTPS
