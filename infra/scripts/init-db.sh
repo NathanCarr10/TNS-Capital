@@ -22,7 +22,7 @@ if $RESET; then
   for r in tns_api tns_auth tns_etl tns_reader tns_strategy; do SQL+=" DROP ROLE IF EXISTS $r;"; done
   SQL+=' CREATE DATABASE tns_capital;'
   OVERRIDES="$(jq -n --arg sql "$SQL" '{containerOverrides: [{name: "db-init", command: ["bash", "-c",
-    "set -e; IFS=\";\"; for s in $SQL; do [ -n \"${s// }\" ] && psql -v ON_ERROR_STOP=1 -d postgres -c \"$s\"; done; bash /docker-entrypoint-initdb.d/00-run-sql.sh"],
+    "set -e; IFS=\";\"; for s in $SQL; do [ -n \"${s// }\" ] && psql -v ON_ERROR_STOP=1 -U \"$DB_USER\" -d postgres -c \"$s\"; done; eval \"$INIT_SCRIPT\""],
     environment: [{name: "SQL", value: $sql}]}]}')"
   echo "Resetting the database first: all its data will be dropped."
 fi

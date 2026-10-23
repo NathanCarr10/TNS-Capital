@@ -169,6 +169,12 @@ locals {
     }
   }
 
+  db_init_script = join(" && ", [
+    "sed -i '/^CREATE ROLE tns_strategy /a GRANT tns_api, tns_auth, tns_etl, tns_reader, tns_strategy TO CURRENT_USER WITH SET TRUE;' /docker-entrypoint-initdb.d/roles/roles.sql",
+    "grep -q 'TO CURRENT_USER WITH SET TRUE' /docker-entrypoint-initdb.d/roles/roles.sql",
+    "exec bash /docker-entrypoint-initdb.d/00-run-sql.sh",
+  ])
+
   # "NAME" injects the secret key NAME; "NAME=KEY" injects key KEY as NAME
   secret_refs = {
     for k, s in local.services : k => [
@@ -351,16 +357,18 @@ resource "aws_ecs_task_definition" "db_init" {
     name      = "db-init"
     image     = local.image["db-init"]
     essential = true
-    # The postgres image's entrypoint runs any command that isn't "postgres" as given
-    command = ["bash", "/docker-entrypoint-initdb.d/00-run-sql.sh"]
+    # The postgres image's entrypoint runs any command that isn't "postgres" as given.
+    # scripts/init-db.sh --reset runs its own SQL first, then the same INIT_SCRIPT.
+    command = ["bash", "-c", "eval \"$INIT_SCRIPT\""]
     environment = [
       { name = "PGHOST", value = local.db_host },
       { name = "PGPORT", value = "5432" },
       { name = "PGSSLMODE", value = "require" },
-      # The RDS master user is not a superuser. This lets it act as the roles it creates
-      # (CREATE SCHEMA analytics AUTHORIZATION tns_etl, ALTER DEFAULT PRIVILEGES FOR ROLE
-      # tns_etl), which on a local superuser needs nothing extra
-      { name = "PGOPTIONS", value = "-c createrole_self_grant=set,inherit" },
+      # The RDS master user is not a superuser and, unlike plain Postgres 16, gets no
+      # membership in the roles it creates, so roles.sql's CREATE SCHEMA ... AUTHORIZATION
+      # tns_etl fails. This container's copy of roles.sql (not db/ in the repo) grants it
+      # SET on them straight after they are created.
+      { name = "INIT_SCRIPT", value = local.db_init_script },
       { name = "DB_USER", value = aws_db_instance.this.username },
     ]
     secrets = [
