@@ -15,6 +15,11 @@ nginx also adds the security headers, including the Content Security Policy
 ([security-headers.conf](security-headers.conf); see
 [docs/SECURITY_GUIDE.md](../docs/SECURITY_GUIDE.md#frontend-nginx-and-xss)).
 
+On AWS the same build is served from S3 through CloudFront, which forwards the same paths and
+sends the same headers in place of nginx ([infra/README.md](../infra/README.md)). If you change
+the CSP in `security-headers.conf`, change it in `infra/frontend.tf` too.
+`infra/scripts/publish-frontend.sh` builds the app, uploads it and invalidates CloudFront.
+
 ## Pages
 
 | Route | Page | Who |

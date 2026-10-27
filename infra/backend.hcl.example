@@ -1,0 +1,4 @@
+# cp backend.hcl.example backend.hcl, then put in the bucket that bootstrap/ printed
+bucket = "<prefix>-tfstate-<account-id>"
+key    = "tns-capital/terraform.tfstate"
+region = "eu-west-1"

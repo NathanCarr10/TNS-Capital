@@ -83,6 +83,16 @@ to the host's containers directory.
 The Monitoring view searches them by text, service and level, with saved searches for failed logins,
 refresh token reuse, access denied, errors and 503s (`Unavailable (503)`).
 
+## On AWS
+
+The deployment ([infra/README.md](../infra/README.md)) runs `victoriametrics`, `vmalert` and
+`victorialogs` as Fargate services, with these configs baked into their images by
+`infra/scripts/push-images.sh` (Fargate has no bind mounts), scraping the services by their
+internal DNS names. Fargate has no Docker log files either, so Fluent Bit is replaced by
+`infra/observability/log-forwarder`, which copies the services' CloudWatch Logs into VictoriaLogs
+every 5 seconds. Their data lives on the tasks' own disks, so pausing the stack starts the history
+again. CloudWatch also has alarms on the API's CPU and on unhealthy ALB targets.
+
 ## Not included
 
 - **Tracing** (OpenTelemetry with Tempo or Jaeger): 300–500 MB for the backend, plus a tracer in each
