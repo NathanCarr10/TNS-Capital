@@ -5,6 +5,8 @@ locals {
   repositories = toset([
     "app", "auth-service", "strategy-service", "broker-simulator",
     "etl", "dashboard", "db-init", "kafka",
+    # The monitoring stack (observability/), with its configs baked in
+    "victoriametrics", "vmalert", "victorialogs", "log-forwarder",
   ])
 }
 

@@ -5,7 +5,8 @@
 
 locals {
   namespace = "${var.prefix}.internal"
-  dns       = { for k in ["kafka", "broker-simulator", "auth-service", "app"] : k => "${k}.${local.namespace}" }
+  dns = { for k in ["kafka", "broker-simulator", "auth-service", "app", "victoriametrics", "vmalert", "victorialogs"] :
+  k => "${k}.${local.namespace}" }
 
   db_host  = aws_db_instance.this.address
   jdbc_url = "jdbc:postgresql://${aws_db_instance.this.address}:5432/tns_capital"
@@ -164,8 +165,83 @@ locals {
         DASHBOARD_DB_HOST  = local.db_host
         DB_USER            = "tns_reader"
         DASHBOARD_AUTH_URL = "http://${local.dns["auth-service"]}:4000"
+        # The Monitoring view, as with the Compose profile "observability"
+        MONITORING_METRICS_URL = "http://${local.dns["victoriametrics"]}:8428"
+        MONITORING_ALERTS_URL  = "http://${local.dns["vmalert"]}:8880"
+        MONITORING_LOGS_URL    = "http://${local.dns["victorialogs"]}:9428"
       }
       secrets = ["JWT_SECRET", "DB_PASSWORD=DB_READER_PASSWORD"]
+    }
+
+    # The monitoring stack the dashboard's Monitoring view reads (observability/README.md).
+    # Same images and settings as docker-compose.yml; the configs are baked into the images
+    # by scripts/push-images.sh, since Fargate has no bind mounts. Data lives on the task's
+    # own disk, so a restart (or a pause) starts the history again.
+    victoriametrics = {
+      image  = local.image["victoriametrics"]
+      port   = 8428
+      cpu    = 256
+      memory = 512
+      public = false
+      single = true
+      # Fills %{SERVICE_DOMAIN} in the scrape targets (app.<namespace>:9464, ...)
+      env = { SERVICE_DOMAIN = local.namespace }
+      command = [
+        "-storageDataPath=/storage", "-retentionPeriod=15d",
+        "-promscrape.config=/etc/victoriametrics/scrape.yml",
+        "-memory.allowedPercent=40", "-search.maxConcurrentRequests=4", "-search.latencyOffset=5s",
+      ]
+      secrets = []
+    }
+
+    vmalert = {
+      image  = local.image["vmalert"]
+      port   = 8880
+      cpu    = 256
+      memory = 512
+      public = false
+      single = true
+      env    = {}
+      command = [
+        "-rule=/etc/vmalert/alerts.yml",
+        "-datasource.url=http://${local.dns["victoriametrics"]}:8428",
+        "-remoteWrite.url=http://${local.dns["victoriametrics"]}:8428",
+        "-remoteRead.url=http://${local.dns["victoriametrics"]}:8428",
+        "-evaluationInterval=30s", "-notifier.blackhole",
+      ]
+      secrets = []
+    }
+
+    victorialogs = {
+      image  = local.image["victorialogs"]
+      port   = 9428
+      cpu    = 256
+      memory = 512
+      public = false
+      single = true
+      env    = {}
+      command = [
+        "-storageDataPath=/vlogs", "-retentionPeriod=7d",
+        "-retention.maxDiskSpaceUsageBytes=2GiB", "-memory.allowedPercent=40",
+      ]
+      secrets = []
+    }
+
+    # Fluent Bit's job locally: copies every service's CloudWatch logs into VictoriaLogs
+    log-forwarder = {
+      image  = local.image["log-forwarder"]
+      port   = null
+      cpu    = 256
+      memory = 512
+      public = false
+      single = true
+      env = {
+        AWS_REGION       = var.region
+        LOG_GROUP_PREFIX = "/ecs/${var.prefix}/"
+        VICTORIALOGS_URL = "http://${local.dns["victorialogs"]}:9428"
+      }
+      secrets   = []
+      task_role = true
     }
   }
 
@@ -259,6 +335,28 @@ resource "aws_iam_role_policy" "read_secrets" {
   })
 }
 
+# The log forwarder's own role (what its code may call): read this stack's log groups
+resource "aws_iam_role" "log_forwarder" {
+  name               = "${var.prefix}-log-forwarder"
+  assume_role_policy = data.aws_iam_policy_document.ecs_tasks_trust.json
+}
+
+resource "aws_iam_role_policy" "log_forwarder" {
+  name = "${var.prefix}-read-logs"
+  role = aws_iam_role.log_forwarder.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = "logs:DescribeLogGroups", Resource = "*" },
+      {
+        Effect   = "Allow"
+        Action   = ["logs:FilterLogEvents"]
+        Resource = "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.prefix}/*"
+      },
+    ]
+  })
+}
+
 # --- Task definitions and services ---
 
 resource "aws_ecs_task_definition" "service" {
@@ -270,13 +368,15 @@ resource "aws_ecs_task_definition" "service" {
   cpu                      = each.value.cpu
   memory                   = each.value.memory
   execution_role_arn       = aws_iam_role.execution.arn
+  # Only the log forwarder calls AWS itself (CloudWatch Logs)
+  task_role_arn = lookup(each.value, "task_role", false) ? aws_iam_role.log_forwarder.arn : null
 
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = var.cpu_architecture
   }
 
-  container_definitions = jsonencode([{
+  container_definitions = jsonencode([merge(lookup(each.value, "command", null) == null ? {} : { command = each.value.command }, {
     name         = each.key
     image        = each.value.image
     essential    = true
@@ -291,7 +391,7 @@ resource "aws_ecs_task_definition" "service" {
         awslogs-stream-prefix = each.key
       }
     }
-  }])
+  })])
 }
 
 resource "aws_ecs_service" "this" {

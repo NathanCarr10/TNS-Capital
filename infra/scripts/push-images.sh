@@ -39,4 +39,37 @@ docker pull "confluentinc/cp-kafka:$KAFKA_TAG"
 docker tag "confluentinc/cp-kafka:$KAFKA_TAG" "$(repo kafka):$KAFKA_TAG"
 docker push "$(repo kafka):$KAFKA_TAG"
 
+# The monitoring stack: the docker-compose.yml images with observability/'s configs baked in,
+# since Fargate has no bind mounts. Scrape targets become <service>.%{SERVICE_DOMAIN}, which
+# VictoriaMetrics fills from its environment (the Cloud Map namespace).
+VM_TAG="v1.153.0"
+VLOGS_TAG="v1.53.0"
+CTX="$(mktemp -d)"
+trap 'rm -rf "$CTX"' EXIT
+
+echo "== victoriametrics"
+mkdir -p "$CTX/vm"
+sed -E 's/"([a-z][a-z0-9-]*):([0-9]+)"/"\1.%{SERVICE_DOMAIN}:\2"/' \
+  "$ROOT/observability/victoriametrics/scrape.yml" > "$CTX/vm/scrape.yml"
+grep -q '%{SERVICE_DOMAIN}' "$CTX/vm/scrape.yml"
+printf 'FROM victoriametrics/victoria-metrics:%s\nCOPY scrape.yml /etc/victoriametrics/scrape.yml\n' "$VM_TAG" > "$CTX/vm/Dockerfile"
+docker build -t "$(repo victoriametrics):$TAG" "$CTX/vm"
+docker push "$(repo victoriametrics):$TAG"
+
+echo "== vmalert"
+mkdir -p "$CTX/vmalert"
+cp "$ROOT/observability/vmalert/alerts.yml" "$CTX/vmalert/"
+printf 'FROM victoriametrics/vmalert:%s\nCOPY alerts.yml /etc/vmalert/alerts.yml\n' "$VM_TAG" > "$CTX/vmalert/Dockerfile"
+docker build -t "$(repo vmalert):$TAG" "$CTX/vmalert"
+docker push "$(repo vmalert):$TAG"
+
+echo "== victorialogs (mirror of victoriametrics/victoria-logs:$VLOGS_TAG)"
+docker pull "victoriametrics/victoria-logs:$VLOGS_TAG"
+docker tag "victoriametrics/victoria-logs:$VLOGS_TAG" "$(repo victorialogs):$TAG"
+docker push "$(repo victorialogs):$TAG"
+
+echo "== log-forwarder"
+docker build -t "$(repo log-forwarder):$TAG" "$ROOT/infra/observability/log-forwarder"
+docker push "$(repo log-forwarder):$TAG"
+
 echo "Pushed tag $TAG. Deploy it with: tofu apply -var-file=training.tfvars -var image_tag=$TAG"
