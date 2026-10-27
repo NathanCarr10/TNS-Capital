@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Deploys one commit: the images to ECR, new task definitions through OpenTofu, the
-# frontend to S3, then checks the site answers through CloudFront. Jenkins runs it for
-# main; it works the same by hand.
+# frontend to S3, then checks the site answers through CloudFront.
 #
 # Usage: infra/scripts/deploy.sh [tag]   (default: the current commit's short SHA)
 # Needs TF_VAR_state_passphrase (and TF_VAR_alpaca_* if Alpaca is used) in the environment.
 #
 # A release only changes task definitions and services. If the plan changes anything else
 # (a security group, the ALB, the database, the secret) it stops before applying, so an
-# infrastructure change is never applied by a pipeline nobody is watching. Read the plan,
+# infrastructure change is never applied without someone reading the plan. Read the plan,
 # then apply it yourself, or rerun with ALLOW_INFRA_CHANGES=1.
 set -euo pipefail
 
@@ -21,7 +20,7 @@ cd "$ROOT/infra"
 VARS=(-var-file=training.tfvars -var "image_tag=$TAG")
 
 echo "== Setup"
-# A fresh checkout (every Jenkins build) has no backend.hcl: the bucket name follows from
+# A fresh checkout has no backend.hcl: the bucket name follows from
 # the prefix and the account, as bootstrap/ names it
 if [ ! -d .terraform ]; then
   ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"

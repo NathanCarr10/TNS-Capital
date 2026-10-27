@@ -97,27 +97,8 @@ passes the ALB health check. If a new version never gets healthy, the old one st
 fix it and apply again, or apply the previous tag. Kafka and the ETL scheduler stop the old task first, since
 two of either must not run at once.
 
-Or all of it in one go, which is what Jenkins runs: `scripts/deploy.sh $TAG`. It stops
+Or all of it in one go: `scripts/deploy.sh $TAG`. It stops
 before applying if the plan changes anything besides task definitions and services.
-
-## Deploying from Jenkins
-
-The Jenkinsfile's **Deploy to AWS** stage runs `scripts/deploy.sh` for `main`, after every
-gate has passed. It needs three things on the Jenkins side, set up once:
-
-1. **AWS access, with no keys in Jenkins.** Attach the instance profile from `ci.tf` to
-   the EC2 instance Jenkins runs on (replace the instance ID):
-   ```bash
-   aws ec2 associate-iam-instance-profile --instance-id i-xxxxxxxx \
-     --iam-instance-profile Name=$(tofu output -raw jenkins_instance_profile)
-   ```
-   The role can read everything but only change what a release changes (images, task
-   definitions, services, the frontend bucket, the state). Your own CLI keeps using the
-   `training` profile, because `AWS_PROFILE` takes precedence over the instance profile.
-2. **Three secret-text credentials** (Manage Jenkins > Credentials): `tns-tofu-passphrase`
-   (`TF_VAR_state_passphrase` from `~/.tns-tofu.env`), `alpaca-api-key-id` and
-   `alpaca-api-secret-key`.
-3. **`tofu`, `aws`, `jq` and Docker** on the agent (all already on the class EC2 hosts).
 
 ## Pausing overnight (keeps the data)
 
