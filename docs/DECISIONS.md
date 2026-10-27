@@ -11,12 +11,12 @@ be explained at the showcase and revisited later.
 | 3 | Failed orders are stored `REJECTED` and captured in a dead-letter queue | §10.2, NFR-05 | Team decision |
 | 4 | Our own Broker Simulator service | FR-12, §5 | In place |
 | 5 | Live prices from Alpaca's market data API | FR-07, §5 | In place |
-| 6 | Analytics in a PostgreSQL `analytics` schema, not Snowflake | §4.2, §18.2 | To confirm with tutor |
+| 6 | Analytics in a PostgreSQL `analytics` schema; no Snowflake | §4.2, §18.2 | Team decision |
 | 7 | Jenkins instead of GitHub Actions | §4.1 | In place |
-| 8 | No TLS, SASL or Kafka ACLs in the local stack | §5 | Deployment concern |
+| 8 | Transport security: HTTPS at CloudFront on AWS; no TLS, SASL or Kafka ACLs inside the stack | §5 | Accepted (docs/OWASP_REVIEW.md A02-7) |
 | 9 | Trading API contract generated from the code; the committed copy is checked by `ApiContractIT` | §9.2 task 2 | In place |
 | 10 | Separate SUPPORT and ADMIN roles: support works on traders' accounts in the trading app, admins run analytics and operations | §22 | Team decision |
-| 11 | Accepted vulnerabilities: two Spring CVEs until the Spring Boot 4 upgrade, one Pillow CVE until Streamlit allows Pillow 13 | §22 (pipeline security) | Review each sprint |
+| 11 | Accepted vulnerabilities: two Spring CVEs until the Spring Boot 4 upgrade | §22 (pipeline security) | Review each sprint |
 | 12 | Admins sign in again on the analytics dashboard; no token handoff from Angular | §7, §11 | Team decision |
 | 13 | The analytics dashboard is served under `/analytics/` on the web app's origin | §12, §14 | In place |
 | 14 | Angular 19, not 21+ | §4.1, §4.2 | Team decision |
@@ -24,6 +24,8 @@ be explained at the showcase and revisited later.
 | 16 | Strategy Lab: automated strategy execution in its own service | §13.2 | Team decision |
 | 17 | Newsletter issues stored as JSONB snapshots, not child tables | — (newsletter story) | Team decision |
 | 18 | Monitoring on VictoriaMetrics, VictoriaLogs and the Streamlit dashboard; no Grafana or tracing | §22 (observability) | In place |
+| 19 | The whole platform on AWS (ECS Fargate, RDS), not only the Angular app on S3 and CloudFront; deployed with OpenTofu and a script, not GitHub Actions | §14 | In place |
+| 20 | Kafka topics `orders` and `executions` instead of `trades` | §10.3 | Team decision |
 
 ## 1. Spring Data JPA alongside MyBatis
 
@@ -104,30 +106,44 @@ most one per symbol per second), which the strategy service consumes (decision 1
 
 ## 6. PostgreSQL `analytics` schema instead of Snowflake
 
-§4.2 lists Snowflake as the data warehouse. The ETL loads the same star schema (§18.2:
-`dim_account`, `dim_instrument`, `dim_date`, `fact_trades`) into a separate `analytics`
-schema in our PostgreSQL. The Docker Compose stack has no Snowflake instance, so this keeps
-the whole pipeline runnable and testable locally, and a separate schema still keeps reporting
-queries away from the trading tables. Moving to Snowflake
-means changing `etl/load.py` and the connection settings; the transforms and their tests are
-warehouse-independent. **To confirm with the tutor.**
+§4.2 lists Snowflake as the data warehouse. The team decided not to use Snowflake: the ETL loads
+the star schema of §18.2 (`dim_account`, `dim_instrument`, `dim_date`, `fact_trades`, plus
+`fact_daily_prices` for Strategy Lab) into a separate `analytics` schema in our PostgreSQL, which
+`tns_etl` owns. A separate schema keeps reporting queries away from the trading tables, and the
+whole pipeline runs and is tested in the Docker Compose stack, in CI and on AWS (RDS) without a
+second, paid platform and its credentials. The transforms and their tests do not depend on the
+warehouse: moving to Snowflake later would mean changing `etl/load.py`, the connection settings
+and the dashboard's batch queries.
 
 ## 7. Jenkins instead of GitHub Actions
 
 §4.1 mentions GitHub Actions. The course environment provides Jenkins (with SonarQube), so the
 pipeline is a `Jenkinsfile`: secret scanning (Gitleaks), SAST (Semgrep), build, unit and
 integration tests, the ETL, dashboard, broker and auth suites, SonarQube with its quality
-gate, and dependency and image scanning (Trivy). The AWS deployment in sprint 11 may still
-use a GitHub Action for the S3 upload and CloudFront invalidation.
+gate, and dependency and image scanning (Trivy). Jenkins does not deploy: the AWS deployment
+is a script run by hand (decision 19).
 
-## 8. Transport security in the local stack
+## 8. Transport security
 
-§5 calls for TLS 1.2+ in transit and Kafka TLS, SASL and ACLs. The Docker Compose stack is a
-local development environment and uses plain HTTP and Kafka PLAINTEXT. Application-level
-controls are in place: signed JWTs with issuer and type checks, role checks, account
-ownership checks, input validation, parameterised SQL, rate limiting on the auth endpoints,
-and the broker is reachable only inside the Compose network. TLS belongs to the deployed
-environment (sprint 11: CloudFront terminates TLS for the UI).
+§5 calls for TLS 1.2+ in transit and Kafka TLS, SASL and ACLs.
+
+- **Local stack.** Docker Compose is a development environment: plain HTTP and Kafka
+  `PLAINTEXT`, with every port except the web app's bound to `127.0.0.1`.
+- **AWS (decision 19).** Browsers reach the platform only over HTTPS: CloudFront redirects HTTP
+  to HTTPS and sends HSTS. The services' connections to RDS are encrypted, as RDS refuses
+  unencrypted ones. Two hops are not encrypted: CloudFront to the ALB (HTTP), and the ECS
+  tasks' calls to each other (HTTP and Kafka `PLAINTEXT`). CloudFront's minimum TLS version
+  also stays at its default, because the site uses the `*.cloudfront.net` certificate.
+  An HTTPS listener on the ALB and a TLS 1.2 minimum both need a custom domain with its own
+  certificate, which the training account does not have. Inside the VPC, security groups
+  limit who can connect: the ALB takes only CloudFront's addresses, and only the ECS tasks
+  can reach Kafka, the broker simulator and RDS.
+
+Application-level controls apply in both: signed JWTs with issuer and type checks, role checks,
+account ownership checks, input validation, parameterised SQL and rate limiting on the auth
+endpoints. Kafka has no SASL or ACLs; anything that can reach it can produce to it, which the
+network rules above limit to the platform's own services. The residual risk is recorded in
+docs/OWASP_REVIEW.md (A02-7, A08-1).
 
 ## 9. Trading API contract
 
@@ -170,16 +186,16 @@ in the analytics dashboard only.
 
 ## 11. Accepted vulnerabilities
 
-`.trivyignore` accepts three findings. Each entry has an owner and a review date.
+`.trivyignore` accepts two findings. Each entry has an owner and a review date.
 
 - **CVE-2026-47884 and CVE-2026-47890** in `spring-webmvc` 6.2.19: flaws in XSLT views and in
   Server-Sent Events rendered through views. The API has no XSLT views, and its only SSE
   endpoint (the support chat's `/api/v1/support/conversations/{id}/events`) sends plain strings
   and JSON, never a view. The only fixes are in Spring 7 (Spring Boot 4), a major upgrade to
   plan separately.
-- **CVE-2026-112403** in Pillow 12.3.0, pulled in by Streamlit for the dashboard: a flaw in the
-  JPEG decoder. The dashboard decodes no images from users. The fix is only in Pillow 13, which
-  no Streamlit release accepts yet; upgrade once one does.
+
+A Pillow finding (CVE-2026-112403, pulled in by Streamlit) was accepted here until 2026-10-22,
+when Streamlit 1.66.1 allowed the dashboard to move to Pillow 13, which fixes it.
 
 ## 12. Admin analytics sign-in
 
@@ -208,8 +224,8 @@ Streamlit container, which runs with the base path `analytics` (`dashboard/.stre
 WebSocket included. The home page's admin link and the admin login both go to that
 relative path. Linking to `http://localhost:8501` only worked when the browser ran on the Docker
 host with that port open: through a forwarded or remote address it gave "page not found", and a
-browser in the end-to-end tests could not reach it either. The same pattern carries over to the
-sprint 11 deployment, where CloudFront can route `/analytics/*` to the dashboard's origin. Port 8501
+browser in the end-to-end tests could not reach it either. The same pattern carries over to AWS,
+where CloudFront routes `/analytics/*` through the ALB to the dashboard (decision 19). Port 8501
 stays published for direct access (`http://localhost:8501/analytics/`).
 
 ## 14. Angular 19
@@ -310,3 +326,53 @@ need 0.8–1.5 GB: Prometheus (~300 MB), Grafana (~200 MB), Loki (300–500 MB) 
 
 The stack closes OWASP A09-5: alerts on reused refresh tokens (A09-1), failed login spikes
 (A09-2), refused and failing API requests, and dead letters waiting for review (A09-4).
+
+## 19. Deployment on AWS
+
+§14 deploys the Angular build to a private S3 bucket behind CloudFront, with a script or GitHub
+Action for build → upload → invalidate. That part is as specified (`infra/frontend.tf`,
+`infra/scripts/publish-frontend.sh`). An Angular app on its own cannot trade, though: it needs the
+APIs, Kafka, the broker simulator and a database. So the whole platform runs on AWS, defined in
+OpenTofu in [infra/](../infra/README.md):
+
+- **Services on ECS Fargate:** the trading API, auth service, broker simulator, strategy
+  service, dashboard, ETL scheduler, Kafka (one KRaft node) and the monitoring stack, each as its
+  own service. Fargate needs no servers to patch, and each service keeps the image it has in
+  Docker Compose.
+- **PostgreSQL on RDS**, private, initialised once from the same `db/` scripts as the local
+  stack (`infra/scripts/init-db.sh`), with the same least-privilege roles.
+- **CloudFront** is the single origin, as nginx is locally: `/` from S3, and `/api`, `/auth` and
+  `/analytics` through an ALB that only accepts CloudFront. The app needs no URL or CORS
+  changes, and CloudFront adds the same security headers as nginx.
+- **Secrets** in Secrets Manager, generated by OpenTofu; the RDS master password is managed by
+  RDS. The state file is encrypted, since everyone in the shared training account is an
+  administrator.
+- **Not MSK:** a managed Kafka cluster costs far more than one Fargate task for a training
+  deployment.
+
+**OpenTofu, not hand-made resources:** the stack can be recreated, reviewed in a pull request
+and paused (all services to 0, RDS stopped) without losing data.
+
+**Deployed by a script, not CI:** `infra/scripts/deploy.sh <tag>` pushes the images, applies new
+task definitions, uploads the Angular build and invalidates CloudFront, then checks the site. It
+refuses to apply a plan that changes more than task definitions and services, so a change to the
+network or the database is always reviewed first. The team kept deployment out of Jenkins
+(decision 7): it builds and tests every branch but does not deploy, so the training account's
+credentials and the state passphrase are not stored in CI.
+
+## 20. Kafka topic names
+
+§10.3 lists the topics `trades` (newly placed orders and executed trades), `trade-events` and
+`market-data`. We split `trades` in two, because a placed order and an executed trade come from
+different producers and have different consumers:
+
+| Topic | Carries | Producer | Consumer |
+|---|---|---|---|
+| `orders` | Orders accepted by `POST /api/v1/orders`, waiting for the Trade Executor | Trading API | Trade Executor (`OrderMessageListener`) |
+| `executions` | Fills of executed trades | Broker simulator | Settlement (`ExecutionListener`) |
+| `trade-events` | Lifecycle events (filled, rejected, cancelled), as in §10.3 | Trading API | Audit consumer (`trade_event_log`) |
+| `market-data` | Live and replayed prices, as in §10.3 | Trading API | Strategy service |
+
+`orders`, `executions` and `trade-events` each have a `.dlq` topic for messages that cannot be
+read. Renaming `orders` to `trades` now would change the producer, the consumer, the tests and the
+docs for no change in behaviour, so the names stay.

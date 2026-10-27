@@ -6,6 +6,8 @@ Kafka with a dead-letter queue for failures. An Angular web app serves traders a
 staff, a separate auth service issues the JWTs the trading API trusts, Strategy Lab runs
 automated trading strategies, and a scheduled ETL pipeline feeds an admin analytics dashboard.
 
+**Live:** https://d3e38tyfrhqhie.cloudfront.net (AWS; see [Deployment](#deployment-aws)).
+
 ---
 
 ## Contents
@@ -20,6 +22,7 @@ automated trading strategies, and a scheduled ETL pipeline feeds an admin analyt
 - [Developing locally](#developing-locally)
 - [Testing](#testing)
 - [CI/CD pipeline](#cicd-pipeline)
+- [Deployment (AWS)](#deployment-aws)
 - [Troubleshooting](#troubleshooting)
 - [Further documentation](#further-documentation)
 - [Contributing](#contributing)
@@ -132,6 +135,7 @@ Order statuses: `NEW`, `FILLED`, `REJECTED`, `CANCELLED`.
 | Testing | JUnit 5, Mockito, Testcontainers, JaCoCo, Jest, Supertest, pytest, Karma and Jasmine, Playwright |
 | CI/CD and quality | Jenkins, SonarQube, Gitleaks, Semgrep, Trivy |
 | Containers | Docker, Docker Compose |
+| Cloud | AWS: S3 and CloudFront (web app), ECS Fargate (services), RDS PostgreSQL, ECR, Secrets Manager, CloudWatch; OpenTofu |
 
 ---
 
@@ -163,6 +167,7 @@ TNS-Capital/
 ├── bruno/                           Bruno API collection for manual testing
 ├── contracts/                       OpenAPI contracts for the auth, trading and strategy APIs
 ├── observability/                   Monitoring stack config: scrape targets, alert rules, log shipping
+├── infra/                           AWS deployment: OpenTofu stack and deploy scripts (has its own README)
 ├── ci/                              Test scripts Jenkins runs (Python suites, e2e stack)
 ├── docs/                            Design decisions, security guide and OWASP review, SonarQube, diagrams
 ├── docker-compose.yml               Full local stack
@@ -624,6 +629,35 @@ security scans locally.
 
 ---
 
+## Deployment (AWS)
+
+The platform runs on AWS at **https://d3e38tyfrhqhie.cloudfront.net**, defined in OpenTofu in
+[`infra/`](infra/README.md) (docs/DECISIONS.md 19):
+
+```
+Browser ──HTTPS──> CloudFront ──> S3                 the Angular build
+                        └──> ALB ──> ECS Fargate      trading API, auth service, strategy service, dashboard
+                                                      (+ broker simulator, Kafka, ETL, monitoring inside the VPC)
+                                     RDS PostgreSQL   private, from the same db/ scripts
+```
+
+CloudFront plays the part nginx plays locally: one origin for the app and every API, with the
+same security headers. Secrets are generated into Secrets Manager; nothing secret is in the
+repository or the images.
+
+A release is one command, run by hand by someone with access to the training account (Jenkins
+tests but does not deploy):
+
+```bash
+source ~/leap-env.sh && source ~/.tns-tofu.env   # AWS credentials and the state passphrase
+infra/scripts/deploy.sh                          # images → ECR, tofu apply, Angular → S3, CloudFront invalidation, smoke check
+```
+
+[infra/README.md](infra/README.md) covers the first deployment, pausing the stack overnight
+without losing data, running the ETL on AWS, troubleshooting and teardown.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -669,6 +703,7 @@ security scans locally.
 | [etl/README.md](etl/README.md) | ETL pipeline, settings and the analytics schema |
 | [dashboard/README.md](dashboard/README.md) | Dashboard insights, data sources and how to run it |
 | [observability/README.md](observability/README.md) | Monitoring stack: metrics, alert rules, log collection |
+| [infra/README.md](infra/README.md) | AWS deployment: first deploy, new versions, pausing, the ETL on AWS, teardown |
 
 ---
 

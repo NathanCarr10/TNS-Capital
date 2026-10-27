@@ -2,7 +2,10 @@
 
 Deploys the platform to the LEAP training account (eu-west-1), following the Sprint 11
 layout: the Angular app in S3 behind CloudFront, the services as ECS Fargate tasks,
-Postgres on RDS, and secrets in Secrets Manager.
+Postgres on RDS, and secrets in Secrets Manager. Why it goes beyond the spec's S3 and
+CloudFront is decision 19 in [docs/DECISIONS.md](../docs/DECISIONS.md).
+
+The live site is **https://d3e38tyfrhqhie.cloudfront.net** (`tofu output url`).
 
 ```
 Browser ──HTTPS──> CloudFront ──> S3 (Angular build)            default path
@@ -20,6 +23,10 @@ CloudFront forwards the API paths to the ALB, as `frontend/nginx.conf` does loca
 the browser only ever talks to one origin and the app needs no URL or CORS changes. The
 ALB accepts CloudFront's addresses only.
 
+CloudFront also sends the security headers nginx sends locally (`frontend.tf`, response
+headers policies). The Content-Security-Policy is written out twice, in
+`frontend/security-headers.conf` and in `frontend.tf`: change both together.
+
 ## What is different from docker-compose
 
 | Compose | AWS | Why |
@@ -32,9 +39,11 @@ ALB accepts CloudFront's addresses only.
 | Fluent Bit reading Docker's log files | `observability/log-forwarder`: copies `/ecs/<prefix>/*` from CloudWatch Logs into VictoriaLogs every 5 s | Fargate has no log files to tail. CloudWatch Logs, alarms and a CloudWatch dashboard are there as well |
 | kafka-ui | Not deployed | Admin tool, no login |
 
-Two settings are AWS-only: `PGSSLMODE=no-verify` for the auth service (RDS refuses
-unencrypted connections and its `pg` Pool sets no `ssl` option), and
-`AUTH_TRUST_PROXY=2` (CloudFront and the ALB both add to `X-Forwarded-For`).
+Three settings differ from the local defaults: `PGSSLMODE=no-verify` for the auth service
+(RDS refuses unencrypted connections and its `pg` Pool sets no `ssl` option),
+`AUTH_TRUST_PROXY=2` (CloudFront and the ALB both add to `X-Forwarded-For`), and
+`NEWSLETTER_EARLY_PUBLISH=true` so support can publish a newsletter issue during a demo
+(variable `newsletter_early_publish`; set it to `false` outside the showcase).
 
 `app` and `etl` call the Alpaca API. With Alpaca keys set they run in public subnets
 with a public IP (inbound is still only the ALB and the other tasks), which avoids a
@@ -82,7 +91,8 @@ tofu output url
 
 Services that start before Kafka is up restart until it is; give them a few minutes
 after step 4. Logins are in `tofu output logins`, and the passwords
-in the secret (`tofu output secret_arn`).
+in the secret (`tofu output secret_arn`). Then [run the ETL once](#running-the-etl-now) so
+the analytics and backtests have data before the first nightly run.
 
 ## Deploying a new version
 
@@ -98,8 +108,28 @@ passes the ALB health check. If a new version never gets healthy, the old one st
 fix it and apply again, or apply the previous tag. Kafka and the ETL scheduler stop the old task first, since
 two of either must not run at once.
 
-Or all of it in one go: `scripts/deploy.sh $TAG`. It stops
-before applying if the plan changes anything besides task definitions and services.
+Or all of it in one go: `scripts/deploy.sh $TAG` (build → push → apply → upload to S3 →
+CloudFront invalidation → check the site answers). It stops before applying if the plan
+changes anything besides task definitions and services.
+
+Deployments are run by hand from a machine with the AWS credentials and the state
+passphrase. Jenkins builds and tests every branch but does not deploy (decision 19 in
+[docs/DECISIONS.md](../docs/DECISIONS.md)).
+
+## Running the ETL now
+
+On AWS the ETL runs every night at 02:00. Until its first run, the dashboard's Batch view
+and Strategy Lab's backtests have no data. To run it once straight away, start a one-off
+copy of the `etl` task with the pipeline as its command, in a public subnet so it can
+reach Alpaca:
+
+```bash
+aws ecs run-task --cluster "$(tofu output -raw cluster)" --launch-type FARGATE \
+  --task-definition tns-capital-etl \
+  --network-configuration "awsvpcConfiguration={subnets=[<a public_subnet_ids entry from training.tfvars>],securityGroups=[$(tofu output -json db_init | jq -r .security_group)],assignPublicIp=ENABLED}" \
+  --overrides '{"containerOverrides":[{"name":"etl","command":["python","pipeline.py"]}]}'
+aws logs tail /ecs/tns-capital/etl --follow
+```
 
 ## Pausing overnight (keeps the data)
 
@@ -118,12 +148,16 @@ starts a stopped database again by itself after 7 days.
 
 ## Teardown (deletes the database)
 
+The database has `prevent_destroy` (`rds.tf`), so `tofu destroy` refuses to run while it
+is there. To tear everything down at the end of the project, remove the `lifecycle` block
+from `rds.tf` on purpose, then:
+
 ```bash
 tofu destroy -var-file=training.tfvars -var image_tag=unused
 ```
 
-Removes everything, **including the RDS database and all its data** (there are no
-backups). Only for the end of the project. The state bucket in `bootstrap/` stays.
+This removes everything, **including the RDS database and all its data** (there are no
+backups and no final snapshot). The state bucket in `bootstrap/` stays.
 
 ## Troubleshooting
 
