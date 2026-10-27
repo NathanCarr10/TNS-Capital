@@ -434,6 +434,10 @@ The Angular app is served by nginx, which adds a `Content-Security-Policy` and
 origin, so injected markup cannot run code even if it reaches the page. `ng serve`
 does not send these headers, so check CSP changes against the `frontend` container.
 
+On AWS there is no nginx: CloudFront sends the same CSP and `nosniff`, plus HSTS, from response
+headers policies in [infra/frontend.tf](../infra/frontend.tf). The CSP is written out in both
+files, so a change to one must be made to the other.
+
 Rules for keeping the frontend XSS-safe:
 
 - Render user and API data with `{{ }}` or property bindings, which Angular escapes.
@@ -669,20 +673,21 @@ monitoring stack are served on a separate, unpublished port (`METRICS_PORT`, 946
 
 ## 12. Deployment Security Checklist
 
-Before deploying to production:
+Where the AWS deployment ([infra/README.md](../infra/README.md), docs/DECISIONS.md 19) stands on
+each item. Gaps are recorded in [OWASP_REVIEW.md](OWASP_REVIEW.md) with their residual risk.
 
-- [ ] JWT shared secret is configured via environment variable (not in code)
-- [ ] Database credentials are in environment variables
-- [ ] HTTPS is enabled (Strict-Transport-Security header)
-- [ ] All validation constraints are tested
-- [ ] Error handling doesn't expose sensitive data
-- [ ] Logging doesn't expose credentials or PII
-- [ ] Database is accessible only from application server
-- [ ] API is behind a web application firewall (WAF)
-- [ ] Rate limiting is configured (the auth service limits credential endpoints per client IP; `AUTH_RATE_LIMIT`, `AUTH_TRUST_PROXY`)
-- [ ] Security headers are verified in responses
-- [ ] All tests pass including security tests
-- [ ] Dependencies are up-to-date (no known vulnerabilities)
+| Item | AWS deployment |
+|---|---|
+| JWT secret and database credentials outside the code | Done: generated into Secrets Manager by OpenTofu and passed to the tasks as secrets; the RDS master password is managed by RDS |
+| HTTPS | Browsers: done, CloudFront redirects HTTP to HTTPS and sends HSTS. CloudFront to the ALB is HTTP, and the minimum TLS version is CloudFront's default (no custom domain): Accepted, OWASP A02-7 |
+| Database reachable only from the services | Done: RDS is not publicly accessible and takes 5432 from the ECS tasks only; connections are encrypted (OWASP A05-9) |
+| Only the web entry point is public | Done: the ALB takes CloudFront's addresses only; Kafka, the broker simulator and monitoring have no public route (OWASP A05-9, A05-10) |
+| Web application firewall | Not deployed. The auth service's per-client rate limit on the credential endpoints is the only throttle (`AUTH_RATE_LIMIT`, `AUTH_TRUST_PROXY=2` behind CloudFront and the ALB) |
+| Security headers verified in responses | Done: CSP, HSTS and `nosniff` checked on the live site on 2026-10-27 |
+| Validation, error handling, no secrets in logs | Same code as the tested local stack (OWASP A03-4, A05-3, A09-3) |
+| All tests pass | Jenkins builds and tests every branch; each deployed image is tagged with the commit it was built from, so it can be traced to that commit's build |
+| Dependencies without known fixable CRITICAL CVEs | Trivy gate in Jenkins; two accepted Spring CVEs (docs/DECISIONS.md 11) |
+| Alerts reach someone | Partly: alerts show in the dashboard's Monitoring view, and the CloudWatch alarms have no notification action (OWASP A09-5) |
 
 ---
 
@@ -826,4 +831,4 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.
 
 ---
 
-**Last updated:** 2026-10-21
+**Last updated:** 2026-10-27

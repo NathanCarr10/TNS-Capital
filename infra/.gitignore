@@ -1,0 +1,9 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+backend.hcl
+# Secrets passed as variables (Alpaca keys, the state passphrase)
+secrets.auto.tfvars
+*.env
