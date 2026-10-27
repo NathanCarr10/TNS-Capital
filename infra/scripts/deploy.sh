@@ -57,8 +57,11 @@ rm -f tfplan
 
 # Rolling deployments: each old task serves until its replacement passes the health check
 CLUSTER="$(tofu output -raw cluster)"
+# (at most 10 services per wait call)
 aws ecs wait services-stable --region "$REGION" --cluster "$CLUSTER" \
   --services kafka broker-simulator auth-service app strategy-service etl dashboard
+aws ecs wait services-stable --region "$REGION" --cluster "$CLUSTER" \
+  --services victoriametrics vmalert victorialogs log-forwarder
 
 scripts/publish-frontend.sh
 
